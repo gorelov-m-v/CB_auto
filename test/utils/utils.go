@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func CheckTokenExpiry(response *requests.AdminCheckResponse) bool {
+func CheckTokenExpiry(response *requests.AdminCheckResponseBody) bool {
 	if response == nil || response.Token == "" {
 		return false
 	}

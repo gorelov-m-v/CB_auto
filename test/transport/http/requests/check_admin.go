@@ -2,54 +2,37 @@ package requests
 
 import (
 	httpClient "CB_auto/test/transport/http"
-	"encoding/json"
 	"fmt"
-	"log"
-	"net/http"
+)
+
+const (
+	pathAdminCheck   = "/_cap/api/token/check"
+	methodAdminCheck = "POST"
 )
 
 type AdminCheckRequest struct {
-	Body AdminCheckBody
+	Body AdminCheckRequestBody
 }
 
-type AdminCheckBody struct {
+type AdminCheckResponse struct {
+	Body       AdminCheckResponseBody
+	StatusCode int
+}
+
+type AdminCheckRequestBody struct {
 	UserName string `json:"username"`
 	Password string `json:"password"`
 }
 
-type AdminCheckResponse struct {
+type AdminCheckResponseBody struct {
 	Token        string `json:"token"`
 	RefreshToken string `json:"refreshToken"`
 }
 
-func (p AdminCheckRequest) GetPath() string {
-	return "/_cap/api/token/check"
-}
-
-func (p AdminCheckRequest) GetQueryParams() map[string]string {
-	return nil
-}
-
-func (p AdminCheckRequest) GetBody() []byte {
-	bodyBytes, err := json.Marshal(p.Body)
-	if err != nil {
-		log.Printf("getBody marshal failed: %v", err)
-		return nil
-	}
-
-	return bodyBytes
-}
-
-func (p AdminCheckRequest) GetQueryHeaders() map[string]string {
-	return nil
-}
-
-func (p AdminCheckRequest) GetPathParams() map[string]string {
-	return nil
-}
-
-func CheckAdmin(client *httpClient.Client, request AdminCheckRequest) (*AdminCheckResponse, error) {
-	response, err := httpClient.DoRequest[AdminCheckRequest, AdminCheckResponse](client, http.MethodPost, request)
+func CheckAdmin1(client *httpClient.Client, request *httpClient.Request[AdminCheckRequestBody]) (*httpClient.Response[AdminCheckResponseBody], error) {
+	request.Path = pathAdminCheck
+	request.Method = methodAdminCheck
+	response, err := httpClient.DoRequest1[AdminCheckRequestBody, AdminCheckResponseBody](client, request)
 	if err != nil {
 		return nil, fmt.Errorf("CheckAdmin failed: %v", err)
 	}

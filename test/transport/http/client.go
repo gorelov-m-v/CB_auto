@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -77,4 +78,82 @@ func makeRequest[T Params](method string, serviceURL string, p T) (*http.Request
 	}
 
 	return req, nil
+}
+
+type Response[V any] struct {
+	Body       V
+	StatusCode int
+	Headers    http.Header
+}
+
+type Request[T any] struct {
+	Method      string
+	Path        string
+	PathParams  map[string]string
+	QueryParams map[string]string
+	Headers     map[string]string
+	Body        *T
+}
+
+func makeRequest1[T any](serviceURL string, r *Request[T]) (*http.Request, error) {
+	path := r.Path
+	if len(r.PathParams) > 0 {
+		for key, value := range r.PathParams {
+			placeholder := fmt.Sprintf("{%s}", key)
+			path = strings.Replace(path, placeholder, value, -1)
+		}
+	}
+
+	var body []byte
+	if r.Body != nil {
+		var err error
+		body, err = json.Marshal(r.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal request body: %v", err)
+		}
+	}
+
+	fullURL := fmt.Sprintf("%s%s", serviceURL, path)
+	if len(r.QueryParams) > 0 {
+		query := url.Values{}
+		for key, value := range r.QueryParams {
+			query.Add(key, value)
+		}
+		fullURL = fmt.Sprintf("%s?%s", fullURL, query.Encode())
+	}
+
+	req, err := http.NewRequest(r.Method, fullURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("request creation failed: %v", err)
+	}
+
+	for key, value := range r.Headers {
+		req.Header.Set(key, value)
+	}
+
+	return req, nil
+}
+
+func DoRequest1[T any, V any](c *Client, r *Request[T]) (*Response[V], error) {
+	req, err := makeRequest1(c.serviceURL, r)
+	if err != nil {
+		return nil, fmt.Errorf("makeRequest failed: %v", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("httpClient.Do failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var result V
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response body: %v", err)
+	}
+
+	return &Response[V]{
+		Body:       result,
+		StatusCode: resp.StatusCode,
+		Headers:    resp.Header,
+	}, nil
 }

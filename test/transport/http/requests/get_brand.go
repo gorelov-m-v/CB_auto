@@ -7,20 +7,20 @@ import (
 )
 
 type GetCapBrandRequest struct {
-	PathParams GetCapBrandPathParams
-	Headers    GetCapBrandHeaders
+	PathParams GetCapBrandRequestPathParams
+	Headers    GetCapBrandRequestHeaders
 }
 
-type GetCapBrandPathParams struct {
+type GetCapBrandRequestPathParams struct {
 	UUID string
 }
 
-type GetCapBrandHeaders struct {
+type GetCapBrandRequestHeaders struct {
 	Authorization  string
 	PlatformNodeID string
 }
 
-type GetCapBrandResponse struct {
+type GetCapBrandResponseBody struct {
 	ID          string            `json:"id"`
 	Names       map[string]string `json:"names"`
 	Alias       string            `json:"alias"`
@@ -63,8 +63,8 @@ func (p GetCapBrandRequest) GetPathParams() map[string]string {
 	}
 }
 
-func GetCapBrand(client *httpClient.Client, request GetCapBrandRequest) (*GetCapBrandResponse, error) {
-	response, err := httpClient.DoRequest[GetCapBrandRequest, GetCapBrandResponse](client, http.MethodGet, request)
+func GetCapBrand(client *httpClient.Client, request GetCapBrandRequest) (*GetCapBrandResponseBody, error) {
+	response, err := httpClient.DoRequest[GetCapBrandRequest, GetCapBrandResponseBody](client, http.MethodGet, request)
 	if err != nil {
 		return nil, fmt.Errorf("GetCapBrand failed: %v", err)
 	}

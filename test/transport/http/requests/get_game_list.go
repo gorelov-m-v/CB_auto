@@ -7,11 +7,11 @@ import (
 )
 
 type CapGameListRequest struct {
-	QueryParams CapGameListQueryParams
-	Headers     CapGameListHeaders
+	QueryParams CapGameListRequestQueryParams
+	Headers     CapGameListRequestHeaders
 }
 
-type CapGameListQueryParams struct {
+type CapGameListRequestQueryParams struct {
 	GroupID       string
 	ProjectID     string
 	SortField     string
@@ -20,12 +20,12 @@ type CapGameListQueryParams struct {
 	PerPage       int
 }
 
-type CapGameListHeaders struct {
+type CapGameListRequestHeaders struct {
 	Authorization  string
 	PlatformLocale string
 }
 
-type GetCapGameListResponse struct {
+type GetCapGameListResponseBody struct {
 	Total int       `json:"total"`
 	Items []CapGame `json:"items"`
 }
@@ -90,8 +90,8 @@ func (p CapGameListRequest) GetPathParams() map[string]string {
 	return nil
 }
 
-func GetCapGameList(client *httpClient.Client, request CapGameListRequest) (*GetCapGameListResponse, error) {
-	response, err := httpClient.DoRequest[CapGameListRequest, GetCapGameListResponse](client, http.MethodGet, request)
+func GetCapGameList(client *httpClient.Client, request CapGameListRequest) (*GetCapGameListResponseBody, error) {
+	response, err := httpClient.DoRequest[CapGameListRequest, GetCapGameListResponseBody](client, http.MethodGet, request)
 	if err != nil {
 		return nil, fmt.Errorf("GetCapGameList failed: %v", err)
 	}

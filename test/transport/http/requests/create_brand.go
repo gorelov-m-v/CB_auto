@@ -9,23 +9,23 @@ import (
 )
 
 type CreateCapBrandRequest struct {
-	Headers CreateCapBrandHeaders
-	Body    CreateCapBrandBody
+	Headers CreateCapBrandRequestHeaders
+	Body    CreateCapBrandRequestBody
 }
 
-type CreateCapBrandHeaders struct {
+type CreateCapBrandRequestHeaders struct {
 	Authorization  string `json:"Authorization"`
 	PlatformNodeID string `json:"platform-nodeid"`
 }
 
-type CreateCapBrandBody struct {
+type CreateCapBrandRequestBody struct {
 	Sort        int               `json:"sort"`
 	Alias       string            `json:"alias"`
 	Names       map[string]string `json:"names"`
 	Description string            `json:"description"`
 }
 
-type CreateCapBrandResponse struct {
+type CreateCapBrandResponseBody struct {
 	ID string `json:"id"`
 }
 
@@ -58,8 +58,8 @@ func (p CreateCapBrandRequest) GetPathParams() map[string]string {
 	return nil
 }
 
-func CreateCapBrand(client *httpClient.Client, request CreateCapBrandRequest) (*CreateCapBrandResponse, error) {
-	response, err := httpClient.DoRequest[CreateCapBrandRequest, CreateCapBrandResponse](client, http.MethodPost, request)
+func CreateCapBrand(client *httpClient.Client, request *CreateCapBrandRequest) (*CreateCapBrandResponseBody, error) {
+	response, err := httpClient.DoRequest[CreateCapBrandRequest, CreateCapBrandResponseBody](client, http.MethodPost, *request)
 	if err != nil {
 		return nil, fmt.Errorf("CreateCapBrand failed: %v", err)
 	}
