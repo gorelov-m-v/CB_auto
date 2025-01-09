@@ -1,8 +1,6 @@
 package utils
 
 import (
-	"CB_auto/test/config"
-	"CB_auto/test/transport/http"
 	"CB_auto/test/transport/http/requests"
 	"encoding/base64"
 	"encoding/json"
@@ -11,7 +9,7 @@ import (
 	"time"
 )
 
-func CheckTokenExpiry(response *requests.AdminCheckResponse) bool {
+func CheckTokenExpiry(response *requests.AdminCheckResponseBody) bool {
 	if response == nil || response.Token == "" {
 		return false
 	}
@@ -48,18 +46,4 @@ func CheckTokenExpiry(response *requests.AdminCheckResponse) bool {
 
 	fmt.Printf("Token is valid until: %v\n", expirationTime)
 	return true
-}
-
-func FormatRequest(request http.Params, config *config.Config) (string, error) {
-	bodyJSON := request.GetBody()
-	headers := request.GetQueryHeaders()
-	var headerStrings []string
-	for key, value := range headers {
-		headerStrings = append(headerStrings, fmt.Sprintf("%s: %s", key, value))
-	}
-
-	result := fmt.Sprintf("Method:\nPOST %s%s\n\nHeaders:\n%s\n\nBody:\n%s",
-		config.BaseURL, request.GetPath(), strings.Join(headerStrings, "\n"), string(bodyJSON))
-
-	return result, nil
 }
