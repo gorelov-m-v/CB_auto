@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
 	"testing"
@@ -50,8 +51,8 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 
 	type TestData struct {
 		adminResponse          *httpClient.Response[requests.AdminCheckResponseBody]
-		createCapBrandResponse *requests.CreateCapBrandResponseBody
-		createCapBrandRequest  *requests.CreateCapBrandRequest
+		createCapBrandRequest  *httpClient.Request[requests.CreateCapBrandRequestBody]
+		createCapBrandResponse *httpClient.Response[requests.CreateCapBrandResponseBody]
 	}
 
 	testData := TestData{
@@ -68,49 +69,59 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 					Password: s.config.Password,
 				},
 			}
-			testData.adminResponse, _ = requests.CheckAdmin1(s.client, adminCheckRequest)
-			fmt.Println(testData.adminResponse.StatusCode)
-			fmt.Println(testData.adminResponse.Body)
+
+			testData.adminResponse, _ = requests.CheckAdmin(s.client, adminCheckRequest)
+
+			requestAtt := httpClient.FormatRequest(adminCheckRequest)
+			responseAtt := httpClient.FormatResponse(testData.adminResponse)
+			sCtx.WithAttachments(allure.NewAttachment("response", allure.JSON, requestAtt))
+			sCtx.WithAttachments(allure.NewAttachment("response", allure.JSON, responseAtt))
 		}
 	})
 
-	//t.WithNewStep("Создание бренда в CAP: POST /_cap/api/v1/brands", func(sCtx provider.StepCtx) {
-	//	testData.createCapBrandRequest = &requests.CreateCapBrandRequest{
-	//		Headers: requests.CreateCapBrandRequestHeaders{
-	//			Authorization:  "Bearer " + testData.adminResponse.Body.Token,
-	//			PlatformNodeID: s.config.ProjectID,
-	//		},
-	//		Body: requests.CreateCapBrandRequestBody{
-	//			Sort:        1,
-	//			Alias:       utils.GenerateAlias(),
-	//			Names:       map[string]string{"en": utils.GenerateAlias()},
-	//			Description: utils.GenerateAlias(),
-	//		},
-	//	}
-	//	testData.createCapBrandResponse, _ = requests.CreateCapBrand(s.client, testData.createCapBrandRequest)
-	//
-	//	requestAttachment, _ := utils.FormatRequest(testData.createCapBrandRequest, s.config)
-	//	responseAttachment, _ := json.Marshal(testData.createCapBrandResponse)
-	//	sCtx.WithAttachments(allure.NewAttachment("request", allure.JSON, []byte(requestAttachment)))
-	//	sCtx.WithAttachments(allure.NewAttachment("response", allure.JSON, responseAttachment))
-	//})
+	t.WithNewStep("Создание бренда в CAP: POST /_cap/api/v1/brands", func(sCtx provider.StepCtx) {
+		testData.createCapBrandRequest = &httpClient.Request[requests.CreateCapBrandRequestBody]{
+			Headers: map[string]string{
+				httpClient.AuthorizationHeader: fmt.Sprintf("Bearer %s", testData.adminResponse.Body.Token),
+				httpClient.PlatformNodeHeader:  s.config.ProjectID,
+			},
+			Body: &requests.CreateCapBrandRequestBody{
+				Sort:        1,
+				Alias:       utils.GenerateAlias(),
+				Names:       map[string]string{"en": utils.GenerateAlias()},
+				Description: utils.GenerateAlias(),
+			},
+		}
 
-	//t.WithNewStep("Проверка создания бренда в CAP: GET /_cap/api/v1/brands/{uuid}", func(sCtx provider.StepCtx) {
-	//	request := requests.GetCapBrandRequest{
-	//		PathParams: requests.GetCapBrandRequestPathParams{
-	//			UUID: testData.createCapBrandResponse.ID,
-	//		},
-	//		Headers: requests.GetCapBrandRequestHeaders{
-	//			Authorization:  "Bearer " + testData.adminResponse.Body.Token,
-	//			PlatformNodeID: s.config.ProjectID,
-	//		},
-	//	}
-	//	getCapBrandResponse, _ := requests.GetCapBrand(s.client, request)
-	//
-	//	sCtx.Require().Equal(testData.createCapBrandRequest.Body.Alias, getCapBrandResponse.Alias)
-	//	responseBody, _ := json.Marshal(getCapBrandResponse)
-	//	sCtx.WithAttachments(allure.NewAttachment("Response JSON", allure.JSON, responseBody))
-	//})
+		testData.createCapBrandResponse, _ = requests.CreateCapBrand(s.client, testData.createCapBrandRequest)
+
+		requestAtt := httpClient.FormatRequest(testData.createCapBrandRequest)
+		responseAtt := httpClient.FormatResponse(testData.createCapBrandResponse)
+		sCtx.WithAttachments(allure.NewAttachment("request", allure.JSON, requestAtt))
+		sCtx.WithAttachments(allure.NewAttachment("response", allure.JSON, responseAtt))
+	})
+
+	t.WithNewStep("Проверка создания бренда в CAP: GET /_cap/api/v1/brands/{uuid}", func(sCtx provider.StepCtx) {
+		pathParams := map[string]string{
+			"UUID": testData.createCapBrandResponse.Body.ID,
+		}
+
+		request := &httpClient.Request[requests.GetCapBrandRequestPathParams]{
+			PathParams: pathParams,
+			Headers: map[string]string{
+				httpClient.AuthorizationHeader: fmt.Sprintf("Bearer %s", testData.adminResponse.Body.Token),
+				httpClient.PlatformNodeHeader:  s.config.ProjectID,
+			},
+		}
+
+		getCapBrandResponse, _ := requests.GetCapBrand(s.client, request)
+		sCtx.Require().Equal(testData.createCapBrandRequest.Body.Alias, getCapBrandResponse.Body.Alias)
+
+		requestAtt := httpClient.FormatRequest(testData.createCapBrandRequest)
+		responseAtt := httpClient.FormatResponse(testData.createCapBrandResponse)
+		sCtx.WithAttachments(allure.NewAttachment("request", allure.JSON, requestAtt))
+		sCtx.WithAttachments(allure.NewAttachment("response", allure.JSON, responseAtt))
+	})
 }
 
 func (s *CreateBrandSuite) AfterAll(t provider.T) {

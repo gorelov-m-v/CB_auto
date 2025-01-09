@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -14,6 +15,31 @@ import (
 type Client struct {
 	httpClient *http.Client
 	serviceURL string
+}
+
+type Request[T any] struct {
+	Method      string
+	Path        string
+	PathParams  map[string]string
+	QueryParams map[string]string
+	Headers     map[string]string
+	Body        *T
+}
+
+const (
+	AuthorizationHeader = "Authorization"
+	PlatformNodeHeader  = "Platform-Nodeid"
+)
+
+type Response[V any] struct {
+	Body       V
+	StatusCode int
+	Headers    http.Header
+	Error      *ErrorResponse
+}
+
+type ErrorResponse struct {
+	Body string `json:"body"`
 }
 
 func InitClient(config *config.Config) (*Client, error) {
@@ -30,8 +56,8 @@ func InitClient(config *config.Config) (*Client, error) {
 	}, nil
 }
 
-func DoRequest[T Params, V any](c *Client, method string, p T) (*V, error) {
-	req, err := makeRequest(method, c.serviceURL, p)
+func DoRequest[T any, V any](c *Client, r *Request[T]) (*Response[V], error) {
+	req, err := makeRequest(c.serviceURL, r)
 	if err != nil {
 		return nil, fmt.Errorf("makeRequest failed: %v", err)
 	}
@@ -42,60 +68,77 @@ func DoRequest[T Params, V any](c *Client, method string, p T) (*V, error) {
 	}
 	defer resp.Body.Close()
 
-	var result V
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("response decode failed: %v", err)
-	}
-
-	return &result, nil
-}
-
-func makeRequest[T Params](method string, serviceURL string, p T) (*http.Request, error) {
-	var body []byte
-	reqURI := p.GetPath()
-	queryParams := p.GetQueryParams()
-
-	if method == http.MethodPost || method == http.MethodPut {
-		body = p.GetBody()
-	}
-
-	if len(queryParams) > 0 {
-		query := "?"
-		for key, value := range queryParams {
-			query += fmt.Sprintf("%s=%s&", key, value)
-		}
-		reqURI += query[:len(query)-1]
-	}
-
-	req, err := http.NewRequest(method, fmt.Sprint(serviceURL, reqURI), bytes.NewReader(body))
+	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("request creation failed: %v", err)
+		return nil, fmt.Errorf("failed to read response body: %v", err)
 	}
 
-	headers := p.GetQueryHeaders()
-	for key, value := range headers {
-		req.Header.Set(key, value)
+	bodyString := string(bodyBytes)
+
+	response := &Response[V]{
+		StatusCode: resp.StatusCode,
+		Headers:    resp.Header,
 	}
 
-	return req, nil
+	if resp.StatusCode >= 400 {
+		response.Error = &ErrorResponse{
+			Body: bodyString,
+		}
+		return response, nil
+	}
+
+	if err := json.Unmarshal(bodyBytes, &response.Body); err != nil {
+		return nil, fmt.Errorf("failed to decode response body: %v", err)
+	}
+
+	return response, nil
 }
 
-type Response[V any] struct {
-	Body       V
-	StatusCode int
-	Headers    http.Header
+func FormatRequest[T any](request *Request[T]) []byte {
+	var result strings.Builder
+
+	result.WriteString(fmt.Sprintf("URL: %s\n", request.Path))
+
+	if len(request.Headers) > 0 {
+		var headerStrings []string
+		for key, value := range request.Headers {
+			headerStrings = append(headerStrings, fmt.Sprintf("%s: %s", key, value))
+		}
+		result.WriteString(fmt.Sprintf("Request Headers:\n%s\n", strings.Join(headerStrings, ", ")))
+	}
+
+	if request.Body != nil {
+		requestBody, err := json.MarshalIndent(request.Body, "", "  ")
+		if err == nil {
+			result.WriteString(fmt.Sprintf("Request Body:\n%s\n", string(requestBody)))
+		} else {
+			result.WriteString("Request Body: <failed to marshal body>\n")
+		}
+	}
+
+	return []byte(result.String())
 }
 
-type Request[T any] struct {
-	Method      string
-	Path        string
-	PathParams  map[string]string
-	QueryParams map[string]string
-	Headers     map[string]string
-	Body        *T
+func FormatResponse[V any](response *Response[V]) []byte {
+	var result strings.Builder
+
+	result.WriteString(fmt.Sprintf("StatusCode: %d\n", response.StatusCode))
+
+	if response.Error != nil {
+		result.WriteString(fmt.Sprintf("Error Body: %s\n", response.Error.Body))
+	} else {
+		responseBody, err := json.MarshalIndent(response.Body, "", "  ")
+		if err == nil {
+			result.WriteString(fmt.Sprintf("Response Body:\n%s\n", string(responseBody)))
+		} else {
+			result.WriteString("Response Body: <failed to marshal body>\n")
+		}
+	}
+
+	return []byte(result.String())
 }
 
-func makeRequest1[T any](serviceURL string, r *Request[T]) (*http.Request, error) {
+func makeRequest[T any](serviceURL string, r *Request[T]) (*http.Request, error) {
 	path := r.Path
 	if len(r.PathParams) > 0 {
 		for key, value := range r.PathParams {
@@ -132,28 +175,4 @@ func makeRequest1[T any](serviceURL string, r *Request[T]) (*http.Request, error
 	}
 
 	return req, nil
-}
-
-func DoRequest1[T any, V any](c *Client, r *Request[T]) (*Response[V], error) {
-	req, err := makeRequest1(c.serviceURL, r)
-	if err != nil {
-		return nil, fmt.Errorf("makeRequest failed: %v", err)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("httpClient.Do failed: %v", err)
-	}
-	defer resp.Body.Close()
-
-	var result V
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response body: %v", err)
-	}
-
-	return &Response[V]{
-		Body:       result,
-		StatusCode: resp.StatusCode,
-		Headers:    resp.Header,
-	}, nil
 }

@@ -2,15 +2,22 @@ package requests
 
 import (
 	httpClient "CB_auto/test/transport/http"
-	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
+)
+
+const (
+	pathCreateBrand = "/_cap/api/v1/brands"
 )
 
 type CreateCapBrandRequest struct {
 	Headers CreateCapBrandRequestHeaders
 	Body    CreateCapBrandRequestBody
+}
+
+type CreateCapBrandResponse struct {
+	Body       CreateCapBrandResponseBody
+	StatusCode int
 }
 
 type CreateCapBrandRequestHeaders struct {
@@ -29,39 +36,13 @@ type CreateCapBrandResponseBody struct {
 	ID string `json:"id"`
 }
 
-func (p CreateCapBrandRequest) GetPath() string {
-	return "/_cap/api/v1/brands"
-}
+func CreateCapBrand(client *httpClient.Client, request *httpClient.Request[CreateCapBrandRequestBody]) (*httpClient.Response[CreateCapBrandResponseBody], error) {
+	request.Path = pathCreateBrand
+	request.Method = http.MethodPost
 
-func (p CreateCapBrandRequest) GetQueryParams() map[string]string {
-	return nil
-}
-
-func (p CreateCapBrandRequest) GetBody() []byte {
-	bodyBytes, err := json.Marshal(p.Body)
+	response, err := httpClient.DoRequest[CreateCapBrandRequestBody, CreateCapBrandResponseBody](client, request)
 	if err != nil {
-		log.Printf("getBody marshal failed: %v", err)
-		return nil
-	}
-
-	return bodyBytes
-}
-
-func (p CreateCapBrandRequest) GetQueryHeaders() map[string]string {
-	return map[string]string{
-		"Authorization":   p.Headers.Authorization,
-		"platform-nodeid": p.Headers.PlatformNodeID,
-	}
-}
-
-func (p CreateCapBrandRequest) GetPathParams() map[string]string {
-	return nil
-}
-
-func CreateCapBrand(client *httpClient.Client, request *CreateCapBrandRequest) (*CreateCapBrandResponseBody, error) {
-	response, err := httpClient.DoRequest[CreateCapBrandRequest, CreateCapBrandResponseBody](client, http.MethodPost, *request)
-	if err != nil {
-		return nil, fmt.Errorf("CreateCapBrand failed: %v", err)
+		return nil, fmt.Errorf("CheckAdmin failed: %v", err)
 	}
 
 	return response, nil

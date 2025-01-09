@@ -6,9 +6,18 @@ import (
 	"net/http"
 )
 
+const (
+	basePath = "/_cap/api/v1/brands"
+)
+
 type GetCapBrandRequest struct {
 	PathParams GetCapBrandRequestPathParams
 	Headers    GetCapBrandRequestHeaders
+}
+
+type GetCapBrandResponse struct {
+	Body       CreateCapBrandResponseBody
+	StatusCode int
 }
 
 type GetCapBrandRequestPathParams struct {
@@ -38,33 +47,11 @@ type GetCapBrandResponseBody struct {
 	ColorLogo   string            `json:"colorLogo"`
 }
 
-func (p GetCapBrandRequest) GetPath() string {
-	return "/_cap/api/v1/brands/" + p.PathParams.UUID
-}
+func GetCapBrand(client *httpClient.Client, request *httpClient.Request[GetCapBrandRequestPathParams]) (*httpClient.Response[GetCapBrandResponseBody], error) {
+	request.Path = fmt.Sprintf("%s/%s", basePath, request.PathParams["UUID"])
+	request.Method = http.MethodGet
 
-func (p GetCapBrandRequest) GetQueryParams() map[string]string {
-	return nil
-}
-
-func (p GetCapBrandRequest) GetBody() []byte {
-	return nil
-}
-
-func (p GetCapBrandRequest) GetQueryHeaders() map[string]string {
-	return map[string]string{
-		"Authorization":   p.Headers.Authorization,
-		"platform-nodeid": p.Headers.PlatformNodeID,
-	}
-}
-
-func (p GetCapBrandRequest) GetPathParams() map[string]string {
-	return map[string]string{
-		"UUID": p.PathParams.UUID,
-	}
-}
-
-func GetCapBrand(client *httpClient.Client, request GetCapBrandRequest) (*GetCapBrandResponseBody, error) {
-	response, err := httpClient.DoRequest[GetCapBrandRequest, GetCapBrandResponseBody](client, http.MethodGet, request)
+	response, err := httpClient.DoRequest[GetCapBrandRequestPathParams, GetCapBrandResponseBody](client, request)
 	if err != nil {
 		return nil, fmt.Errorf("GetCapBrand failed: %v", err)
 	}

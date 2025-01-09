@@ -3,11 +3,11 @@ package requests
 import (
 	httpClient "CB_auto/test/transport/http"
 	"fmt"
+	"net/http"
 )
 
 const (
-	pathAdminCheck   = "/_cap/api/token/check"
-	methodAdminCheck = "POST"
+	pathAdminCheck = "/_cap/api/token/check"
 )
 
 type AdminCheckRequest struct {
@@ -29,10 +29,11 @@ type AdminCheckResponseBody struct {
 	RefreshToken string `json:"refreshToken"`
 }
 
-func CheckAdmin1(client *httpClient.Client, request *httpClient.Request[AdminCheckRequestBody]) (*httpClient.Response[AdminCheckResponseBody], error) {
+func CheckAdmin(client *httpClient.Client, request *httpClient.Request[AdminCheckRequestBody]) (*httpClient.Response[AdminCheckResponseBody], error) {
 	request.Path = pathAdminCheck
-	request.Method = methodAdminCheck
-	response, err := httpClient.DoRequest1[AdminCheckRequestBody, AdminCheckResponseBody](client, request)
+	request.Method = http.MethodPost
+
+	response, err := httpClient.DoRequest[AdminCheckRequestBody, AdminCheckResponseBody](client, request)
 	if err != nil {
 		return nil, fmt.Errorf("CheckAdmin failed: %v", err)
 	}
