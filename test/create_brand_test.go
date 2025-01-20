@@ -3,12 +3,15 @@ package test
 import (
 	"CB_auto/test/config"
 	"CB_auto/test/transport/database"
+	"CB_auto/test/transport/database/brand"
 	httpClient "CB_auto/test/transport/http"
 	"CB_auto/test/transport/http/requests"
 	"CB_auto/test/utils"
-	"database/sql"
+	"context"
+	"encoding/json"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/google/uuid"
 	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
@@ -19,27 +22,40 @@ type CreateBrandSuite struct {
 	suite.Suite
 	client   *httpClient.Client
 	config   *config.Config
-	database *sql.DB
+	database *database.Connector
 }
 
 func (s *CreateBrandSuite) BeforeAll(t provider.T) {
 	t.WithNewStep("Чтение конфигурационного файла.", func(sCtx provider.StepCtx) {
-		cfg, _ := config.ReadConfig()
+		cfg, err := config.ReadConfig()
+		if err != nil {
+			t.Fatalf("Ошибка при чтении конфигурации: %v", err)
+		}
 		s.config = cfg
 	})
+
 	t.WithNewStep("Инициализация http-клиента.", func(sCtx provider.StepCtx) {
 		client, err := httpClient.InitClient(s.config)
 		if err != nil {
-			t.Fatalf("InitClient Failed: %v", err)
+			t.Fatalf("InitClient не удался: %v", err)
 		}
 		s.client = client
 	})
+
 	t.WithNewStep("Соединение с базой данных.", func(sCtx provider.StepCtx) {
-		db, err := database.InitDB(&s.config.MySQL)
+		connector, err := database.OpenConnector(context.Background(), database.Config{
+			DriverName:      s.config.MySQL.DriverName,
+			DSN:             s.config.MySQL.DSN,
+			PingTimeout:     s.config.MySQL.PingTimeout,
+			ConnMaxLifetime: s.config.MySQL.ConnMaxLifetime,
+			ConnMaxIdleTime: s.config.MySQL.ConnMaxIdleTime,
+			MaxOpenConns:    s.config.MySQL.MaxOpenConns,
+			MaxIdleConns:    s.config.MySQL.MaxIdleConns,
+		})
 		if err != nil {
-			t.Fatalf("InitDB Failed: %v", err)
+			t.Fatalf("OpenConnector не удался: %v", err)
 		}
-		s.database = db
+		s.database = &connector
 	})
 }
 
@@ -48,6 +64,8 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 	t.Feature("Создание бренда.")
 	t.Tags("CAP", "Brands")
 	t.Title("Проверка ответа метода GET /_cap/api/v1/brands/{uuid} при создании бренда")
+
+	brandRepo := brand.NewRepository(s.database)
 
 	type TestData struct {
 		adminResponse          *httpClient.Response[requests.AdminCheckResponseBody]
@@ -122,12 +140,22 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 		sCtx.WithAttachments(allure.NewAttachment("request", allure.JSON, requestAtt))
 		sCtx.WithAttachments(allure.NewAttachment("response", allure.JSON, responseAtt))
 	})
+
+	t.WithNewStep("Проверка записи информации о бренде в БД.", func(sCtx provider.StepCtx) {
+		brandUUID := uuid.MustParse(testData.createCapBrandResponse.Body.ID)
+		brand, _ := brandRepo.GetBrand(context.Background(), brandUUID)
+
+		jsonData, _ := json.MarshalIndent(brand, "", "  ")
+
+		sCtx.WithAttachments(allure.NewAttachment("result", allure.JSON, jsonData))
+
+	})
 }
 
 func (s *CreateBrandSuite) AfterAll(t provider.T) {
-	t.WithNewStep("Close Database Connection", func(sCtx provider.StepCtx) {
-		if err := database.CloseDB(s.database); err != nil {
-			t.Fatalf("Failed to close database connection: %v", err)
+	t.WithNewStep("Закрытие соединения с базой данных.", func(sCtx provider.StepCtx) {
+		if err := s.database.Close(); err != nil { // Закрываем соединение через метод Close
+			t.Fatalf("Ошибка при закрытии соединения с базой данных: %v", err)
 		}
 	})
 }

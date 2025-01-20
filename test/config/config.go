@@ -4,17 +4,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 )
 
 type MySQLConfig struct {
-	User            string `json:"user"`
-	Password        string `json:"password"`
-	DBName          string `json:"dbName"`
-	Host            string `json:"host"`
-	Port            string `json:"port"`
-	ConnMaxLifetime string `json:"connMaxLifetime"`
-	MaxOpenConns    int    `json:"maxOpenConns"`
-	MaxIdleConns    int    `json:"maxIdleConns"`
+	DriverName      string        `json:"driverName"`
+	DSN             string        `json:"dsn"`
+	PingTimeout     time.Duration `json:"pingTimeout"`
+	ConnMaxLifetime time.Duration `json:"connMaxLifetime"`
+	ConnMaxIdleTime time.Duration `json:"connMaxIdleTime"`
+	MaxOpenConns    int           `json:"maxOpenConns"`
+	MaxIdleConns    int           `json:"maxIdleConns"`
 }
 
 type Config struct {
@@ -22,8 +22,8 @@ type Config struct {
 	RequestTimeout int         `json:"requestTimeout"`
 	UserName       string      `json:"username"`
 	Password       string      `json:"password"`
-	GroupID        string      `json:"groupID"`
-	ProjectID      string      `json:"projectID"`
+	GroupID        string      `json:"groupId"`   // Исправлено на "groupId"
+	ProjectID      string      `json:"projectId"` // Исправлено на "projectId"
 	MySQL          MySQLConfig `json:"mysql"`
 }
 
