@@ -1,4 +1,4 @@
-package requests
+package http
 
 //import (
 //	httpClient "CB_auto/test/transport/http"
