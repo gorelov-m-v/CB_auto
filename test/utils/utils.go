@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"CB_auto/test/transport/http/requests"
+	capAPI "CB_auto/test/transport/http/cap/models"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func CheckTokenExpiry(response *requests.AdminCheckResponseBody) bool {
+func CheckTokenExpiry(response *capAPI.AdminCheckResponseBody) bool {
 	if response == nil || response.Token == "" {
 		return false
 	}
@@ -46,4 +46,12 @@ func CheckTokenExpiry(response *requests.AdminCheckResponseBody) bool {
 
 	fmt.Printf("Token is valid until: %v\n", expirationTime)
 	return true
+}
+
+func CreateAttach(v interface{}) []byte {
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return []byte(fmt.Sprintf("%+v", v))
+	}
+	return b
 }
