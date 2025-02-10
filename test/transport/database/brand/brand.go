@@ -38,8 +38,26 @@ func NewRepository(connector *database.Connector) *Repository {
 }
 
 func (r *Repository) GetBrand(ctx context.Context, brandUUID uuid.UUID) (*Brand, error) {
-	q := `SELECT uuid, localized_names, alias, description, node_uuid, status, sort, created_at, created_by, updated_at, updated_by, deleted_at, deleted_by, alias_for_index, icon, logo 
-		FROM brand WHERE uuid = :uuid`
+	q := `SELECT 
+    	  	uuid, 
+    	  	localized_names, 
+    	  	alias, 
+    	  	description, 
+    	  	node_uuid, 
+    	  	status, 
+    	  	sort, 
+    	  	created_at, 
+    	  	created_by, 
+    	  	updated_at, 
+    	  	updated_by, 
+    	  	deleted_at, 
+    	  	deleted_by, 
+    	  	alias_for_index, 
+    	  	icon, 
+    	  	logo 
+		  FROM brand 
+		  WHERE uuid = :uuid`
+
 	params := map[string]any{"uuid": brandUUID}
 
 	queryNamed := namedParameterQuery.NewNamedParameterQuery(q)

@@ -12,42 +12,29 @@ import (
 	"time"
 )
 
-type RequestDetails struct {
-	Method  string            `json:"method"`
-	URL     string            `json:"url"`
-	Headers map[string]string `json:"headers"`
-	Body    json.RawMessage   `json:"body,omitempty"`
-}
-
-type ResponseDetails struct {
-	StatusCode int               `json:"status_code"`
-	Headers    map[string]string `json:"headers"`
-	Body       json.RawMessage   `json:"body,omitempty"`
-}
-
 type Client struct {
 	httpClient *http.Client
 	serviceURL string
 }
 
 type Request[T any] struct {
-	Method      string
-	Path        string
-	PathParams  map[string]string
-	QueryParams map[string]string
-	Headers     map[string]string
-	Body        *T
-}
-
-type Response[V any] struct {
-	Body       V
-	StatusCode int
-	Headers    http.Header
-	Error      *ErrorResponse
+	Method      string            `json:"method"`                // HTTP-метод
+	Path        string            `json:"path"`                  // Путь запроса (с шаблонами, например, {id})
+	PathParams  map[string]string `json:"path_params,omitempty"` // Подставляемые параметры в путь
+	QueryParams map[string]string `json:"query_params,omitempty"`
+	Headers     map[string]string `json:"headers,omitempty"`
+	Body        *T                `json:"body,omitempty"`
 }
 
 type ErrorResponse struct {
 	Body string `json:"body"`
+}
+
+type Response[V any] struct {
+	Body       V              `json:"body"`
+	StatusCode int            `json:"status_code"`
+	Headers    http.Header    `json:"headers"`
+	Error      *ErrorResponse `json:"error,omitempty"`
 }
 
 func InitClient(cfg *config.Config) (*Client, error) {
@@ -64,41 +51,21 @@ func InitClient(cfg *config.Config) (*Client, error) {
 	}, nil
 }
 
-func DoRequest[T any, V any](c *Client, r *Request[T]) (*Response[V], *RequestDetails, *ResponseDetails, error) {
+func DoRequest[T any, V any](c *Client, r *Request[T]) (*Response[V], error) {
 	req, err := makeRequest(c.serviceURL, r)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("makeRequest failed: %v", err)
-	}
-
-	var reqBodyBytes json.RawMessage
-	if r.Body != nil {
-		reqBodyBytes, err = json.Marshal(r.Body)
-		if err != nil {
-			reqBodyBytes = []byte{}
-		}
-	}
-	reqDetails := &RequestDetails{
-		Method:  req.Method,
-		URL:     req.URL.String(),
-		Headers: r.Headers,
-		Body:    reqBodyBytes,
+		return nil, fmt.Errorf("makeRequest failed: %v", err)
 	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, reqDetails, nil, fmt.Errorf("httpClient.Do failed: %v", err)
+		return nil, fmt.Errorf("httpClient.Do failed: %v", err)
 	}
 	defer resp.Body.Close()
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, reqDetails, nil, fmt.Errorf("failed to read response body: %v", err)
-	}
-
-	respDetails := &ResponseDetails{
-		StatusCode: resp.StatusCode,
-		Headers:    convertHeaders(resp.Header),
-		Body:       bodyBytes,
+		return nil, fmt.Errorf("failed to read response body: %v", err)
 	}
 
 	response := &Response[V]{
@@ -108,14 +75,14 @@ func DoRequest[T any, V any](c *Client, r *Request[T]) (*Response[V], *RequestDe
 
 	if resp.StatusCode >= 400 {
 		response.Error = &ErrorResponse{Body: string(bodyBytes)}
-		return response, reqDetails, respDetails, nil
+		return response, nil
 	}
 
 	if err := json.Unmarshal(bodyBytes, &response.Body); err != nil {
-		return nil, reqDetails, respDetails, fmt.Errorf("failed to decode response body: %v", err)
+		return nil, fmt.Errorf("failed to decode response body: %v", err)
 	}
 
-	return response, reqDetails, respDetails, nil
+	return response, nil
 }
 
 func makeRequest[T any](serviceURL string, r *Request[T]) (*http.Request, error) {
@@ -165,12 +132,4 @@ func makeRequest[T any](serviceURL string, r *Request[T]) (*http.Request, error)
 	}
 
 	return req, nil
-}
-
-func convertHeaders(headers http.Header) map[string]string {
-	result := make(map[string]string)
-	for k, v := range headers {
-		result[k] = strings.Join(v, ", ")
-	}
-	return result
 }
