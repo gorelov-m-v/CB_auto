@@ -1,57 +1,63 @@
 package utils
 
 import (
-	capAPI "CB_auto/test/transport/http/cap/models"
-	"encoding/base64"
+	"CB_auto/test/transport/http"
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 )
 
-func CheckTokenExpiry(response *capAPI.AdminCheckResponseBody) bool {
-	if response == nil || response.Token == "" {
-		return false
+func CreateHttpAttachRequest[T any](req *http.Request[T]) []byte {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Method: %s\n", req.Method))
+	sb.WriteString(fmt.Sprintf("Path: %s\n", req.Path))
+	if len(req.PathParams) > 0 {
+		sb.WriteString("PathParams:\n")
+		for k, v := range req.PathParams {
+			sb.WriteString(fmt.Sprintf("  %s: %s\n", k, v))
+		}
 	}
-
-	parts := strings.Split(response.Token, ".")
-	if len(parts) != 3 {
-		fmt.Println("Invalid token format")
-		return false
+	if len(req.QueryParams) > 0 {
+		sb.WriteString("QueryParams:\n")
+		for k, v := range req.QueryParams {
+			sb.WriteString(fmt.Sprintf("  %s: %s\n", k, v))
+		}
 	}
-
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		fmt.Printf("Failed to decode token payload: %v\n", err)
-		return false
+	if len(req.Headers) > 0 {
+		sb.WriteString("Headers:\n")
+		for k, v := range req.Headers {
+			sb.WriteString(fmt.Sprintf("  %s: %s\n", k, v))
+		}
 	}
-
-	var claims map[string]interface{}
-	if err := json.Unmarshal(payload, &claims); err != nil {
-		fmt.Printf("Failed to unmarshal token payload: %v\n", err)
-		return false
+	if req.Body != nil {
+		b, err := json.MarshalIndent(req.Body, "", "  ")
+		if err != nil {
+			sb.WriteString(fmt.Sprintf("Body: %+v\n", req.Body))
+		} else {
+			sb.WriteString("Body: " + string(b) + "\n")
+		}
 	}
-
-	exp, ok := claims["exp"].(float64)
-	if !ok {
-		fmt.Println("Token does not contain an expiration time")
-		return false
-	}
-
-	expirationTime := time.Unix(int64(exp), 0)
-	if time.Until(expirationTime) <= 0 {
-		fmt.Println("Token has expired")
-		return false
-	}
-
-	fmt.Printf("Token is valid until: %v\n", expirationTime)
-	return true
+	return []byte(sb.String())
 }
 
-func CreateAttach(v interface{}) []byte {
-	b, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return []byte(fmt.Sprintf("%+v", v))
+func CreateHttpAttachResponse[V any](resp *http.Response[V]) []byte {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("StatusCode: %d\n", resp.StatusCode))
+	if len(resp.Headers) > 0 {
+		sb.WriteString("Headers:\n")
+		for k, v := range resp.Headers {
+			sb.WriteString(fmt.Sprintf("  %s: %s\n", k, strings.Join(v, ", ")))
+		}
 	}
-	return b
+	if resp.Error != nil {
+		sb.WriteString(fmt.Sprintf("Error: %s\n", resp.Error.Body))
+	} else {
+		b, err := json.MarshalIndent(resp.Body, "", "  ")
+		if err != nil {
+			sb.WriteString(fmt.Sprintf("Body: %+v\n", resp.Body))
+		} else {
+			sb.WriteString("Body: " + string(b) + "\n")
+		}
+	}
+	return []byte(sb.String())
 }

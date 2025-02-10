@@ -8,9 +8,9 @@ import (
 )
 
 type CapAPI interface {
-	CheckAdmin(body models.AdminCheckRequestBody) (*models.AdminCheckResponseBody, *httpClient.RequestDetails, *httpClient.ResponseDetails, error)
-	CreateCapBrand(body models.CreateCapBrandRequestBody, headers models.CreateCapBrandRequestHeaders) (*models.CreateCapBrandResponseBody, *httpClient.RequestDetails, *httpClient.ResponseDetails, error)
-	GetCapBrand(uuid string, headers models.GetCapBrandRequestHeaders) (*models.GetCapBrandResponseBody, *httpClient.RequestDetails, *httpClient.ResponseDetails, error)
+	CheckAdmin(req *httpClient.Request[models.AdminCheckRequestBody]) (*httpClient.Response[models.AdminCheckResponseBody], error)
+	CreateCapBrand(req *httpClient.Request[models.CreateCapBrandRequestBody]) (*httpClient.Response[models.CreateCapBrandResponseBody], error)
+	GetCapBrand(req *httpClient.Request[struct{}]) (*httpClient.Response[models.GetCapBrandResponseBody], error)
 }
 
 type capClient struct {
@@ -21,50 +21,32 @@ func NewCapClient(client *httpClient.Client) CapAPI {
 	return &capClient{client: client}
 }
 
-func (c *capClient) CheckAdmin(body models.AdminCheckRequestBody) (*models.AdminCheckResponseBody, *httpClient.RequestDetails, *httpClient.ResponseDetails, error) {
-	req := &httpClient.Request[models.AdminCheckRequestBody]{
-		Method: http.MethodPost,
-		Path:   "/_cap/api/token/check",
-		Body:   &body,
-	}
-	resp, reqDetails, respDetails, err := httpClient.DoRequest[models.AdminCheckRequestBody, models.AdminCheckResponseBody](c.client, req)
+func (c *capClient) CheckAdmin(req *httpClient.Request[models.AdminCheckRequestBody]) (*httpClient.Response[models.AdminCheckResponseBody], error) {
+	req.Method = http.MethodPost
+	req.Path = "/_cap/api/token/check"
+	resp, err := httpClient.DoRequest[models.AdminCheckRequestBody, models.AdminCheckResponseBody](c.client, req)
 	if err != nil {
-		return nil, reqDetails, respDetails, fmt.Errorf("CheckAdmin failed: %v", err)
+		return nil, fmt.Errorf("CheckAdmin failed: %v", err)
 	}
-	return &resp.Body, reqDetails, respDetails, nil
+	return resp, nil
 }
 
-func (c *capClient) CreateCapBrand(body models.CreateCapBrandRequestBody, headers models.CreateCapBrandRequestHeaders) (*models.CreateCapBrandResponseBody, *httpClient.RequestDetails, *httpClient.ResponseDetails, error) {
-	req := &httpClient.Request[models.CreateCapBrandRequestBody]{
-		Method: http.MethodPost,
-		Path:   "/_cap/api/v1/brands",
-		Headers: map[string]string{
-			"Authorization":   headers.Authorization,
-			"Platform-Nodeid": headers.PlatformNodeID,
-		},
-		Body: &body,
-	}
-	resp, reqDetails, respDetails, err := httpClient.DoRequest[models.CreateCapBrandRequestBody, models.CreateCapBrandResponseBody](c.client, req)
+func (c *capClient) CreateCapBrand(req *httpClient.Request[models.CreateCapBrandRequestBody]) (*httpClient.Response[models.CreateCapBrandResponseBody], error) {
+	req.Method = http.MethodPost
+	req.Path = "/_cap/api/v1/brands"
+	resp, err := httpClient.DoRequest[models.CreateCapBrandRequestBody, models.CreateCapBrandResponseBody](c.client, req)
 	if err != nil {
-		return nil, reqDetails, respDetails, fmt.Errorf("CreateCapBrand failed: %v", err)
+		return nil, fmt.Errorf("CreateCapBrand failed: %v", err)
 	}
-	return &resp.Body, reqDetails, respDetails, nil
+	return resp, nil
 }
 
-func (c *capClient) GetCapBrand(uuid string, headers models.GetCapBrandRequestHeaders) (*models.GetCapBrandResponseBody, *httpClient.RequestDetails, *httpClient.ResponseDetails, error) {
-	path := fmt.Sprintf("/_cap/api/v1/brands/%s", uuid)
-	req := &httpClient.Request[struct{}]{
-		Method: http.MethodGet,
-		Path:   path,
-		Headers: map[string]string{
-			"Authorization":   headers.Authorization,
-			"Platform-Nodeid": headers.PlatformNodeID,
-		},
-		Body: nil,
-	}
-	resp, reqDetails, respDetails, err := httpClient.DoRequest[struct{}, models.GetCapBrandResponseBody](c.client, req)
+func (c *capClient) GetCapBrand(req *httpClient.Request[struct{}]) (*httpClient.Response[models.GetCapBrandResponseBody], error) {
+	req.Method = http.MethodGet
+	req.Path = "/_cap/api/v1/brands/{id}"
+	resp, err := httpClient.DoRequest[struct{}, models.GetCapBrandResponseBody](c.client, req)
 	if err != nil {
-		return nil, reqDetails, respDetails, fmt.Errorf("GetCapBrand failed: %v", err)
+		return nil, fmt.Errorf("GetCapBrand failed: %v", err)
 	}
-	return &resp.Body, reqDetails, respDetails, nil
+	return resp, nil
 }

@@ -66,7 +66,7 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 	t.Epic("Brands.")
 	t.Feature("Создание бренда.")
 	t.Tags("CAP", "Brands")
-	t.Title("Проверка создания бренда и получения его данных через GET /_cap/api/v1/brands/{uuid}")
+	t.Title("Проверка создания бренда и получения его данных через GET /_cap/api/v1/brands/{id}")
 
 	brandRepo := brand.NewRepository(s.database)
 
@@ -78,61 +78,68 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 	var testData TestData
 
 	t.WithNewStep("Получение/Обновление токена авторизации CAP.", func(sCtx provider.StepCtx) {
-		if testData.adminResponse == nil || !utils.CheckTokenExpiry(testData.adminResponse) {
-			adminBody := models.AdminCheckRequestBody{
+		adminReq := &httpClient.Request[models.AdminCheckRequestBody]{
+			Body: &models.AdminCheckRequestBody{
 				UserName: s.config.UserName,
 				Password: s.config.Password,
-			}
-			adminResp, reqDetails, respDetails, err := s.capService.CheckAdmin(adminBody)
-			if err != nil {
-				t.Fatalf("CheckAdmin не удался: %v", err)
-			}
-			testData.adminResponse = adminResp
-
-			sCtx.WithAttachments(allure.NewAttachment("CheckAdmin Request (Full)", allure.JSON, utils.CreateAttach(reqDetails)))
-			sCtx.WithAttachments(allure.NewAttachment("CheckAdmin Response (Full)", allure.JSON, utils.CreateAttach(respDetails)))
+			},
 		}
+		adminResp, err := s.capService.CheckAdmin(adminReq)
+		if err != nil {
+			t.Fatalf("CheckAdmin не удался: %v", err)
+		}
+		testData.adminResponse = &adminResp.Body
+
+		sCtx.WithAttachments(allure.NewAttachment("CheckAdmin Request", allure.JSON, utils.CreateHttpAttachRequest(adminReq)))
+		sCtx.WithAttachments(allure.NewAttachment("CheckAdmin Response", allure.JSON, utils.CreateHttpAttachResponse(adminResp)))
 	})
 
 	t.WithNewStep("Создание бренда в CAP.", func(sCtx provider.StepCtx) {
 		alias := utils.GenerateAlias()
 		testData.createdAlias = alias
 
-		createBody := models.CreateCapBrandRequestBody{
-			Sort:        1,
-			Alias:       alias,
-			Names:       map[string]string{"en": utils.GenerateAlias()},
-			Description: utils.GenerateAlias(),
+		createReq := &httpClient.Request[models.CreateCapBrandRequestBody]{
+			Headers: map[string]string{
+				"Authorization":   fmt.Sprintf("Bearer %s", testData.adminResponse.Token),
+				"Platform-Nodeid": s.config.ProjectID,
+			},
+			Body: &models.CreateCapBrandRequestBody{
+				Sort:        1,
+				Alias:       alias,
+				Names:       map[string]string{"en": utils.GenerateAlias()},
+				Description: utils.GenerateAlias(),
+			},
 		}
-		headers := models.CreateCapBrandRequestHeaders{
-			Authorization:  fmt.Sprintf("Bearer %s", testData.adminResponse.Token),
-			PlatformNodeID: s.config.ProjectID,
-		}
-		createResp, reqDetails, respDetails, err := s.capService.CreateCapBrand(createBody, headers)
+		createResp, err := s.capService.CreateCapBrand(createReq)
 		if err != nil {
 			t.Fatalf("CreateCapBrand не удался: %v", err)
 		}
-		testData.createCapBrandResponse = createResp
+		testData.createCapBrandResponse = &createResp.Body
 
-		sCtx.WithAttachments(allure.NewAttachment("CreateBrand Request (Full)", allure.JSON, utils.CreateAttach(reqDetails)))
-		sCtx.WithAttachments(allure.NewAttachment("CreateBrand Response (Full)", allure.JSON, utils.CreateAttach(respDetails)))
+		sCtx.WithAttachments(allure.NewAttachment("CreateBrand Request", allure.JSON, utils.CreateHttpAttachRequest(createReq)))
+		sCtx.WithAttachments(allure.NewAttachment("CreateBrand Response", allure.JSON, utils.CreateHttpAttachResponse(createResp)))
 	})
 
 	t.WithNewStep("Проверка создания бренда в CAP через GET.", func(sCtx provider.StepCtx) {
-		headers := models.GetCapBrandRequestHeaders{
-			Authorization:  fmt.Sprintf("Bearer %s", testData.adminResponse.Token),
-			PlatformNodeID: s.config.ProjectID,
+		getReq := &httpClient.Request[struct{}]{
+			Headers: map[string]string{
+				"Authorization":   fmt.Sprintf("Bearer %s", testData.adminResponse.Token),
+				"Platform-Nodeid": s.config.ProjectID,
+			},
+			PathParams: map[string]string{
+				"id": testData.createCapBrandResponse.ID,
+			},
 		}
-		getResp, reqDetails, respDetails, err := s.capService.GetCapBrand(testData.createCapBrandResponse.ID, headers)
+		getResp, err := s.capService.GetCapBrand(getReq)
 		if err != nil {
 			t.Fatalf("GetCapBrand не удался: %v", err)
 		}
-		if testData.createdAlias != getResp.Alias {
-			t.Fatalf("Ожидали alias %s, получили %s", testData.createdAlias, getResp.Alias)
+		if testData.createdAlias != getResp.Body.Alias {
+			t.Fatalf("Ожидали alias %s, получили %s", testData.createdAlias, getResp.Body.Alias)
 		}
 
-		sCtx.WithAttachments(allure.NewAttachment("GetBrand Request (Full)", allure.JSON, utils.CreateAttach(reqDetails)))
-		sCtx.WithAttachments(allure.NewAttachment("GetBrand Response (Full)", allure.JSON, utils.CreateAttach(respDetails)))
+		sCtx.WithAttachments(allure.NewAttachment("GetBrand Request", allure.JSON, utils.CreateHttpAttachRequest(getReq)))
+		sCtx.WithAttachments(allure.NewAttachment("GetBrand Response", allure.JSON, utils.CreateHttpAttachResponse(getResp)))
 	})
 
 	t.WithNewStep("Проверка записи информации о бренде в БД.", func(sCtx provider.StepCtx) {
