@@ -18,9 +18,9 @@ type Client struct {
 }
 
 type Request[T any] struct {
-	Method      string            `json:"method"`                // HTTP-метод
-	Path        string            `json:"path"`                  // Путь запроса (с шаблонами, например, {id})
-	PathParams  map[string]string `json:"path_params,omitempty"` // Подставляемые параметры в путь
+	Method      string            `json:"method"`
+	Path        string            `json:"path"`
+	PathParams  map[string]string `json:"path_params,omitempty"`
 	QueryParams map[string]string `json:"query_params,omitempty"`
 	Headers     map[string]string `json:"headers,omitempty"`
 	Body        *T                `json:"body,omitempty"`
