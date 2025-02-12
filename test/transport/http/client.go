@@ -26,15 +26,15 @@ type Request[T any] struct {
 	Body        *T                `json:"body,omitempty"`
 }
 
-type ErrorResponse struct {
-	Body string `json:"body"`
-}
-
 type Response[V any] struct {
 	Body       V              `json:"body"`
 	StatusCode int            `json:"status_code"`
 	Headers    http.Header    `json:"headers"`
 	Error      *ErrorResponse `json:"error,omitempty"`
+}
+
+type ErrorResponse struct {
+	Body string `json:"body"`
 }
 
 func InitClient(cfg *config.Config) (*Client, error) {

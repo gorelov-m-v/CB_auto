@@ -17,14 +17,20 @@ type MySQLConfig struct {
 	MaxIdleConns    int           `json:"maxIdleConns"`
 }
 
+type KafkaConfig struct {
+	Brokers string `json:"brokers"`
+	Topic   string `json:"topic"`
+}
+
 type Config struct {
 	BaseURL        string      `json:"baseURL"`
 	RequestTimeout int         `json:"requestTimeout"`
 	UserName       string      `json:"username"`
 	Password       string      `json:"password"`
-	GroupID        string      `json:"groupId"`   // Исправлено на "groupId"
-	ProjectID      string      `json:"projectId"` // Исправлено на "projectId"
+	GroupID        string      `json:"groupId"`
+	ProjectID      string      `json:"projectId"`
 	MySQL          MySQLConfig `json:"mysql"`
+	Kafka          KafkaConfig `json:"kafka"`
 }
 
 func ReadConfig() (*Config, error) {
@@ -40,6 +46,10 @@ func ReadConfig() (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("config decode failed: %w", err)
 	}
+
+	config.MySQL.PingTimeout *= time.Nanosecond
+	config.MySQL.ConnMaxLifetime *= time.Nanosecond
+	config.MySQL.ConnMaxIdleTime *= time.Nanosecond
 
 	return config, nil
 }
