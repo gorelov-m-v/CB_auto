@@ -61,3 +61,11 @@ func CreateHttpAttachResponse[V any](resp *http.Response[V]) []byte {
 	}
 	return []byte(sb.String())
 }
+
+func CreatePrettyJSON[T any](v T) []byte {
+	prettyJSON, err := json.MarshalIndent(v, "", "    ")
+	if err != nil {
+		return []byte(fmt.Sprintf("Ошибка при форматировании JSON: %v", err))
+	}
+	return prettyJSON
+}

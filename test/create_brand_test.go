@@ -11,12 +11,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"testing"
+	"time"
+
 	_ "github.com/go-sql-driver/mysql"
+
+	"CB_auto/test/transport/kafka"
+
 	"github.com/google/uuid"
 	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
-	"testing"
 )
 
 type CreateBrandSuite struct {
@@ -25,6 +30,7 @@ type CreateBrandSuite struct {
 	config     *config.Config
 	database   *database.Connector
 	capService capAPI.CapAPI
+	kafka      *kafka.Kafka
 }
 
 func (s *CreateBrandSuite) BeforeAll(t provider.T) {
@@ -59,6 +65,14 @@ func (s *CreateBrandSuite) BeforeAll(t provider.T) {
 			t.Fatalf("OpenConnector не удался: %v", err)
 		}
 		s.database = &connector
+	})
+
+	t.WithNewStep("Инициализация Kafka utils.", func(sCtx provider.StepCtx) {
+		s.kafka = kafka.NewTestUtils(
+			[]string{s.config.Kafka.Brokers},
+			s.config.Kafka.Topic,
+			s.config.GroupID,
+		)
 	})
 }
 
@@ -120,6 +134,22 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 		sCtx.WithAttachments(allure.NewAttachment("CreateBrand Response", allure.JSON, utils.CreateHttpAttachResponse(createResp)))
 	})
 
+	t.WithNewStep("Проверка сообщения из Kafka.", func(sCtx provider.StepCtx) {
+		expectedAlias := testData.createdAlias
+		expectedUUID := testData.createCapBrandResponse.ID
+
+		message := s.kafka.ReadMessageWithFilter(t, 10*time.Second, func(brand kafka.Brand) bool {
+			return brand.Brand.Alias == expectedAlias && brand.Brand.UUID == expectedUUID
+		})
+
+		var kafkaMessage kafka.Brand
+		if err := json.Unmarshal(message.Value, &kafkaMessage); err != nil {
+			t.Fatalf("Ошибка при парсинге сообщения Kafka: %v", err)
+		}
+
+		sCtx.WithAttachments(allure.NewAttachment("Kafka Message", allure.JSON, utils.CreatePrettyJSON(kafkaMessage)))
+	})
+
 	t.WithNewStep("Проверка создания бренда в CAP через GET.", func(sCtx provider.StepCtx) {
 		getReq := &httpClient.Request[struct{}]{
 			Headers: map[string]string{
@@ -149,12 +179,15 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 			t.Fatalf("Не удалось получить бренд из БД: %v", err)
 		}
 
-		jsonData, _ := json.MarshalIndent(brandData, "", "  ")
-		sCtx.WithAttachments(allure.NewAttachment("Бренд из БД", allure.JSON, jsonData))
+		sCtx.WithAttachments(allure.NewAttachment("Бренд из БД", allure.JSON, utils.CreatePrettyJSON(brandData)))
 	})
 }
 
 func (s *CreateBrandSuite) AfterAll(t provider.T) {
+	t.WithNewStep("Закрытие соединения с Kafka.", func(sCtx provider.StepCtx) {
+		s.kafka.Close(t)
+	})
+
 	t.WithNewStep("Закрытие соединения с базой данных.", func(sCtx provider.StepCtx) {
 		if err := s.database.Close(); err != nil {
 			t.Fatalf("Ошибка при закрытии соединения с базой данных: %v", err)
