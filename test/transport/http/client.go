@@ -37,8 +37,25 @@ type ErrorResponse struct {
 	Body string `json:"body"`
 }
 
-func InitClient(cfg *config.Config) (*Client, error) {
-	u, err := url.Parse(cfg.BaseURL)
+type ClientType string
+
+const (
+	Cap    ClientType = "cap"
+	Public ClientType = "public"
+)
+
+func InitClient(cfg *config.Config, clientType ClientType) (*Client, error) {
+	var baseURL string
+	switch clientType {
+	case Cap:
+		baseURL = cfg.HTTP.CapURL
+	case Public:
+		baseURL = cfg.HTTP.PublicURL
+	default:
+		return nil, fmt.Errorf("unknown client type: %s", clientType)
+	}
+
+	u, err := url.Parse(baseURL)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +63,7 @@ func InitClient(cfg *config.Config) (*Client, error) {
 	return &Client{
 		serviceURL: u.String(),
 		httpClient: &http.Client{
-			Timeout: time.Duration(cfg.RequestTimeout) * time.Second,
+			Timeout: time.Duration(cfg.HTTP.Timeout) * time.Second,
 		},
 	}, nil
 }
@@ -55,6 +72,13 @@ func DoRequest[T any, V any](c *Client, r *Request[T]) (*Response[V], error) {
 	req, err := makeRequest(c.serviceURL, r)
 	if err != nil {
 		return nil, fmt.Errorf("makeRequest failed: %v", err)
+	}
+
+	// Логируем запрос
+	fmt.Printf("Request URL: %s\nRequest Method: %s\nRequest Headers: %+v\n", req.URL.String(), req.Method, req.Header)
+	if r.Body != nil {
+		bodyBytes, _ := json.Marshal(r.Body)
+		fmt.Printf("Request Body: %s\n", string(bodyBytes))
 	}
 
 	resp, err := c.httpClient.Do(req)
@@ -68,7 +92,8 @@ func DoRequest[T any, V any](c *Client, r *Request[T]) (*Response[V], error) {
 		return nil, fmt.Errorf("failed to read response body: %v", err)
 	}
 
-	fmt.Printf("Response Status: %d\nResponse Body: %s\n", resp.StatusCode, string(bodyBytes))
+	// Логируем ответ
+	fmt.Printf("Response Status: %d\nResponse Headers: %+v\nResponse Body: %s\n", resp.StatusCode, resp.Header, string(bodyBytes))
 
 	response := &Response[V]{
 		StatusCode: resp.StatusCode,
@@ -80,8 +105,10 @@ func DoRequest[T any, V any](c *Client, r *Request[T]) (*Response[V], error) {
 		return response, nil
 	}
 
-	if err := json.Unmarshal(bodyBytes, &response.Body); err != nil {
-		return nil, fmt.Errorf("failed to decode response body: %v", err)
+	if len(bodyBytes) > 0 {
+		if err := json.Unmarshal(bodyBytes, &response.Body); err != nil {
+			return nil, fmt.Errorf("failed to decode response body: %v", err)
+		}
 	}
 
 	return response, nil
