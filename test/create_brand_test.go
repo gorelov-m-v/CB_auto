@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
-	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 
@@ -67,12 +66,14 @@ func (s *CreateBrandSuite) BeforeAll(t provider.T) {
 		s.database = &connector
 	})
 
-	t.WithNewStep("Инициализация Kafka utils.", func(sCtx provider.StepCtx) {
-		s.kafka = kafka.NewTestUtils(
+	t.WithNewStep("Инициализация Kafka consumer.", func(sCtx provider.StepCtx) {
+		s.kafka = kafka.NewConsumer(
 			[]string{s.config.Kafka.Brokers},
 			s.config.Kafka.Topic,
 			s.config.GroupID,
+			s.config.Kafka.GetTimeout(),
 		)
+		s.kafka.StartReading(t)
 	})
 }
 
@@ -86,8 +87,8 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 
 	type TestData struct {
 		adminResponse          *models.AdminCheckResponseBody
+		createRequest          *httpClient.Request[models.CreateCapBrandRequestBody]
 		createCapBrandResponse *models.CreateCapBrandResponseBody
-		createdAlias           string
 	}
 	var testData TestData
 
@@ -98,10 +99,7 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 				Password: s.config.Password,
 			},
 		}
-		adminResp, err := s.capService.CheckAdmin(adminReq)
-		if err != nil {
-			t.Fatalf("CheckAdmin не удался: %v", err)
-		}
+		adminResp := s.capService.CheckAdmin(adminReq)
 		testData.adminResponse = &adminResp.Body
 
 		sCtx.WithAttachments(allure.NewAttachment("CheckAdmin Request", allure.JSON, utils.CreateHttpAttachRequest(adminReq)))
@@ -109,8 +107,10 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 	})
 
 	t.WithNewStep("Создание бренда в CAP.", func(sCtx provider.StepCtx) {
-		alias := utils.GenerateAlias()
-		testData.createdAlias = alias
+		brandName := utils.GenerateAlias()
+		names := map[string]string{
+			"en": brandName,
+		}
 
 		createReq := &httpClient.Request[models.CreateCapBrandRequestBody]{
 			Headers: map[string]string{
@@ -119,35 +119,17 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 			},
 			Body: &models.CreateCapBrandRequestBody{
 				Sort:        1,
-				Alias:       alias,
-				Names:       map[string]string{"en": utils.GenerateAlias()},
+				Alias:       brandName,
+				Names:       names,
 				Description: utils.GenerateAlias(),
 			},
 		}
-		createResp, err := s.capService.CreateCapBrand(createReq)
-		if err != nil {
-			t.Fatalf("CreateCapBrand не удался: %v", err)
-		}
+		testData.createRequest = createReq
+		createResp := s.capService.CreateCapBrand(createReq)
 		testData.createCapBrandResponse = &createResp.Body
 
 		sCtx.WithAttachments(allure.NewAttachment("CreateBrand Request", allure.JSON, utils.CreateHttpAttachRequest(createReq)))
 		sCtx.WithAttachments(allure.NewAttachment("CreateBrand Response", allure.JSON, utils.CreateHttpAttachResponse(createResp)))
-	})
-
-	t.WithNewStep("Проверка сообщения из Kafka.", func(sCtx provider.StepCtx) {
-		expectedAlias := testData.createdAlias
-		expectedUUID := testData.createCapBrandResponse.ID
-
-		message := s.kafka.ReadMessageWithFilter(t, 10*time.Second, func(brand kafka.Brand) bool {
-			return brand.Brand.Alias == expectedAlias && brand.Brand.UUID == expectedUUID
-		})
-
-		var kafkaMessage kafka.Brand
-		if err := json.Unmarshal(message.Value, &kafkaMessage); err != nil {
-			t.Fatalf("Ошибка при парсинге сообщения Kafka: %v", err)
-		}
-
-		sCtx.WithAttachments(allure.NewAttachment("Kafka Message", allure.JSON, utils.CreatePrettyJSON(kafkaMessage)))
 	})
 
 	t.WithNewStep("Проверка создания бренда в CAP через GET.", func(sCtx provider.StepCtx) {
@@ -160,13 +142,14 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 				"id": testData.createCapBrandResponse.ID,
 			},
 		}
-		getResp, err := s.capService.GetCapBrand(getReq)
-		if err != nil {
-			t.Fatalf("GetCapBrand не удался: %v", err)
-		}
-		if testData.createdAlias != getResp.Body.Alias {
-			t.Fatalf("Ожидали alias %s, получили %s", testData.createdAlias, getResp.Body.Alias)
-		}
+		getResp := s.capService.GetCapBrand(getReq)
+
+		t.Require().Equal(testData.createCapBrandResponse.ID, getResp.Body.ID)
+		t.Require().Equal(testData.createRequest.Body.Alias, getResp.Body.Alias)
+		t.Require().Equal(testData.createRequest.Body.Names, getResp.Body.Names)
+		t.Require().Equal(testData.createRequest.Body.Sort, getResp.Body.Sort)
+		t.Require().Equal(s.config.ProjectID, getResp.Body.NodeID)
+		t.Require().Equal(models.StatusDisabled, getResp.Body.Status)
 
 		sCtx.WithAttachments(allure.NewAttachment("GetBrand Request", allure.JSON, utils.CreateHttpAttachRequest(getReq)))
 		sCtx.WithAttachments(allure.NewAttachment("GetBrand Response", allure.JSON, utils.CreateHttpAttachResponse(getResp)))
@@ -175,11 +158,45 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 	t.WithNewStep("Проверка записи информации о бренде в БД.", func(sCtx provider.StepCtx) {
 		brandUUID := uuid.MustParse(testData.createCapBrandResponse.ID)
 		brandData, err := brandRepo.GetBrand(context.Background(), brandUUID)
-		if err != nil {
-			t.Fatalf("Не удалось получить бренд из БД: %v", err)
-		}
+		t.Require().NoError(err, "Ошибка при получении бренда из БД")
+
+		var dbNames map[string]string
+		err = json.Unmarshal(brandData.LocalizedNames, &dbNames)
+		t.Require().NoError(err)
+		t.Require().Equal(testData.createRequest.Body.Names, dbNames)
+		t.Require().Equal(testData.createRequest.Body.Alias, brandData.Alias)
+		t.Require().Equal(testData.createRequest.Body.Sort, brandData.Sort)
+		t.Require().Equal(testData.createRequest.Body.Description, brandData.Description)
+		t.Require().Equal(uuid.MustParse(s.config.ProjectID), brandData.NodeUUID)
+		t.Require().Equal(models.StatusDisabled, brandData.Status)
+		t.Require().NotZero(brandData.CreatedAt)
+		t.Require().Zero(brandData.UpdatedAt)
 
 		sCtx.WithAttachments(allure.NewAttachment("Бренд из БД", allure.JSON, utils.CreatePrettyJSON(brandData)))
+	})
+
+	t.WithNewStep("Проверка сообщения из Kafka.", func(sCtx provider.StepCtx) {
+		expectedAlias := testData.createRequest.Body.Alias
+		expectedUUID := testData.createCapBrandResponse.ID
+		expectedNames := testData.createRequest.Body.Names
+
+		message := s.kafka.FindMessage(t, func(brand kafka.Brand) bool {
+			return brand.Brand.UUID == expectedUUID
+		})
+
+		brandMessage := kafka.ParseMessage[kafka.Brand](t, message)
+
+		t.Require().Equal("gambling.gameBrandCreated", brandMessage.Message.EventType)
+		t.Require().Equal(expectedUUID, brandMessage.Brand.UUID)
+		t.Require().Equal(expectedAlias, brandMessage.Brand.Alias)
+		t.Require().Equal(expectedNames, brandMessage.Brand.LocalizedNames)
+		t.Require().False(brandMessage.Brand.StatusEnabled)
+		t.Require().Equal(s.config.ProjectID, brandMessage.Brand.ProjectID)
+
+		isDateValid, errMsg := utils.IsTimeInRange(brandMessage.Brand.CreatedAt, 5)
+		t.Require().True(isDateValid, errMsg)
+
+		sCtx.WithAttachments(allure.NewAttachment("Kafka Message", allure.JSON, utils.CreatePrettyJSON(message.Value)))
 	})
 }
 

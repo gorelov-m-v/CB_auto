@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
+
+	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
 
 func CreateHttpAttachRequest[T any](req *http.Request[T]) []byte {
@@ -68,4 +71,27 @@ func CreatePrettyJSON[T any](v T) []byte {
 		return []byte(fmt.Sprintf("Ошибка при форматировании JSON: %v", err))
 	}
 	return prettyJSON
+}
+
+func IsTimeInRange(timestamp int64, minutes time.Duration) (bool, string) {
+	if timestamp == 0 {
+		return false, "timestamp не должен быть пустым"
+	}
+
+	checkTime := time.Unix(timestamp, 0)
+	now := time.Now()
+	timeDiff := now.Sub(checkTime)
+
+	if timeDiff < -minutes*time.Minute || timeDiff > minutes*time.Minute {
+		return false, fmt.Sprintf("timestamp '%v' не попадает в диапазон текущего времени ±%d минут от %v",
+			checkTime, minutes, now)
+	}
+
+	return true, ""
+}
+
+func RequireNoError(t provider.T, err error, format string, args ...interface{}) {
+	if err != nil {
+		t.Fatalf(format+": %v", append(args, err)...)
+	}
 }

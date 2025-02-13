@@ -18,8 +18,9 @@ type MySQLConfig struct {
 }
 
 type KafkaConfig struct {
-	Brokers string `json:"brokers"`
-	Topic   string `json:"topic"`
+	Brokers string        `json:"brokers"`
+	Topic   string        `json:"topic"`
+	Timeout time.Duration `json:"timeout"`
 }
 
 type Config struct {
@@ -31,6 +32,10 @@ type Config struct {
 	ProjectID      string      `json:"projectId"`
 	MySQL          MySQLConfig `json:"mysql"`
 	Kafka          KafkaConfig `json:"kafka"`
+}
+
+func (k *KafkaConfig) GetTimeout() time.Duration {
+	return k.Timeout
 }
 
 func ReadConfig() (*Config, error) {
@@ -50,6 +55,7 @@ func ReadConfig() (*Config, error) {
 	config.MySQL.PingTimeout *= time.Nanosecond
 	config.MySQL.ConnMaxLifetime *= time.Nanosecond
 	config.MySQL.ConnMaxIdleTime *= time.Nanosecond
+	config.Kafka.Timeout *= time.Second
 
 	return config, nil
 }

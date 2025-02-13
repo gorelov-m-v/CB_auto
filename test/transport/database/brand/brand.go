@@ -6,27 +6,23 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"time"
+
 	"github.com/Knetic/go-namedParameterQuery"
 	"github.com/google/uuid"
 )
 
 type Brand struct {
-	UUID           string              `db:"uuid"            json:"UUID"`
-	LocalizedNames json.RawMessage     `db:"localized_names" json:"LocalizedNames"`
-	Alias          string              `db:"alias"           json:"Alias"`
-	Description    database.NullString `db:"description"     json:"Description,omitempty"`
-	NodeUUID       string              `db:"node_uuid"       json:"NodeUUID"`
-	Status         int16               `db:"status"          json:"Status"`
-	Sort           int                 `db:"sort"            json:"Sort"`
-	CreatedAt      int64               `db:"created_at"      json:"CreatedAt"`
-	CreatedBy      string              `db:"created_by"      json:"CreatedBy"`
-	UpdatedAt      database.NullInt64  `db:"updated_at"      json:"UpdatedAt,omitempty"`
-	UpdatedBy      database.NullString `db:"updated_by"      json:"UpdatedBy,omitempty"`
-	DeletedAt      database.NullInt64  `db:"deleted_at"      json:"DeletedAt,omitempty"`
-	DeletedBy      database.NullString `db:"deleted_by"      json:"DeletedBy,omitempty"`
-	AliasForIndex  database.NullString `db:"alias_for_index" json:"AliasForIndex,omitempty"`
-	Icon           database.NullString `db:"icon"            json:"Icon,omitempty"`
-	Logo           database.NullString `db:"logo"            json:"Logo,omitempty"`
+	UUID           uuid.UUID
+	NodeUUID       uuid.UUID
+	Alias          string
+	LocalizedNames []byte
+	Sort           int
+	Status         int
+	Description    string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 type Repository struct {
@@ -64,29 +60,51 @@ func (r *Repository) GetBrand(ctx context.Context, brandUUID uuid.UUID) (*Brand,
 	queryNamed.SetValuesFromMap(params)
 
 	var result Brand
+	var createdBy string
+	var updatedBy, deletedBy, aliasForIndex, icon, logo database.NullString
+	var deletedAt database.NullInt64
+	var localizedNamesRaw []byte
+	var createdAtUnix int64
+	var updatedAtUnix database.NullInt64
+	var nodeUUIDStr string
+
 	if err := r.connector.QueryRowContext(ctx, queryNamed.GetParsedQuery(), queryNamed.GetParsedParameters()...).Scan(
 		&result.UUID,
-		&result.LocalizedNames,
+		&localizedNamesRaw,
 		&result.Alias,
 		&result.Description,
-		&result.NodeUUID,
+		&nodeUUIDStr,
 		&result.Status,
 		&result.Sort,
-		&result.CreatedAt,
-		&result.CreatedBy,
-		&result.UpdatedAt,
-		&result.UpdatedBy,
-		&result.DeletedAt,
-		&result.DeletedBy,
-		&result.AliasForIndex,
-		&result.Icon,
-		&result.Logo,
+		&createdAtUnix,
+		&createdBy,
+		&updatedAtUnix,
+		&updatedBy,
+		&deletedAt,
+		&deletedBy,
+		&aliasForIndex,
+		&icon,
+		&logo,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, err
 	}
+
+	var tempNames map[string]string
+	if err := json.Unmarshal(localizedNamesRaw, &tempNames); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal localized_names: %w", err)
+	}
+
+	result.LocalizedNames = localizedNamesRaw
+
+	result.CreatedAt = time.Unix(createdAtUnix, 0)
+	if updatedAtUnix.Valid {
+		result.UpdatedAt = time.Unix(updatedAtUnix.Int64, 0)
+	}
+
+	result.NodeUUID = uuid.MustParse(nodeUUIDStr)
 
 	return &result, nil
 }

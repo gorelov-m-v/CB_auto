@@ -68,6 +68,8 @@ func DoRequest[T any, V any](c *Client, r *Request[T]) (*Response[V], error) {
 		return nil, fmt.Errorf("failed to read response body: %v", err)
 	}
 
+	fmt.Printf("Response Status: %d\nResponse Body: %s\n", resp.StatusCode, string(bodyBytes))
+
 	response := &Response[V]{
 		StatusCode: resp.StatusCode,
 		Headers:    resp.Header,
