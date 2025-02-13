@@ -23,15 +23,35 @@ type KafkaConfig struct {
 	Timeout time.Duration `json:"timeout"`
 }
 
+type NatsConfig struct {
+	Hosts         string        `json:"hosts"`
+	Bucket        string        `json:"bucket"`
+	Timeout       time.Duration `json:"timeout"`
+	ReconnectWait time.Duration `json:"reconnect_wait"`
+	MaxReconnects int           `json:"max_reconnects"`
+}
+
+type NodeConfig struct {
+	GroupID         string `json:"group_id"`
+	ProjectID       string `json:"project_id"`
+	DefaultCountry  string `json:"default_country"`
+	DefaultCurrency string `json:"default_currency"`
+}
+
+type HTTPConfig struct {
+	CapURL      string `json:"cap_url"`
+	PublicURL   string `json:"public_url"`
+	Timeout     int    `json:"timeout"`
+	CapUsername string `json:"cap_username"`
+	CapPassword string `json:"cap_password"`
+}
+
 type Config struct {
-	BaseURL        string      `json:"baseURL"`
-	RequestTimeout int         `json:"requestTimeout"`
-	UserName       string      `json:"username"`
-	Password       string      `json:"password"`
-	GroupID        string      `json:"groupId"`
-	ProjectID      string      `json:"projectId"`
-	MySQL          MySQLConfig `json:"mysql"`
-	Kafka          KafkaConfig `json:"kafka"`
+	HTTP  HTTPConfig  `json:"http"`
+	Node  NodeConfig  `json:"node"`
+	MySQL MySQLConfig `json:"mysql"`
+	Kafka KafkaConfig `json:"kafka"`
+	Nats  NatsConfig  `json:"nats"`
 }
 
 func (k *KafkaConfig) GetTimeout() time.Duration {

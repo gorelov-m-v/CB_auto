@@ -73,21 +73,13 @@ func CreatePrettyJSON[T any](v T) []byte {
 	return prettyJSON
 }
 
-func IsTimeInRange(timestamp int64, minutes time.Duration) (bool, string) {
-	if timestamp == 0 {
-		return false, "timestamp не должен быть пустым"
+func IsTimeInRange(timestamp int64, rangeInSeconds int64) bool {
+	currentTime := time.Now().Unix()
+	diff := currentTime - timestamp
+	if diff < 0 {
+		diff = -diff
 	}
-
-	checkTime := time.Unix(timestamp, 0)
-	now := time.Now()
-	timeDiff := now.Sub(checkTime)
-
-	if timeDiff < -minutes*time.Minute || timeDiff > minutes*time.Minute {
-		return false, fmt.Sprintf("timestamp '%v' не попадает в диапазон текущего времени ±%d минут от %v",
-			checkTime, minutes, now)
-	}
-
-	return true, ""
+	return diff <= rangeInSeconds
 }
 
 func RequireNoError(t provider.T, err error, format string, args ...interface{}) {

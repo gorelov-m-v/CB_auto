@@ -10,6 +10,7 @@ type CapAPI interface {
 	CheckAdmin(req *httpClient.Request[models.AdminCheckRequestBody]) *httpClient.Response[models.AdminCheckResponseBody]
 	CreateCapBrand(req *httpClient.Request[models.CreateCapBrandRequestBody]) *httpClient.Response[models.CreateCapBrandResponseBody]
 	GetCapBrand(req *httpClient.Request[struct{}]) *httpClient.Response[models.GetCapBrandResponseBody]
+	DeleteCapBrand(req *httpClient.Request[struct{}]) *httpClient.Response[struct{}]
 }
 
 type capClient struct {
@@ -46,6 +47,16 @@ func (c *capClient) GetCapBrand(req *httpClient.Request[struct{}]) *httpClient.R
 	resp, err := httpClient.DoRequest[struct{}, models.GetCapBrandResponseBody](c.client, req)
 	if err != nil {
 		panic(fmt.Sprintf("GetCapBrand не удался: %v", err))
+	}
+	return resp
+}
+
+func (c *capClient) DeleteCapBrand(req *httpClient.Request[struct{}]) *httpClient.Response[struct{}] {
+	req.Method = "DELETE"
+	req.Path = "/_cap/api/v1/brands/{id}"
+	resp, err := httpClient.DoRequest[struct{}, struct{}](c.client, req)
+	if err != nil {
+		panic(fmt.Sprintf("DeleteCapBrand не удался: %v", err))
 	}
 	return resp
 }

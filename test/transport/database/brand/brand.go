@@ -4,7 +4,6 @@ import (
 	"CB_auto/test/transport/database"
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -33,7 +32,7 @@ func NewRepository(connector *database.Connector) *Repository {
 	return &Repository{connector: connector}
 }
 
-func (r *Repository) GetBrand(ctx context.Context, brandUUID uuid.UUID) (*Brand, error) {
+func (r *Repository) GetBrand(ctx context.Context, brandUUID uuid.UUID) *Brand {
 	q := `SELECT 
     	  	uuid, 
     	  	localized_names, 
@@ -87,18 +86,12 @@ func (r *Repository) GetBrand(ctx context.Context, brandUUID uuid.UUID) (*Brand,
 		&logo,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
+			panic(fmt.Sprintf("бренд не найден: %s", brandUUID))
 		}
-		return nil, err
-	}
-
-	var tempNames map[string]string
-	if err := json.Unmarshal(localizedNamesRaw, &tempNames); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal localized_names: %w", err)
+		panic(fmt.Sprintf("ошибка при получении бренда из БД: %v", err))
 	}
 
 	result.LocalizedNames = localizedNamesRaw
-
 	result.CreatedAt = time.Unix(createdAtUnix, 0)
 	if updatedAtUnix.Valid {
 		result.UpdatedAt = time.Unix(updatedAtUnix.Int64, 0)
@@ -106,5 +99,5 @@ func (r *Repository) GetBrand(ctx context.Context, brandUUID uuid.UUID) (*Brand,
 
 	result.NodeUUID = uuid.MustParse(nodeUUIDStr)
 
-	return &result, nil
+	return &result
 }

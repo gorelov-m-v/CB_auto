@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"testing"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -42,7 +43,7 @@ func (s *CreateBrandSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация http-клиента и CAP API сервиса.", func(sCtx provider.StepCtx) {
-		client, err := httpClient.InitClient(s.config)
+		client, err := httpClient.InitClient(s.config, httpClient.Cap)
 		if err != nil {
 			t.Fatalf("InitClient не удался: %v", err)
 		}
@@ -70,7 +71,7 @@ func (s *CreateBrandSuite) BeforeAll(t provider.T) {
 		s.kafka = kafka.NewConsumer(
 			[]string{s.config.Kafka.Brokers},
 			s.config.Kafka.Topic,
-			s.config.GroupID,
+			s.config.Node.GroupID,
 			s.config.Kafka.GetTimeout(),
 		)
 		s.kafka.StartReading(t)
@@ -81,7 +82,7 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 	t.Epic("Brands.")
 	t.Feature("Создание бренда.")
 	t.Tags("CAP", "Brands")
-	t.Title("Проверка создания бренда и получения его данных через GET /_cap/api/v1/brands/{id}")
+	t.Title("Проверка создания бренда")
 
 	brandRepo := brand.NewRepository(s.database)
 
@@ -95,8 +96,8 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 	t.WithNewStep("Получение/Обновление токена авторизации CAP.", func(sCtx provider.StepCtx) {
 		adminReq := &httpClient.Request[models.AdminCheckRequestBody]{
 			Body: &models.AdminCheckRequestBody{
-				UserName: s.config.UserName,
-				Password: s.config.Password,
+				UserName: s.config.HTTP.CapUsername,
+				Password: s.config.HTTP.CapPassword,
 			},
 		}
 		adminResp := s.capService.CheckAdmin(adminReq)
@@ -115,7 +116,7 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 		createReq := &httpClient.Request[models.CreateCapBrandRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", testData.adminResponse.Token),
-				"Platform-Nodeid": s.config.ProjectID,
+				"Platform-Nodeid": s.config.Node.ProjectID,
 			},
 			Body: &models.CreateCapBrandRequestBody{
 				Sort:        1,
@@ -136,7 +137,7 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 		getReq := &httpClient.Request[struct{}]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", testData.adminResponse.Token),
-				"Platform-Nodeid": s.config.ProjectID,
+				"Platform-Nodeid": s.config.Node.ProjectID,
 			},
 			PathParams: map[string]string{
 				"id": testData.createCapBrandResponse.ID,
@@ -148,7 +149,7 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 		t.Require().Equal(testData.createRequest.Body.Alias, getResp.Body.Alias)
 		t.Require().Equal(testData.createRequest.Body.Names, getResp.Body.Names)
 		t.Require().Equal(testData.createRequest.Body.Sort, getResp.Body.Sort)
-		t.Require().Equal(s.config.ProjectID, getResp.Body.NodeID)
+		t.Require().Equal(s.config.Node.ProjectID, getResp.Body.NodeID)
 		t.Require().Equal(models.StatusDisabled, getResp.Body.Status)
 
 		sCtx.WithAttachments(allure.NewAttachment("GetBrand Request", allure.JSON, utils.CreateHttpAttachRequest(getReq)))
@@ -157,17 +158,15 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 
 	t.WithNewStep("Проверка записи информации о бренде в БД.", func(sCtx provider.StepCtx) {
 		brandUUID := uuid.MustParse(testData.createCapBrandResponse.ID)
-		brandData, err := brandRepo.GetBrand(context.Background(), brandUUID)
-		t.Require().NoError(err, "Ошибка при получении бренда из БД")
+		brandData := brandRepo.GetBrand(context.Background(), brandUUID)
+		var dbNames map[string]string = make(map[string]string)
+		json.Unmarshal(brandData.LocalizedNames, &dbNames)
 
-		var dbNames map[string]string
-		err = json.Unmarshal(brandData.LocalizedNames, &dbNames)
-		t.Require().NoError(err)
 		t.Require().Equal(testData.createRequest.Body.Names, dbNames)
 		t.Require().Equal(testData.createRequest.Body.Alias, brandData.Alias)
 		t.Require().Equal(testData.createRequest.Body.Sort, brandData.Sort)
 		t.Require().Equal(testData.createRequest.Body.Description, brandData.Description)
-		t.Require().Equal(uuid.MustParse(s.config.ProjectID), brandData.NodeUUID)
+		t.Require().Equal(uuid.MustParse(s.config.Node.ProjectID), brandData.NodeUUID)
 		t.Require().Equal(models.StatusDisabled, brandData.Status)
 		t.Require().NotZero(brandData.CreatedAt)
 		t.Require().Zero(brandData.UpdatedAt)
@@ -191,12 +190,28 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 		t.Require().Equal(expectedAlias, brandMessage.Brand.Alias)
 		t.Require().Equal(expectedNames, brandMessage.Brand.LocalizedNames)
 		t.Require().False(brandMessage.Brand.StatusEnabled)
-		t.Require().Equal(s.config.ProjectID, brandMessage.Brand.ProjectID)
-
-		isDateValid, errMsg := utils.IsTimeInRange(brandMessage.Brand.CreatedAt, 5)
-		t.Require().True(isDateValid, errMsg)
+		t.Require().Equal(s.config.Node.ProjectID, brandMessage.Brand.ProjectID)
+		t.Require().True(utils.IsTimeInRange(brandMessage.Brand.CreatedAt, 5))
 
 		sCtx.WithAttachments(allure.NewAttachment("Kafka Message", allure.JSON, utils.CreatePrettyJSON(message.Value)))
+	})
+
+	t.WithNewStep("Удаление бренда.", func(sCtx provider.StepCtx) {
+		deleteReq := &httpClient.Request[struct{}]{
+			Headers: map[string]string{
+				"Authorization":   fmt.Sprintf("Bearer %s", testData.adminResponse.Token),
+				"Platform-Nodeid": s.config.Node.ProjectID,
+			},
+			PathParams: map[string]string{
+				"id": testData.createCapBrandResponse.ID,
+			},
+		}
+
+		deleteResp := s.capService.DeleteCapBrand(deleteReq)
+
+		t.Require().Equal(http.StatusNoContent, deleteResp.StatusCode)
+
+		sCtx.WithAttachments(allure.NewAttachment("DeleteBrand Request", allure.JSON, utils.CreateHttpAttachRequest(deleteReq)))
 	})
 }
 
