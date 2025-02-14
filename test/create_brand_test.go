@@ -179,7 +179,7 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 		expectedUUID := testData.createCapBrandResponse.ID
 		expectedNames := testData.createRequest.Body.Names
 
-		message := s.kafka.FindMessage(t, func(brand kafka.Brand) bool {
+		message := kafka.FindMessageByFilter[kafka.Brand](s.kafka, t, func(brand kafka.Brand) bool {
 			return brand.Brand.UUID == expectedUUID
 		})
 

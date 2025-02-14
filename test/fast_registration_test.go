@@ -6,13 +6,17 @@ import (
 	publicAPI "CB_auto/test/transport/http/public"
 	"CB_auto/test/transport/http/public/models"
 	"CB_auto/test/utils"
+	"fmt"
 	"testing"
 
 	"CB_auto/test/transport/nats"
+	"CB_auto/test/transport/redis"
 
 	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
+
+	"CB_auto/test/transport/kafka"
 )
 
 type FastRegistrationSuite struct {
@@ -21,6 +25,8 @@ type FastRegistrationSuite struct {
 	config        *config.Config
 	publicService publicAPI.PublicAPI
 	natsKV        *nats.KVStore
+	redisClient   *redis.RedisClient
+	kafka         *kafka.Kafka
 }
 
 func (s *FastRegistrationSuite) BeforeAll(t provider.T) {
@@ -48,6 +54,25 @@ func (s *FastRegistrationSuite) BeforeAll(t provider.T) {
 		}
 		s.natsKV = kv
 	})
+
+	t.WithNewStep("Инициализация Redis клиента.", func(sCtx provider.StepCtx) {
+		client, err := redis.NewRedisClient(&s.config.Redis)
+		if err != nil {
+			t.Fatalf("Redis init failed: %v", err)
+		}
+		s.redisClient = client
+	})
+
+	t.WithNewStep("Инициализация Kafka.", func(sCtx provider.StepCtx) {
+		fmt.Printf("Initializing Kafka consumer for topic: %s\n", s.config.Kafka.PlayerTopic)
+		s.kafka = kafka.NewConsumer(
+			[]string{s.config.Kafka.Brokers},
+			s.config.Kafka.PlayerTopic,
+			s.config.Node.GroupID,
+			s.config.Kafka.GetTimeout(),
+		)
+		s.kafka.StartReading(t)
+	})
 }
 
 func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
@@ -58,6 +83,7 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 
 	type TestData struct {
 		registrationResponse *models.FastRegistrationResponseBody
+		playerMessage        *kafka.PlayerMessage
 	}
 	var testData TestData
 
@@ -82,21 +108,41 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 		sCtx.WithAttachments(allure.NewAttachment("FastRegistration Response", allure.JSON, utils.CreateHttpAttachResponse(createResp)))
 	})
 
-	t.WithNewStep("Проверка записи в NATS KV.", func(sCtx provider.StepCtx) {
-		key := "003e5b26-5575-4eac-80b4-6dd094978e75"
-		value, err := s.natsKV.Get(key)
-		if err != nil {
-			t.Fatalf("Ошибка при получении значения из KV: %v", err)
-		}
-		t.Require().NotNil(value, "Значение в KV не найдено")
+	t.WithNewStep("Проверка сообщения из Kafka о регистрации.", func(sCtx provider.StepCtx) {
+		accountID := testData.registrationResponse.Username
 
-		sCtx.WithAttachments(allure.NewAttachment("NATS KV Value", allure.JSON, utils.CreatePrettyJSON(string(value))))
+		message := kafka.FindMessageByFilter[kafka.PlayerMessage](s.kafka, t, func(msg kafka.PlayerMessage) bool {
+			return msg.Message.EventType == "player.signUpFast" &&
+				msg.Player.AccountID == accountID
+		})
+
+		playerMessage := kafka.ParseMessage[kafka.PlayerMessage](t, message)
+		testData.playerMessage = &playerMessage
+
+		t.Require().Equal(s.config.Node.ProjectID, playerMessage.Player.NodeID)
+		t.Require().Equal(s.config.Node.GroupID, playerMessage.Player.ProjectGroupID)
+		t.Require().Equal(s.config.Node.DefaultCountry, playerMessage.Player.Country)
+		t.Require().Equal(s.config.Node.DefaultCurrency, playerMessage.Player.Currency)
+
+		sCtx.WithAttachments(allure.NewAttachment("Kafka Message", allure.JSON, utils.CreatePrettyJSON(message.Value)))
+
+		t.Require().NotEmpty(playerMessage.Player.ExternalID)
+	})
+
+	t.WithNewStep("Проверка значения в Redis.", func(sCtx provider.StepCtx) {
+		key := testData.playerMessage.Player.ExternalID
+		value := s.redisClient.GetWithRetry(t, key)
+
+		sCtx.WithAttachments(allure.NewAttachment("Redis Value", allure.JSON, utils.CreatePrettyJSON(value)))
 	})
 }
 
 func (s *FastRegistrationSuite) AfterAll(t provider.T) {
 	if s.natsKV != nil {
 		s.natsKV.Close()
+	}
+	if s.redisClient != nil {
+		s.redisClient.Close()
 	}
 }
 
