@@ -49,11 +49,10 @@ func (k *Kafka) StartReading(t provider.T) {
 
 func (k *Kafka) readMessages() {
 	fmt.Printf("Started reading messages\n")
-	defer fmt.Printf("Stopping message reader\n")
-
 	for {
 		select {
 		case <-k.stopChan:
+			fmt.Printf("Stopping message reader\n")
 			return
 		default:
 			msg, err := k.reader.ReadMessage(context.Background())
@@ -63,13 +62,7 @@ func (k *Kafka) readMessages() {
 			}
 			fmt.Printf("Received message from topic %s, partition %d, offset %d: %s\n",
 				msg.Topic, msg.Partition, msg.Offset, string(msg.Value))
-
-			select {
-			case <-k.stopChan:
-				return
-			default:
-				k.Messages <- msg
-			}
+			k.Messages <- msg
 		}
 	}
 }
@@ -125,14 +118,24 @@ func FindMessageByFilter[T any](k *Kafka, t provider.T, filter func(T) bool) kaf
 }
 
 func (k *Kafka) Close(t provider.T) {
-	if err := k.reader.Close(); err != nil {
-		t.Errorf("Ошибка при закрытии Kafka reader: %v", err)
-	}
-
 	close(k.stopChan)
 	time.Sleep(500 * time.Millisecond)
 
 	close(k.Messages)
+
+	done := make(chan struct{})
+	go func() {
+		if err := k.reader.Close(); err != nil {
+			t.Errorf("Ошибка при закрытии Kafka reader: %v", err)
+		}
+		close(done)
+	}()
+
+	select {
+	case <-time.After(30 * time.Second):
+		t.Errorf("Таймаут при закрытии Kafka reader")
+	case <-done:
+	}
 }
 
 func ParseMessage[T any](t provider.T, message kafka.Message) T {
