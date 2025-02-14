@@ -18,9 +18,10 @@ type MySQLConfig struct {
 }
 
 type KafkaConfig struct {
-	Brokers string        `json:"brokers"`
-	Topic   string        `json:"topic"`
-	Timeout time.Duration `json:"timeout"`
+	Brokers     string        `json:"brokers"`
+	Topic       string        `json:"topic"`
+	PlayerTopic string        `json:"player_topic"`
+	Timeout     time.Duration `json:"timeout"`
 }
 
 type NatsConfig struct {
@@ -46,12 +47,24 @@ type HTTPConfig struct {
 	CapPassword string `json:"cap_password"`
 }
 
+type RedisConfig struct {
+	Addr          string        `json:"addr"`
+	Password      string        `json:"password"`
+	DB            int           `json:"db"`
+	DialTimeout   time.Duration `json:"dial_timeout"`
+	ReadTimeout   time.Duration `json:"read_timeout"`
+	WriteTimeout  time.Duration `json:"write_timeout"`
+	RetryAttempts int           `json:"retryAttempts"`
+	RetryDelay    time.Duration `json:"retryDelay"`
+}
+
 type Config struct {
 	HTTP  HTTPConfig  `json:"http"`
 	Node  NodeConfig  `json:"node"`
 	MySQL MySQLConfig `json:"mysql"`
 	Kafka KafkaConfig `json:"kafka"`
 	Nats  NatsConfig  `json:"nats"`
+	Redis RedisConfig `json:"redis"`
 }
 
 func (k *KafkaConfig) GetTimeout() time.Duration {
