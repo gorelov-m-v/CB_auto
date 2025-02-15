@@ -1,15 +1,17 @@
 package http
 
 import (
-	"CB_auto/test/config"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"CB_auto/test/config"
 )
 
 type Client struct {
@@ -74,11 +76,10 @@ func DoRequest[T any, V any](c *Client, r *Request[T]) (*Response[V], error) {
 		return nil, fmt.Errorf("makeRequest failed: %v", err)
 	}
 
-	// Логируем запрос
-	fmt.Printf("Request URL: %s\nRequest Method: %s\nRequest Headers: %+v\n", req.URL.String(), req.Method, req.Header)
+	log.Printf("Request URL: %s, Method: %s, Headers: %+v", req.URL.String(), req.Method, req.Header)
 	if r.Body != nil {
 		bodyBytes, _ := json.Marshal(r.Body)
-		fmt.Printf("Request Body: %s\n", string(bodyBytes))
+		log.Printf("Request Body: %s", string(bodyBytes))
 	}
 
 	resp, err := c.httpClient.Do(req)
@@ -92,8 +93,7 @@ func DoRequest[T any, V any](c *Client, r *Request[T]) (*Response[V], error) {
 		return nil, fmt.Errorf("failed to read response body: %v", err)
 	}
 
-	// Логируем ответ
-	fmt.Printf("Response Status: %d\nResponse Headers: %+v\nResponse Body: %s\n", resp.StatusCode, resp.Header, string(bodyBytes))
+	log.Printf("Response Status: %d, Headers: %+v, Body: %s", resp.StatusCode, resp.Header, string(bodyBytes))
 
 	response := &Response[V]{
 		StatusCode: resp.StatusCode,

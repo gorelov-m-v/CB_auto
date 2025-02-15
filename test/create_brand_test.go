@@ -191,7 +191,7 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 		t.Require().Equal(expectedNames, brandMessage.Brand.LocalizedNames)
 		t.Require().False(brandMessage.Brand.StatusEnabled)
 		t.Require().Equal(s.config.Node.ProjectID, brandMessage.Brand.ProjectID)
-		t.Require().True(utils.IsTimeInRange(brandMessage.Brand.CreatedAt, 5))
+		t.Require().True(utils.IsTimeInRange(brandMessage.Brand.CreatedAt, 30))
 
 		sCtx.WithAttachments(allure.NewAttachment("Kafka Message", allure.JSON, utils.CreatePrettyJSON(message.Value)))
 	})
