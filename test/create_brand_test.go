@@ -70,7 +70,7 @@ func (s *CreateBrandSuite) BeforeAll(t provider.T) {
 	t.WithNewStep("Инициализация Kafka consumer.", func(sCtx provider.StepCtx) {
 		s.kafka = kafka.NewConsumer(
 			[]string{s.config.Kafka.Brokers},
-			s.config.Kafka.Topic,
+			s.config.Kafka.BrandTopic,
 			s.config.Node.GroupID,
 			s.config.Kafka.GetTimeout(),
 		)

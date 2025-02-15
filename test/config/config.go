@@ -19,17 +19,18 @@ type MySQLConfig struct {
 
 type KafkaConfig struct {
 	Brokers     string        `json:"brokers"`
-	Topic       string        `json:"topic"`
+	BrandTopic  string        `json:"brand_topic"`
 	PlayerTopic string        `json:"player_topic"`
 	Timeout     time.Duration `json:"timeout"`
 }
 
 type NatsConfig struct {
 	Hosts         string        `json:"hosts"`
-	Bucket        string        `json:"bucket"`
-	Timeout       time.Duration `json:"timeout"`
 	ReconnectWait time.Duration `json:"reconnect_wait"`
 	MaxReconnects int           `json:"max_reconnects"`
+	Timeout       time.Duration `json:"timeout"`
+	StreamTimeout time.Duration `json:"stream_timeout"`
+	StreamPrefix  string        `json:"stream_prefix"`
 }
 
 type NodeConfig struct {
