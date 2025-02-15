@@ -4,6 +4,8 @@ import (
 	httpClient "CB_auto/test/transport/http"
 	"CB_auto/test/transport/http/public/models"
 	"fmt"
+	"log"
+	"net/http"
 )
 
 type PublicAPI interface {
@@ -23,7 +25,13 @@ func (c *publicClient) FastRegistration(req *httpClient.Request[models.FastRegis
 	req.Path = "/_front_api/api/v1/registration/fast"
 	resp, err := httpClient.DoRequest[models.FastRegistrationRequestBody, models.FastRegistrationResponseBody](c.client, req)
 	if err != nil {
-		panic(fmt.Sprintf("FastRegistration не удался: %v", err))
+		log.Printf("FastRegistration failed: %v", err)
+		return &httpClient.Response[models.FastRegistrationResponseBody]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &httpClient.ErrorResponse{
+				Body: fmt.Sprintf("FastRegistration failed: %v", err),
+			},
+		}
 	}
 	return resp
 }

@@ -3,7 +3,8 @@ package kafka
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"log"
+	"sync"
 	"time"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
@@ -14,27 +15,31 @@ type Kafka struct {
 	reader   *kafka.Reader
 	Messages chan kafka.Message
 	Timeout  time.Duration
-	stopChan chan struct{}
+	ctx      context.Context
+	cancel   context.CancelFunc
+	wg       sync.WaitGroup
 	started  bool
 }
 
 func NewConsumer(brokers []string, topic string, groupID string, timeout time.Duration) *Kafka {
-	fmt.Printf("Creating new Kafka consumer: brokers=%v, topic=%s, groupID=%s\n", brokers, topic, groupID)
+	log.Printf("Creating new Kafka consumer: brokers=%v, topic=%s, groupID=%s", brokers, topic, groupID)
 
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:        brokers,
 		Topic:          topic,
 		GroupID:        groupID,
 		StartOffset:    kafka.LastOffset,
-		ReadBackoffMin: time.Millisecond * 100,
-		ReadBackoffMax: time.Second * 1,
+		ReadBackoffMin: 100 * time.Millisecond,
+		ReadBackoffMax: 1 * time.Second,
 	})
 
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Kafka{
 		reader:   reader,
 		Messages: make(chan kafka.Message, 100),
 		Timeout:  timeout,
-		stopChan: make(chan struct{}),
+		ctx:      ctx,
+		cancel:   cancel,
 	}
 }
 
@@ -42,42 +47,48 @@ func (k *Kafka) StartReading(t provider.T) {
 	if k.started {
 		return
 	}
-	time.Sleep(1 * time.Second)
-	go k.readMessages()
 	k.started = true
+	k.wg.Add(1)
+	go k.readMessages()
 }
 
 func (k *Kafka) readMessages() {
-	fmt.Printf("Started reading messages\n")
+	defer k.wg.Done()
+	log.Printf("Started reading messages")
 	for {
 		select {
-		case <-k.stopChan:
-			fmt.Printf("Stopping message reader\n")
+		case <-k.ctx.Done():
+			log.Printf("Stopping message reader")
 			return
 		default:
-			msg, err := k.reader.ReadMessage(context.Background())
+			msg, err := k.reader.ReadMessage(k.ctx)
 			if err != nil {
-				fmt.Printf("Error reading message: %v\n", err)
+				if k.ctx.Err() != nil {
+					log.Printf("Message reading stopped: %v", err)
+					return
+				}
+				log.Printf("Error reading message: %v", err)
+				time.Sleep(100 * time.Millisecond)
 				continue
 			}
-			fmt.Printf("Received message from topic %s, partition %d, offset %d: %s\n",
+			log.Printf("Received message from topic %s, partition %d, offset %d: %s",
 				msg.Topic, msg.Partition, msg.Offset, string(msg.Value))
-			k.Messages <- msg
+			select {
+			case k.Messages <- msg:
+			case <-k.ctx.Done():
+				return
+			}
 		}
 	}
 }
 
-type Message interface {
-	Brand | PlayerMessage
-}
-
 func FindMessageByFilter[T any](k *Kafka, t provider.T, filter func(T) bool) kafka.Message {
-	ctx, cancel := context.WithTimeout(context.Background(), k.Timeout)
+	ctx, cancel := context.WithTimeout(k.ctx, k.Timeout)
 	defer cancel()
 
 	msgBuffer := make([]kafka.Message, 0)
+	log.Printf("Starting to look for message with timeout %v", k.Timeout)
 
-	fmt.Printf("Starting to look for message with timeout %v\n", k.Timeout)
 	for {
 		select {
 		case <-ctx.Done():
@@ -86,21 +97,19 @@ func FindMessageByFilter[T any](k *Kafka, t provider.T, filter func(T) bool) kaf
 			if !ok {
 				t.Fatal("Канал сообщений закрыт")
 			}
-
-			fmt.Printf("Checking new message: %s\n", string(msg.Value))
+			log.Printf("Checking new message: %s", string(msg.Value))
 			var data T
 			if err := json.Unmarshal(msg.Value, &data); err != nil {
-				fmt.Printf("Failed to unmarshal message: %v\n", err)
+				log.Printf("Failed to unmarshal message: %v", err)
 				msgBuffer = append(msgBuffer, msg)
 				continue
 			}
 			if filter(data) {
-				fmt.Printf("Found matching message\n")
+				log.Printf("Found matching message")
 				return msg
 			}
-			fmt.Printf("Message didn't match filter\n")
+			log.Printf("Message didn't match filter")
 			msgBuffer = append(msgBuffer, msg)
-
 		default:
 			for i, bufferedMsg := range msgBuffer {
 				var data T
@@ -118,8 +127,8 @@ func FindMessageByFilter[T any](k *Kafka, t provider.T, filter func(T) bool) kaf
 }
 
 func (k *Kafka) Close(t provider.T) {
-	close(k.stopChan)
-	time.Sleep(500 * time.Millisecond)
+	k.cancel()
+	k.wg.Wait()
 
 	close(k.Messages)
 

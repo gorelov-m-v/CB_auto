@@ -4,6 +4,8 @@ import (
 	httpClient "CB_auto/test/transport/http"
 	"CB_auto/test/transport/http/cap/models"
 	"fmt"
+	"log"
+	"net/http"
 )
 
 type CapAPI interface {
@@ -26,7 +28,13 @@ func (c *capClient) CheckAdmin(req *httpClient.Request[models.AdminCheckRequestB
 	req.Path = "/_cap/api/token/check"
 	resp, err := httpClient.DoRequest[models.AdminCheckRequestBody, models.AdminCheckResponseBody](c.client, req)
 	if err != nil {
-		panic(fmt.Sprintf("CheckAdmin не удался: %v", err))
+		log.Printf("CheckAdmin failed: %v", err)
+		return &httpClient.Response[models.AdminCheckResponseBody]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &httpClient.ErrorResponse{
+				Body: fmt.Sprintf("CheckAdmin failed: %v", err),
+			},
+		}
 	}
 	return resp
 }
@@ -36,7 +44,13 @@ func (c *capClient) CreateCapBrand(req *httpClient.Request[models.CreateCapBrand
 	req.Path = "/_cap/api/v1/brands"
 	resp, err := httpClient.DoRequest[models.CreateCapBrandRequestBody, models.CreateCapBrandResponseBody](c.client, req)
 	if err != nil {
-		panic(fmt.Sprintf("CreateCapBrand не удался: %v", err))
+		log.Printf("CreateCapBrand failed: %v", err)
+		return &httpClient.Response[models.CreateCapBrandResponseBody]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &httpClient.ErrorResponse{
+				Body: fmt.Sprintf("CreateCapBrand failed: %v", err),
+			},
+		}
 	}
 	return resp
 }
@@ -46,7 +60,13 @@ func (c *capClient) GetCapBrand(req *httpClient.Request[struct{}]) *httpClient.R
 	req.Path = "/_cap/api/v1/brands/{id}"
 	resp, err := httpClient.DoRequest[struct{}, models.GetCapBrandResponseBody](c.client, req)
 	if err != nil {
-		panic(fmt.Sprintf("GetCapBrand не удался: %v", err))
+		log.Printf("GetCapBrand failed: %v", err)
+		return &httpClient.Response[models.GetCapBrandResponseBody]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &httpClient.ErrorResponse{
+				Body: fmt.Sprintf("GetCapBrand failed: %v", err),
+			},
+		}
 	}
 	return resp
 }
@@ -56,7 +76,13 @@ func (c *capClient) DeleteCapBrand(req *httpClient.Request[struct{}]) *httpClien
 	req.Path = "/_cap/api/v1/brands/{id}"
 	resp, err := httpClient.DoRequest[struct{}, struct{}](c.client, req)
 	if err != nil {
-		panic(fmt.Sprintf("DeleteCapBrand не удался: %v", err))
+		log.Printf("DeleteCapBrand failed: %v", err)
+		return &httpClient.Response[struct{}]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &httpClient.ErrorResponse{
+				Body: fmt.Sprintf("DeleteCapBrand failed: %v", err),
+			},
+		}
 	}
 	return resp
 }
