@@ -111,13 +111,12 @@ func FindMessageByFilter[T any](k *Kafka, t provider.T, filter func(T) bool) kaf
 			log.Printf("Message didn't match filter")
 			msgBuffer = append(msgBuffer, msg)
 		default:
-			for i, bufferedMsg := range msgBuffer {
+			for _, bufferedMsg := range msgBuffer {
 				var data T
 				if err := json.Unmarshal(bufferedMsg.Value, &data); err != nil {
 					continue
 				}
 				if filter(data) {
-					msgBuffer = append(msgBuffer[:i], msgBuffer[i+1:]...)
 					return bufferedMsg
 				}
 			}
