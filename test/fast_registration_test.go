@@ -24,7 +24,7 @@ type FastRegistrationSuite struct {
 	client        *httpClient.Client
 	config        *config.Config
 	publicService publicAPI.PublicAPI
-	natsKV        *nats.KVStore
+	natsClient    *nats.NatsClient
 	redisClient   *redis.RedisClient
 	kafka         *kafka.Kafka
 }
@@ -47,12 +47,12 @@ func (s *FastRegistrationSuite) BeforeAll(t provider.T) {
 		s.publicService = publicAPI.NewPublicClient(s.client)
 	})
 
-	t.WithNewStep("Инициализация NATS KV.", func(sCtx provider.StepCtx) {
-		kv, err := nats.NewKVStore(&s.config.Nats)
+	t.WithNewStep("Инициализация NATS клиента.", func(sCtx provider.StepCtx) {
+		client, err := nats.NewClient(&s.config.Nats)
 		if err != nil {
-			t.Fatalf("NewKVStore не удался: %v", err)
+			t.Fatalf("NewClient не удался: %v", err)
 		}
-		s.natsKV = kv
+		s.natsClient = client
 	})
 
 	t.WithNewStep("Инициализация Redis клиента.", func(sCtx provider.StepCtx) {
@@ -135,11 +135,28 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 
 		sCtx.WithAttachments(allure.NewAttachment("Redis Value", allure.JSON, utils.CreatePrettyJSON(value)))
 	})
+
+	t.WithNewStep("Проверка создания кошелька в NATS.", func(sCtx provider.StepCtx) {
+		playerUUID := testData.playerMessage.Player.ExternalID
+		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, playerUUID)
+
+		s.natsClient.Subscribe(t, subject)
+
+		message := nats.FindMessageByFilter[nats.WalletPayload](s.natsClient, t, func(wallet nats.WalletPayload) bool {
+			return wallet.WalletType == nats.TypeReal &&
+				wallet.WalletStatus == nats.StatusEnabled &&
+				wallet.IsBasic
+		})
+
+		walletData := nats.ParseMessage[nats.WalletPayload](t, message)
+
+		sCtx.WithAttachments(allure.NewAttachment("NATS Wallet Message", allure.JSON, utils.CreatePrettyJSON(walletData)))
+	})
 }
 
 func (s *FastRegistrationSuite) AfterAll(t provider.T) {
-	if s.natsKV != nil {
-		s.natsKV.Close()
+	if s.natsClient != nil {
+		s.natsClient.Close()
 	}
 	if s.redisClient != nil {
 		s.redisClient.Close()
