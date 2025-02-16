@@ -103,6 +103,7 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 	t.Title("Проверка создания кошелька при регистрации пользователя")
 
 	type TestData struct {
+		authResponse              *models.TokenCheckResponseBody
 		registrationResponse      *models.FastRegistrationResponseBody
 		playerRegistrationMessage *kafka.PlayerMessage
 		walletCreatedEvent        *nats.NatsMessage[nats.WalletCreatedPayload]
@@ -138,6 +139,38 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 		sCtx.WithAttachments(allure.NewAttachment(
 			"FastRegistration Response", allure.JSON,
 			utils.CreateHttpAttachResponse[models.FastRegistrationResponseBody](createResp),
+		))
+	})
+
+	t.WithNewStep("Получение токена авторизации.", func(sCtx provider.StepCtx) {
+		authReq := &client.Request[models.TokenCheckRequestBody]{
+			Headers: map[string]string{
+				"Content-Type": "application/json",
+			},
+			Body: &models.TokenCheckRequestBody{
+				Username: testData.registrationResponse.Username,
+				Password: testData.registrationResponse.Password,
+			},
+		}
+		authResp := s.publicService.TokenCheck(authReq)
+		testData.authResponse = &authResp.Body
+
+		sCtx.Assert().NotEmpty(
+			authResp.Body.Token,
+			"Токен авторизации не пустой",
+		)
+		sCtx.Assert().NotEmpty(
+			authResp.Body.RefreshToken,
+			"Refresh токен не пустой",
+		)
+
+		sCtx.WithAttachments(allure.NewAttachment(
+			"TokenCheck Request", allure.JSON,
+			utils.CreateHttpAttachRequest(authReq),
+		))
+		sCtx.WithAttachments(allure.NewAttachment(
+			"TokenCheck Response", allure.JSON,
+			utils.CreateHttpAttachResponse(authResp),
 		))
 	})
 
@@ -365,6 +398,52 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 		sCtx.WithAttachments(allure.NewAttachment(
 			"Wallet DB Data", allure.JSON,
 			utils.CreatePrettyJSON(walletFromDatabase),
+		))
+	})
+
+	t.WithNewAsyncStep("Проверка получения списка кошельков.", func(sCtx provider.StepCtx) {
+		getWalletsReq := &client.Request[any]{
+			Headers: map[string]string{
+				"Authorization":   fmt.Sprintf("Bearer %s", testData.authResponse.Token),
+				"Platform-Locale": "en",
+			},
+		}
+		getWalletsResp := s.publicService.GetWallets(getWalletsReq)
+
+		var foundWallet *models.WalletData
+		for _, wallet := range getWalletsResp.Body.Wallets {
+			if wallet.ID == testData.walletCreatedEvent.Payload.WalletUUID {
+				foundWallet = &wallet
+				break
+			}
+		}
+
+		sCtx.Assert().NotNil(
+			foundWallet,
+			"Кошелёк найден в списке",
+		)
+		sCtx.Assert().Equal(
+			testData.walletCreatedEvent.Payload.Currency,
+			foundWallet.Currency,
+			"Валюта кошелька совпадает с ожидаемой",
+		)
+		sCtx.Assert().Equal(
+			constants.ZeroAmount,
+			foundWallet.Balance,
+			"Баланс кошелька равен 0",
+		)
+		sCtx.Assert().True(
+			foundWallet.Default,
+			"Кошелёк помечен как \"по умолчанию\"",
+		)
+
+		sCtx.WithAttachments(allure.NewAttachment(
+			"GetWallets Request", allure.JSON,
+			utils.CreateHttpAttachRequest(getWalletsReq),
+		))
+		sCtx.WithAttachments(allure.NewAttachment(
+			"GetWallets Response", allure.JSON,
+			utils.CreateHttpAttachResponse(getWalletsResp),
 		))
 	})
 }
