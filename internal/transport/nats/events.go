@@ -40,6 +40,7 @@ type WalletCreatedPayload struct {
 	PlayerUUID      string       `json:"player_uuid"`
 	PlayerBonusUUID string       `json:"player_bonus_uuid"`
 	NodeUUID        string       `json:"node_uuid"`
+	BonusCategory   string       `json:"bonus_category"`
 	Currency        string       `json:"currency"`
 	WalletType      WalletType   `json:"wallet_type"`
 	WalletStatus    WalletStatus `json:"wallet_status"`
@@ -48,4 +49,19 @@ type WalletCreatedPayload struct {
 	UpdatedAt       int64        `json:"updated_at"`
 	IsDefault       bool         `json:"is_default"`
 	IsBasic         bool         `json:"is_basic"`
+}
+
+type SetDefaultStartedPayload struct {
+	UUID      string `json:"uuid"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+type DefaultUnsettedPayload struct {
+	UUID      string `json:"uuid"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+type DefaultSettedPayload struct {
+	UUID      string `json:"uuid"`
+	CreatedAt int64  `json:"created_at"`
 }

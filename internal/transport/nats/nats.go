@@ -31,7 +31,9 @@ type NatsMessage[T any] struct {
 	Metadata  *nats.MsgMetadata
 	Subject   string
 	Sequence  uint64
+	Seq       uint64
 	Timestamp time.Time
+	Type      string
 }
 
 func NewClient(cfg *config.NatsConfig) (*NatsClient, error) {
@@ -109,13 +111,15 @@ func (n *NatsClient) messageHandler(msg *nats.Msg) {
 	}
 }
 
-func FindMessageByFilter[T any](n *NatsClient, t provider.T, filter func(T) bool) *NatsMessage[T] {
+func FindMessageByFilter[T any](n *NatsClient, t provider.T, filter func(T, string) bool) *NatsMessage[T] {
 	ctx, cancel := context.WithTimeout(n.ctx, n.timeout)
 	defer cancel()
 
 	msgBuffer := make([]*nats.Msg, 0)
 	log.Printf("Starting to look for message with timeout %v", n.timeout)
 
+	maxAttempts := 5 // Увеличиваем количество попыток
+	attempt := 1
 	for {
 		select {
 		case <-ctx.Done():
@@ -133,7 +137,7 @@ func FindMessageByFilter[T any](n *NatsClient, t provider.T, filter func(T) bool
 				continue
 			}
 
-			if filter(data) {
+			if filter(data, msg.Header.Get("type")) {
 				log.Printf("Found matching message")
 				meta, _ := msg.Metadata()
 				return &NatsMessage[T]{
@@ -141,7 +145,9 @@ func FindMessageByFilter[T any](n *NatsClient, t provider.T, filter func(T) bool
 					Metadata:  meta,
 					Subject:   msg.Subject,
 					Sequence:  meta.Sequence.Stream,
+					Seq:       meta.Sequence.Stream,
 					Timestamp: meta.Timestamp,
+					Type:      msg.Header.Get("type"),
 				}
 			}
 
@@ -153,7 +159,7 @@ func FindMessageByFilter[T any](n *NatsClient, t provider.T, filter func(T) bool
 				if err := mapEventData(bufferedMsg.Data, &data); err != nil {
 					continue
 				}
-				if filter(data) {
+				if filter(data, bufferedMsg.Header.Get("type")) {
 					log.Printf("Found matching message in buffer")
 					meta, _ := bufferedMsg.Metadata()
 					return &NatsMessage[T]{
@@ -161,11 +167,19 @@ func FindMessageByFilter[T any](n *NatsClient, t provider.T, filter func(T) bool
 						Metadata:  meta,
 						Subject:   bufferedMsg.Subject,
 						Sequence:  meta.Sequence.Stream,
+						Seq:       meta.Sequence.Stream,
 						Timestamp: meta.Timestamp,
+						Type:      bufferedMsg.Header.Get("type"),
 					}
 				}
 			}
-			time.Sleep(100 * time.Millisecond)
+			if attempt < maxAttempts {
+				log.Printf("No matching message found, attempt %d/%d", attempt, maxAttempts)
+				attempt++
+				time.Sleep(500 * time.Millisecond) // Увеличиваем интервал между попытками
+			} else {
+				time.Sleep(100 * time.Millisecond)
+			}
 		}
 	}
 }

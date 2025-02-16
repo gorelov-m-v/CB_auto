@@ -37,3 +37,7 @@ type CreateWalletRequestBody struct {
 }
 
 type CreateWalletResponseBody struct{}
+
+type SwitchWalletRequestBody struct {
+	Currency string `json:"currency"`
+}
