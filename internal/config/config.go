@@ -29,11 +29,11 @@ type KafkaConfig struct {
 
 type NatsConfig struct {
 	Hosts         string        `json:"hosts"`
+	StreamPrefix  string        `json:"stream_prefix"`
 	ReconnectWait time.Duration `json:"reconnect_wait"`
 	MaxReconnects int           `json:"max_reconnects"`
 	Timeout       time.Duration `json:"timeout"`
 	StreamTimeout time.Duration `json:"stream_timeout"`
-	StreamPrefix  string        `json:"stream_prefix"`
 }
 
 type NodeConfig struct {

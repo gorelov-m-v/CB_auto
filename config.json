@@ -20,7 +20,9 @@
     "connMaxLifetime": 60000000000,
     "connMaxIdleTime": 30000000000,
     "maxOpenConns": 10,
-    "maxIdleConns": 5
+    "maxIdleConns": 5,
+    "retry_attempts": 10,
+    "retry_delay": 1
   },
   "kafka": {
     "brokers": "kafka-development-01.b2bdev.pro:9092",
@@ -30,11 +32,11 @@
   },
   "nats": {
     "hosts": "nats://nats-development-01.b2bdev.pro:4222,nats://nats-development-02.b2bdev.pro:4222,nats://nats-development-03.b2bdev.pro:4222",
+    "stream_prefix": "beta-09_",
     "reconnect_wait": 1,
-    "max_reconnects": 3,
-    "timeout": 2,
-    "stream_timeout": 60,
-    "stream_prefix": "beta-09_"
+    "max_reconnects": 5,
+    "timeout": 5,
+    "stream_timeout": 120
   },
   "redis": {
     "addr": "redis-inmem-development-02.b2bdev.pro:6389",

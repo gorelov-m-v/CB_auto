@@ -9,6 +9,7 @@ import (
 	"CB_auto/pkg/utils"
 	"context"
 	"fmt"
+	"log"
 	"testing"
 
 	"CB_auto/internal/transport/nats"
@@ -195,11 +196,15 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 	})
 
 	t.WithNewStep("Проверка создания кошелька в NATS.", func(sCtx provider.StepCtx) {
-		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.playerRegistrationMessage.Player.ExternalID)
+		subject := fmt.Sprintf("%s.wallet.*.%s.*",
+			s.config.Nats.StreamPrefix,
+			testData.playerRegistrationMessage.Player.ExternalID,
+		)
+		log.Printf("Subscribing to NATS subject: %s", subject)
 		s.natsClient.Subscribe(t, subject)
 
 		testData.walletCreatedEvent = nats.FindMessageByFilter[nats.WalletCreatedPayload](
-			s.natsClient, t, func(wallet nats.WalletCreatedPayload) bool {
+			s.natsClient, t, func(wallet nats.WalletCreatedPayload, msgType string) bool {
 				return wallet.WalletType == nats.TypeReal &&
 					wallet.WalletStatus == nats.StatusEnabled &&
 					wallet.IsBasic

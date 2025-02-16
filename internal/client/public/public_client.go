@@ -13,6 +13,7 @@ type PublicAPI interface {
 	TokenCheck(req *httpClient.Request[models.TokenCheckRequestBody]) *httpClient.Response[models.TokenCheckResponseBody]
 	GetWallets(req *httpClient.Request[any]) *httpClient.Response[models.GetWalletsResponseBody]
 	CreateWallet(req *httpClient.Request[models.CreateWalletRequestBody]) *httpClient.Response[models.CreateWalletResponseBody]
+	SwitchWallet(req *httpClient.Request[models.SwitchWalletRequestBody]) *httpClient.Response[struct{}]
 }
 
 type publicClient struct {
@@ -81,6 +82,22 @@ func (c *publicClient) CreateWallet(req *httpClient.Request[models.CreateWalletR
 			StatusCode: http.StatusInternalServerError,
 			Error: &httpClient.ErrorResponse{
 				Body: fmt.Sprintf("CreateWallet failed: %v", err),
+			},
+		}
+	}
+	return resp
+}
+
+func (c *publicClient) SwitchWallet(req *httpClient.Request[models.SwitchWalletRequestBody]) *httpClient.Response[struct{}] {
+	req.Method = "PUT"
+	req.Path = "/_front_api/api/v1/wallets/switch"
+	resp, err := httpClient.DoRequest[models.SwitchWalletRequestBody, struct{}](c.client, req)
+	if err != nil {
+		log.Printf("SwitchWallet failed: %v", err)
+		return &httpClient.Response[struct{}]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &httpClient.ErrorResponse{
+				Body: fmt.Sprintf("SwitchWallet failed: %v", err),
 			},
 		}
 	}
