@@ -5,7 +5,9 @@ import (
 	publicAPI "CB_auto/internal/client/public"
 	"CB_auto/internal/client/public/models"
 	"CB_auto/internal/config"
+	"CB_auto/internal/database"
 	"CB_auto/pkg/utils"
+	"context"
 	"fmt"
 	"testing"
 
@@ -16,7 +18,9 @@ import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
 
+	"CB_auto/internal/database/wallet"
 	"CB_auto/internal/transport/kafka"
+	"CB_auto/test/e2e/constants"
 )
 
 type FastRegistrationSuite struct {
@@ -27,6 +31,7 @@ type FastRegistrationSuite struct {
 	natsClient    *nats.NatsClient
 	redisClient   *redis.RedisClient
 	kafka         *kafka.Kafka
+	walletDB      *database.Connector
 }
 
 func (s *FastRegistrationSuite) BeforeAll(t provider.T) {
@@ -48,19 +53,19 @@ func (s *FastRegistrationSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация NATS клиента.", func(sCtx provider.StepCtx) {
-		client, err := nats.NewClient(&s.config.Nats)
+		natsClient, err := nats.NewClient(&s.config.Nats)
 		if err != nil {
-			t.Fatalf("NewClient не удался: %v", err)
+			t.Fatalf("NewClient NATS не удался: %v", err)
 		}
-		s.natsClient = client
+		s.natsClient = natsClient
 	})
 
 	t.WithNewStep("Инициализация Redis клиента.", func(sCtx provider.StepCtx) {
-		client, err := redis.NewRedisClient(&s.config.Redis)
+		redisClient, err := redis.NewRedisClient(&s.config.Redis)
 		if err != nil {
 			t.Fatalf("Redis init failed: %v", err)
 		}
-		s.redisClient = client
+		s.redisClient = redisClient
 	})
 
 	t.WithNewStep("Инициализация Kafka.", func(sCtx provider.StepCtx) {
@@ -73,18 +78,34 @@ func (s *FastRegistrationSuite) BeforeAll(t provider.T) {
 		)
 		s.kafka.StartReading(t)
 	})
+
+	t.WithNewStep("Соединение с базой данных wallet.", func(sCtx provider.StepCtx) {
+		connector, err := database.OpenConnector(context.Background(), database.Config{
+			DriverName:      s.config.MySQL.DriverName,
+			DSN:             s.config.MySQL.DSNWallet,
+			PingTimeout:     s.config.MySQL.PingTimeout,
+			ConnMaxLifetime: s.config.MySQL.ConnMaxLifetime,
+			ConnMaxIdleTime: s.config.MySQL.ConnMaxIdleTime,
+			MaxOpenConns:    s.config.MySQL.MaxOpenConns,
+			MaxIdleConns:    s.config.MySQL.MaxIdleConns,
+		})
+		if err != nil {
+			t.Fatalf("OpenConnector для wallet не удался: %v", err)
+		}
+		s.walletDB = &connector
+	})
 }
 
 func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
-	t.Epic("Users")
-	t.Feature("Регистрация пользователя")
-	t.Tags("Public", "Users")
-	t.Title("Проверка быстрой регистрации пользователя")
+	t.Epic("Wallet")
+	t.Feature("Создание кошелька при регистрации пользователя")
+	t.Tags("Wallet", "Registration")
+	t.Title("Проверка создания кошелька при регистрации пользователя")
 
 	type TestData struct {
 		registrationResponse      *models.FastRegistrationResponseBody
 		playerRegistrationMessage *kafka.PlayerMessage
-		walletCreatedPayload      *nats.WalletCreatedPayload
+		walletCreatedEvent        *nats.NatsMessage[nats.WalletCreatedPayload]
 	}
 	var testData TestData
 
@@ -98,15 +119,26 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 				Currency: s.config.Node.DefaultCurrency,
 			},
 		}
-
 		createResp := s.publicService.FastRegistration(createReq)
 		testData.registrationResponse = &createResp.Body
 
-		sCtx.Require().NotEmpty(createResp.Body.Username, "Username is empty")
-		sCtx.Require().NotEmpty(createResp.Body.Password, "Password is empty")
+		sCtx.Assert().NotEmpty(
+			createResp.Body.Username,
+			"Username в ответе регистрации не пустой",
+		)
+		sCtx.Assert().NotEmpty(
+			createResp.Body.Password,
+			"Password в ответе регистрации не пустой",
+		)
 
-		sCtx.WithAttachments(allure.NewAttachment("FastRegistration Request", allure.JSON, utils.CreateHttpAttachRequest[models.FastRegistrationRequestBody](createReq)))
-		sCtx.WithAttachments(allure.NewAttachment("FastRegistration Response", allure.JSON, utils.CreateHttpAttachResponse[models.FastRegistrationResponseBody](createResp)))
+		sCtx.WithAttachments(allure.NewAttachment(
+			"FastRegistration Request", allure.JSON,
+			utils.CreateHttpAttachRequest[models.FastRegistrationRequestBody](createReq),
+		))
+		sCtx.WithAttachments(allure.NewAttachment(
+			"FastRegistration Response", allure.JSON,
+			utils.CreateHttpAttachResponse[models.FastRegistrationResponseBody](createResp),
+		))
 	})
 
 	t.WithNewStep("Получение сообщения о регистрации из топика player.v1.account.", func(sCtx provider.StepCtx) {
@@ -116,62 +148,225 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 			return msg.Message.EventType == "player.signUpFast" &&
 				msg.Player.AccountID == accountID
 		})
-
 		playerRegistrationMessage := kafka.ParseMessage[kafka.PlayerMessage](t, message)
 		testData.playerRegistrationMessage = &playerRegistrationMessage
 
-		sCtx.Require().NotEmpty(playerRegistrationMessage.Player.ExternalID, "Player External ID is not empty")
-		sCtx.WithAttachments(allure.NewAttachment("Kafka Message", allure.JSON, utils.CreatePrettyJSON(playerRegistrationMessage)))
+		sCtx.Assert().NotEmpty(
+			playerRegistrationMessage.Player.ExternalID,
+			"External ID игрока в регистрации не пустой",
+		)
+		sCtx.WithAttachments(allure.NewAttachment(
+			"Kafka Message", allure.JSON,
+			utils.CreatePrettyJSON(playerRegistrationMessage),
+		))
 	})
 
 	t.WithNewStep("Проверка создания кошелька в NATS.", func(sCtx provider.StepCtx) {
-		playerUUID := testData.playerRegistrationMessage.Player.ExternalID
-		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, playerUUID)
-
+		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.playerRegistrationMessage.Player.ExternalID)
 		s.natsClient.Subscribe(t, subject)
 
-		message := nats.FindMessageByFilter[nats.WalletCreatedPayload](s.natsClient, t, func(wallet nats.WalletCreatedPayload) bool {
-			return wallet.WalletType == nats.TypeReal &&
-				wallet.WalletStatus == nats.StatusEnabled &&
-				wallet.IsBasic
-		})
+		testData.walletCreatedEvent = nats.FindMessageByFilter[nats.WalletCreatedPayload](
+			s.natsClient, t, func(wallet nats.WalletCreatedPayload) bool {
+				return wallet.WalletType == nats.TypeReal &&
+					wallet.WalletStatus == nats.StatusEnabled &&
+					wallet.IsBasic
+			},
+		)
 
-		walletData := nats.ParseMessage[nats.WalletCreatedPayload](t, message)
-		testData.walletCreatedPayload = &walletData
+		sCtx.Assert().NotEmpty(
+			testData.walletCreatedEvent.Payload.WalletUUID,
+			"UUID кошелька в ивенте `wallet_created` не пустой",
+		)
+		sCtx.Assert().Equal(
+			testData.playerRegistrationMessage.Player.ExternalID,
+			testData.walletCreatedEvent.Payload.PlayerUUID,
+			"UUID игрока в ивенте `wallet_created` совпадает с ожидаемым",
+		)
+		sCtx.Assert().Equal(
+			constants.EmptyBonusUUID,
+			testData.walletCreatedEvent.Payload.PlayerBonusUUID,
+			"Bonus UUID в ивенте `wallet_created` равен пустому значению",
+		)
+		sCtx.Assert().Equal(
+			nats.TypeReal,
+			testData.walletCreatedEvent.Payload.WalletType,
+			"Тип кошелька в ивенте `wallet_created` – реальный",
+		)
+		sCtx.Assert().Equal(
+			nats.StatusEnabled,
+			testData.walletCreatedEvent.Payload.WalletStatus,
+			"Статус кошелька в ивенте `wallet_created` – включён",
+		)
+		sCtx.Assert().Equal(
+			s.config.Node.DefaultCurrency,
+			testData.walletCreatedEvent.Payload.Currency,
+			"Валюта в ивенте `wallet_created` совпадает с ожидаемой",
+		)
+		sCtx.Assert().Equal(
+			constants.ZeroAmount,
+			testData.walletCreatedEvent.Payload.Balance,
+			"Баланс в ивенте `wallet_created` равен 0",
+		)
+		sCtx.Assert().True(
+			testData.walletCreatedEvent.Payload.IsDefault,
+			"Кошелёк в ивенте `wallet_created` помечен как \"по умолчанию\"",
+		)
+		sCtx.Assert().True(
+			testData.walletCreatedEvent.Payload.IsBasic,
+			"Кошелёк в ивенте `wallet_created` помечен как базовый",
+		)
+		sCtx.Assert().NotEmpty(
+			testData.walletCreatedEvent.Payload.CreatedAt,
+			"Дата создания в ивенте `wallet_created` не пустая",
+		)
+		sCtx.Assert().NotEmpty(
+			testData.walletCreatedEvent.Payload.UpdatedAt,
+			"Дата обновления в ивенте `wallet_created` не пустая",
+		)
 
-		sCtx.Require().NotEmpty(walletData.WalletUUID, "Expected non-empty wallet UUID")
-		sCtx.Require().Equal(playerUUID, walletData.PlayerUUID, "Wrong player UUID")
-		sCtx.Require().Equal("00000000-0000-0000-0000-000000000000", walletData.PlayerBonusUUID, "Expected nil bonus UUID")
-		sCtx.Require().Equal(nats.TypeReal, walletData.WalletType, "Expected real wallet type")
-		sCtx.Require().Equal(nats.StatusEnabled, walletData.WalletStatus, "Expected enabled status")
-		sCtx.Require().Equal(s.config.Node.DefaultCurrency, walletData.Currency, "Wrong currency")
-		sCtx.Require().Equal("0", walletData.Balance, "Non-zero initial balance")
-		sCtx.Require().True(walletData.IsDefault, "Not marked as default")
-		sCtx.Require().True(walletData.IsBasic, "Not marked as basic")
-		sCtx.Require().NotEmpty(walletData.CreatedAt, "Missing creation timestamp")
-		sCtx.Require().NotEmpty(walletData.UpdatedAt, "Missing update timestamp")
-
-		sCtx.WithAttachments(allure.NewAttachment("NATS Wallet Message", allure.JSON, utils.CreatePrettyJSON(walletData)))
+		sCtx.WithAttachments(allure.NewAttachment(
+			"NATS Wallet Message", allure.JSON,
+			utils.CreatePrettyJSON(testData.walletCreatedEvent.Payload),
+		))
 	})
 
-	t.WithNewStep("Проверка значения в Redis.", func(sCtx provider.StepCtx) {
+	t.WithNewAsyncStep("Проверка значения в Redis.", func(sCtx provider.StepCtx) {
 		key := testData.playerRegistrationMessage.Player.ExternalID
 		wallets := s.redisClient.GetWithRetry(t, key)
-
 		var wallet redis.WalletData
 		for _, w := range wallets {
 			wallet = w
 			break
 		}
 
-		sCtx.Require().Equal(testData.walletCreatedPayload.Currency, wallet.Currency, "Wrong currency in Redis")
-		sCtx.Require().Equal(1, wallet.Type, "Wrong wallet type in Redis")
-		sCtx.Require().Equal(1, wallet.Status, "Wrong wallet status in Redis")
-		sCtx.Require().Equal(testData.walletCreatedPayload.WalletUUID, wallet.WalletUUID, "Wrong wallet UUID in Redis")
+		sCtx.Assert().Equal(
+			testData.walletCreatedEvent.Payload.Currency,
+			wallet.Currency,
+			"Валюта в Redis совпадает с валютой из ивента `wallet_created`",
+		)
+		sCtx.Assert().Equal(
+			int(nats.TypeReal),
+			wallet.Type,
+			"Тип кошелька в Redis – реальный",
+		)
+		sCtx.Assert().Equal(
+			int(nats.StatusEnabled),
+			wallet.Status,
+			"Статус кошелька в Redis – включён",
+		)
+		sCtx.Assert().Equal(
+			testData.walletCreatedEvent.Payload.WalletUUID,
+			wallet.WalletUUID,
+			"UUID кошелька в Redis совпадает с UUID из ивента `wallet_created`",
+		)
 
-		sCtx.WithAttachments(allure.NewAttachment("Redis Value", allure.JSON, utils.CreatePrettyJSON(wallets)))
+		sCtx.WithAttachments(allure.NewAttachment(
+			"Redis Value", allure.JSON,
+			utils.CreatePrettyJSON(wallets),
+		))
 	})
 
+	t.WithNewAsyncStep("Проверка создания кошелька в БД.", func(sCtx provider.StepCtx) {
+		walletRepo := wallet.NewRepository(s.walletDB.DB)
+		walletFromDatabase := walletRepo.GetWalletByUUID(t, testData.walletCreatedEvent.Payload.WalletUUID)
+
+		sCtx.Assert().Equal(
+			testData.walletCreatedEvent.Payload.WalletUUID,
+			walletFromDatabase.UUID,
+			"UUID кошелька в БД совпадает с UUID из ивента `wallet_created`",
+		)
+		sCtx.Assert().Equal(
+			testData.walletCreatedEvent.Payload.PlayerUUID,
+			walletFromDatabase.PlayerUUID,
+			"UUID игрока в БД совпадает с UUID из ивента `wallet_created`",
+		)
+		sCtx.Assert().Equal(
+			testData.walletCreatedEvent.Payload.Currency,
+			walletFromDatabase.Currency,
+			"Валюта в БД совпадает с валютой из ивента `wallet_created`",
+		)
+		sCtx.Assert().Equal(
+			int(nats.StatusEnabled),
+			walletFromDatabase.WalletStatus,
+			"Статус кошелька в БД – включён",
+		)
+		sCtx.Assert().Equal(
+			constants.ZeroAmount,
+			walletFromDatabase.Balance.String(),
+			"Баланс в БД равен 0",
+		)
+		sCtx.Assert().NotZero(
+			walletFromDatabase.CreatedAt,
+			"Дата создания в БД не равна 0",
+		)
+		sCtx.Assert().NotZero(
+			walletFromDatabase.UpdatedAt.Int64,
+			"Дата обновления в БД должна быть не нулевой",
+		)
+		sCtx.Assert().True(
+			walletFromDatabase.IsDefault,
+			"Кошелёк помечен как \"по умолчанию\" в БД",
+		)
+		sCtx.Assert().True(
+			walletFromDatabase.IsBasic,
+			"Кошелёк помечен как базовый в БД",
+		)
+		sCtx.Assert().False(
+			walletFromDatabase.IsBlocked,
+			"Кошелёк не заблокирован в БД",
+		)
+		sCtx.Assert().Equal(
+			int(nats.TypeReal),
+			walletFromDatabase.WalletType,
+			"Тип кошелька в БД – реальный",
+		)
+		sCtx.Assert().Equal(
+			int(testData.walletCreatedEvent.Sequence),
+			walletFromDatabase.Seq,
+			"Номер последовательности в БД совпадает с номером из ивента",
+		)
+		sCtx.Assert().True(
+			walletFromDatabase.IsGamblingActive,
+			"Гэмблинг активен в БД",
+		)
+		sCtx.Assert().True(
+			walletFromDatabase.IsBettingActive,
+			"Беттинг активен в БД",
+		)
+		sCtx.Assert().Equal(
+			constants.ZeroAmount,
+			walletFromDatabase.DepositAmount.String(),
+			"Сумма депозитов в БД равна 0",
+		)
+		sCtx.Assert().Equal(
+			constants.ZeroAmount,
+			walletFromDatabase.ProfitAmount.String(),
+			"Сумма прибыли в БД равна 0",
+		)
+		sCtx.Assert().Equal(
+			testData.walletCreatedEvent.Payload.NodeUUID,
+			walletFromDatabase.NodeUUID.String,
+			"Node UUID в БД совпадает с Node UUID из ивента",
+		)
+		sCtx.Assert().False(
+			walletFromDatabase.IsSumsubVerified,
+			"Кошелёк не верифицирован через Sumsub в БД",
+		)
+		sCtx.Assert().Equal(
+			constants.ZeroAmount,
+			walletFromDatabase.AvailableWithdrawal.String(),
+			"Доступная сумма для вывода в БД равна 0",
+		)
+		sCtx.Assert().True(
+			walletFromDatabase.IsKycVerified,
+			"Кошелёк прошёл KYC-верификацию в БД",
+		)
+
+		sCtx.WithAttachments(allure.NewAttachment(
+			"Wallet DB Data", allure.JSON,
+			utils.CreatePrettyJSON(walletFromDatabase),
+		))
+	})
 }
 
 func (s *FastRegistrationSuite) AfterAll(t provider.T) {
@@ -180,6 +375,11 @@ func (s *FastRegistrationSuite) AfterAll(t provider.T) {
 	}
 	if s.redisClient != nil {
 		s.redisClient.Close()
+	}
+	if s.walletDB != nil {
+		if err := s.walletDB.Close(); err != nil {
+			t.Errorf("Ошибка при закрытии соединения с wallet DB: %v", err)
+		}
 	}
 }
 

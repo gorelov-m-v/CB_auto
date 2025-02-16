@@ -26,6 +26,14 @@ type NatsClient struct {
 	subs      []*nats.Subscription
 }
 
+type NatsMessage[T any] struct {
+	Payload   T
+	Metadata  *nats.MsgMetadata
+	Subject   string
+	Sequence  uint64
+	Timestamp time.Time
+}
+
 func NewClient(cfg *config.NatsConfig) (*NatsClient, error) {
 	log.Printf("Creating new NATS client: hosts=%s", cfg.Hosts)
 
@@ -101,7 +109,7 @@ func (n *NatsClient) messageHandler(msg *nats.Msg) {
 	}
 }
 
-func FindMessageByFilter[T any](n *NatsClient, t provider.T, filter func(T) bool) *nats.Msg {
+func FindMessageByFilter[T any](n *NatsClient, t provider.T, filter func(T) bool) *NatsMessage[T] {
 	ctx, cancel := context.WithTimeout(n.ctx, n.timeout)
 	defer cancel()
 
@@ -127,7 +135,14 @@ func FindMessageByFilter[T any](n *NatsClient, t provider.T, filter func(T) bool
 
 			if filter(data) {
 				log.Printf("Found matching message")
-				return msg
+				meta, _ := msg.Metadata()
+				return &NatsMessage[T]{
+					Payload:   data,
+					Metadata:  meta,
+					Subject:   msg.Subject,
+					Sequence:  meta.Sequence.Stream,
+					Timestamp: meta.Timestamp,
+				}
 			}
 
 			log.Printf("Message didn't match filter")
@@ -140,7 +155,14 @@ func FindMessageByFilter[T any](n *NatsClient, t provider.T, filter func(T) bool
 				}
 				if filter(data) {
 					log.Printf("Found matching message in buffer")
-					return bufferedMsg
+					meta, _ := bufferedMsg.Metadata()
+					return &NatsMessage[T]{
+						Payload:   data,
+						Metadata:  meta,
+						Subject:   bufferedMsg.Subject,
+						Sequence:  meta.Sequence.Stream,
+						Timestamp: meta.Timestamp,
+					}
 				}
 			}
 			time.Sleep(100 * time.Millisecond)

@@ -4,11 +4,49 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	"gitlab.b2bdev.pro/backend/go-packages/log"
 )
+
+type Repository struct {
+	db            *sql.DB
+	retryAttempts int
+	retryDelay    time.Duration
+}
+
+func NewRepository(db *sql.DB) Repository {
+	return Repository{
+		db:            db,
+		retryAttempts: 3,           // значение по умолчанию
+		retryDelay:    time.Second, // значение по умолчанию
+	}
+}
+
+func (r *Repository) ExecuteWithRetry(ctx context.Context, operation func(context.Context) error) error {
+	var lastErr error
+	for attempt := 0; attempt < r.retryAttempts; attempt++ {
+		if err := operation(ctx); err == nil {
+			return nil
+		} else if err == sql.ErrNoRows {
+			lastErr = err
+			log.Printf("No rows found, attempt %d/%d", attempt+1, r.retryAttempts)
+		} else {
+			lastErr = err
+			log.Printf("Database operation failed, attempt %d/%d: %v", attempt+1, r.retryAttempts, err)
+		}
+
+		if attempt < r.retryAttempts-1 {
+			time.Sleep(r.retryDelay)
+		}
+	}
+	return fmt.Errorf("operation failed after %d attempts: %w", r.retryAttempts, lastErr)
+}
+
+func (r *Repository) DB() *sql.DB {
+	return r.db
+}
 
 type Config struct {
 	DriverName string
@@ -19,10 +57,13 @@ type Config struct {
 	ConnMaxIdleTime time.Duration
 	MaxOpenConns    int
 	MaxIdleConns    int
+	RetryAttempts   int
+	RetryDelay      time.Duration
 }
 
 type Connector struct {
 	db *sqlx.DB
+	DB *sql.DB
 }
 
 func NewConnector(db *sqlx.DB) Connector {
@@ -44,12 +85,12 @@ func OpenConnector(ctx context.Context, config Config) (Connector, error) {
 
 	if err := pingDB(ctx, db, config.PingTimeout); err != nil {
 		if err := db.Close(); err != nil {
-			log.Errorwe(ctx, "failed to close db connection", err)
+			log.Printf("failed to close db connection: %v", err)
 		}
 		return Connector{}, fmt.Errorf("ping db: %w", err)
 	}
 
-	return Connector{db: db}, nil
+	return Connector{db: db, DB: db.DB}, nil
 }
 
 func (c Connector) QueryContext(ctx context.Context, query string, args ...interface{}) (*sqlx.Rows, error) {

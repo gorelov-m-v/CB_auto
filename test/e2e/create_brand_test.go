@@ -54,7 +54,7 @@ func (s *CreateBrandSuite) BeforeAll(t provider.T) {
 	t.WithNewStep("Соединение с базой данных.", func(sCtx provider.StepCtx) {
 		connector, err := database.OpenConnector(context.Background(), database.Config{
 			DriverName:      s.config.MySQL.DriverName,
-			DSN:             s.config.MySQL.DSN,
+			DSN:             s.config.MySQL.DSNCore,
 			PingTimeout:     s.config.MySQL.PingTimeout,
 			ConnMaxLifetime: s.config.MySQL.ConnMaxLifetime,
 			ConnMaxIdleTime: s.config.MySQL.ConnMaxIdleTime,
@@ -84,7 +84,7 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 	t.Tags("CAP", "Brands")
 	t.Title("Проверка создания бренда")
 
-	brandRepo := brand.NewRepository(s.database)
+	brandRepo := brand.NewRepository(s.database.DB)
 
 	type TestData struct {
 		adminResponse          *models.AdminCheckResponseBody
@@ -133,7 +133,7 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 		sCtx.WithAttachments(allure.NewAttachment("CreateBrand Response", allure.JSON, utils.CreateHttpAttachResponse(createResp)))
 	})
 
-	t.WithNewStep("Проверка создания бренда в CAP через GET.", func(sCtx provider.StepCtx) {
+	t.WithNewAsyncStep("Проверка создания бренда в CAP через GET.", func(sCtx provider.StepCtx) {
 		getReq := &client.Request[struct{}]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", testData.adminResponse.Token),
@@ -156,9 +156,9 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 		sCtx.WithAttachments(allure.NewAttachment("GetBrand Response", allure.JSON, utils.CreateHttpAttachResponse(getResp)))
 	})
 
-	t.WithNewStep("Проверка записи информации о бренде в БД.", func(sCtx provider.StepCtx) {
+	t.WithNewAsyncStep("Проверка записи информации о бренде в БД.", func(sCtx provider.StepCtx) {
 		brandUUID := uuid.MustParse(testData.createCapBrandResponse.ID)
-		brandData := brandRepo.GetBrand(context.Background(), brandUUID)
+		brandData := brandRepo.GetBrandByUUID(t, brandUUID)
 		var dbNames map[string]string = make(map[string]string)
 		json.Unmarshal(brandData.LocalizedNames, &dbNames)
 
@@ -174,7 +174,7 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 		sCtx.WithAttachments(allure.NewAttachment("Бренд из БД", allure.JSON, utils.CreatePrettyJSON(brandData)))
 	})
 
-	t.WithNewStep("Проверка сообщения из Kafka.", func(sCtx provider.StepCtx) {
+	t.WithNewAsyncStep("Проверка сообщения из Kafka.", func(sCtx provider.StepCtx) {
 		expectedAlias := testData.createRequest.Body.Alias
 		expectedUUID := testData.createCapBrandResponse.ID
 		expectedNames := testData.createRequest.Body.Names
