@@ -1,25 +1,24 @@
 package test
 
 import (
+	"context"
+	"fmt"
+	"testing"
+
 	client "CB_auto/internal/client"
 	publicAPI "CB_auto/internal/client/public"
 	"CB_auto/internal/client/public/models"
 	"CB_auto/internal/config"
 	"CB_auto/internal/database"
+	"CB_auto/internal/transport/kafka"
 	"CB_auto/internal/transport/nats"
 	"CB_auto/internal/transport/redis"
 	"CB_auto/pkg/utils"
-	"context"
-	"fmt"
-	"testing"
 
-	"log"
-
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
-
-	"CB_auto/internal/transport/kafka"
 )
 
 type SwitchWalletSuite struct {
@@ -127,23 +126,11 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 		createResp := s.publicService.FastRegistration(createReq)
 		testData.registrationResponse = &createResp.Body
 
-		sCtx.Assert().NotEmpty(
-			createResp.Body.Username,
-			"Username в ответе регистрации не пустой",
-		)
-		sCtx.Assert().NotEmpty(
-			createResp.Body.Password,
-			"Password в ответе регистрации не пустой",
-		)
+		sCtx.Assert().NotEmpty(createResp.Body.Username, "Username в ответе регистрации не пустой")
+		sCtx.Assert().NotEmpty(createResp.Body.Password, "Password в ответе регистрации не пустой")
 
-		sCtx.WithAttachments(allure.NewAttachment(
-			"FastRegistration Request", allure.JSON,
-			utils.CreateHttpAttachRequest(createReq),
-		))
-		sCtx.WithAttachments(allure.NewAttachment(
-			"FastRegistration Response", allure.JSON,
-			utils.CreateHttpAttachResponse(createResp),
-		))
+		sCtx.WithAttachments(allure.NewAttachment("FastRegistration Request", allure.JSON, utils.CreateHttpAttachRequest(createReq)))
+		sCtx.WithAttachments(allure.NewAttachment("FastRegistration Response", allure.JSON, utils.CreateHttpAttachResponse(createResp)))
 	})
 
 	t.WithNewStep("Получение сообщения о регистрации из топика player.v1.account.", func(sCtx provider.StepCtx) {
@@ -156,10 +143,7 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 		playerRegistrationMessage := kafka.ParseMessage[kafka.PlayerMessage](t, message)
 		testData.playerRegistrationMessage = &playerRegistrationMessage
 
-		sCtx.WithAttachments(allure.NewAttachment(
-			"Kafka Player Message", allure.JSON,
-			utils.CreatePrettyJSON(testData.playerRegistrationMessage),
-		))
+		sCtx.WithAttachments(allure.NewAttachment("Kafka Player Message", allure.JSON, utils.CreatePrettyJSON(testData.playerRegistrationMessage)))
 	})
 
 	t.WithNewStep("Получение токена авторизации.", func(sCtx provider.StepCtx) {
@@ -175,23 +159,11 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 		authResp := s.publicService.TokenCheck(authReq)
 		testData.authResponse = &authResp.Body
 
-		sCtx.Assert().NotEmpty(
-			authResp.Body.Token,
-			"Токен авторизации не пустой",
-		)
-		sCtx.Assert().NotEmpty(
-			authResp.Body.RefreshToken,
-			"Refresh токен не пустой",
-		)
+		sCtx.Assert().NotEmpty(authResp.Body.Token, "Токен авторизации не пустой")
+		sCtx.Assert().NotEmpty(authResp.Body.RefreshToken, "Refresh токен не пустой")
 
-		sCtx.WithAttachments(allure.NewAttachment(
-			"TokenCheck Request", allure.JSON,
-			utils.CreateHttpAttachRequest(authReq),
-		))
-		sCtx.WithAttachments(allure.NewAttachment(
-			"TokenCheck Response", allure.JSON,
-			utils.CreateHttpAttachResponse(authResp),
-		))
+		sCtx.WithAttachments(allure.NewAttachment("TokenCheck Request", allure.JSON, utils.CreateHttpAttachRequest(authReq)))
+		sCtx.WithAttachments(allure.NewAttachment("TokenCheck Response", allure.JSON, utils.CreateHttpAttachResponse(authResp)))
 	})
 
 	t.WithNewStep("Получение сообщения о создании основного кошелька в NATS.", func(sCtx provider.StepCtx) {
@@ -206,10 +178,7 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 			},
 		)
 
-		sCtx.WithAttachments(allure.NewAttachment(
-			"NATS Wallet Message", allure.JSON,
-			utils.CreatePrettyJSON(testData.mainWalletCreatedEvent.Payload),
-		))
+		sCtx.WithAttachments(allure.NewAttachment("NATS Wallet Message", allure.JSON, utils.CreatePrettyJSON(testData.mainWalletCreatedEvent.Payload)))
 	})
 
 	t.WithNewStep("Создание дополнительного кошелька.", func(sCtx provider.StepCtx) {
@@ -226,20 +195,10 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 		createResp := s.publicService.CreateWallet(createReq)
 		testData.createWalletResponse = &createResp.Body
 
-		sCtx.Assert().Equal(
-			201,
-			createResp.StatusCode,
-			"Статус код ответа равен 201",
-		)
+		sCtx.Assert().Equal(201, createResp.StatusCode, "Статус код ответа равен 201")
 
-		sCtx.WithAttachments(allure.NewAttachment(
-			"CreateWallet Request", allure.JSON,
-			utils.CreateHttpAttachRequest(createReq),
-		))
-		sCtx.WithAttachments(allure.NewAttachment(
-			"CreateWallet Response", allure.JSON,
-			utils.CreateHttpAttachResponse(createResp),
-		))
+		sCtx.WithAttachments(allure.NewAttachment("CreateWallet Request", allure.JSON, utils.CreateHttpAttachRequest(createReq)))
+		sCtx.WithAttachments(allure.NewAttachment("CreateWallet Response", allure.JSON, utils.CreateHttpAttachResponse(createResp)))
 	})
 
 	t.WithNewStep("Получение сообщения о создании дополнительного кошелька в NATS.", func(sCtx provider.StepCtx) {
@@ -255,10 +214,7 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 			},
 		)
 
-		sCtx.WithAttachments(allure.NewAttachment(
-			"NATS Wallet Message", allure.JSON,
-			utils.CreatePrettyJSON(testData.additionalWalletCreatedEvent.Payload),
-		))
+		sCtx.WithAttachments(allure.NewAttachment("NATS Wallet Message", allure.JSON, utils.CreatePrettyJSON(testData.additionalWalletCreatedEvent.Payload)))
 	})
 
 	t.WithNewStep("Переключение дефолтного кошелька.", func(sCtx provider.StepCtx) {
@@ -274,97 +230,46 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 		}
 		switchResp := s.publicService.SwitchWallet(switchReq)
 
-		sCtx.Assert().Equal(
-			204,
-			switchResp.StatusCode,
-			"Статус код ответа равен 204",
-		)
+		sCtx.Assert().Equal(204, switchResp.StatusCode, "Статус код ответа равен 204")
 
-		sCtx.WithAttachments(allure.NewAttachment(
-			"SwitchWallet Request", allure.JSON,
-			utils.CreateHttpAttachRequest(switchReq),
-		))
-		sCtx.WithAttachments(allure.NewAttachment(
-			"SwitchWallet Response", allure.JSON,
-			utils.CreateHttpAttachResponse(switchResp),
-		))
+		sCtx.WithAttachments(allure.NewAttachment("SwitchWallet Request", allure.JSON, utils.CreateHttpAttachRequest(switchReq)))
+		sCtx.WithAttachments(allure.NewAttachment("SwitchWallet Response", allure.JSON, utils.CreateHttpAttachResponse(switchResp)))
 	})
 
 	t.WithNewStep("Проверка событий смены дефолтного кошелька в NATS.", func(sCtx provider.StepCtx) {
-		log.Printf("Ожидаем события для кошельков: основной=%s, дополнительный=%s",
-			testData.mainWalletCreatedEvent.Payload.WalletUUID,
-			testData.additionalWalletCreatedEvent.Payload.WalletUUID,
-		)
-
-		// Проверяем события по сабжекту игрока
 		playerSubject := fmt.Sprintf("%s.wallet.*.%s.*",
 			s.config.Nats.StreamPrefix,
 			testData.playerRegistrationMessage.Player.ExternalID,
 		)
 		s.natsClient.Subscribe(t, playerSubject)
 
-		log.Printf("Ожидаем событие set_default_started")
 		testData.setDefaultStartedEvent = nats.FindMessageByFilter[nats.SetDefaultStartedPayload](
 			s.natsClient, t, func(msg nats.SetDefaultStartedPayload, msgType string) bool {
 				return msgType == "set_default_started"
 			},
 		)
 
-		log.Printf("Ожидаем событие default_unsetted")
 		testData.defaultUnsettedEvent = nats.FindMessageByFilter[nats.DefaultUnsettedPayload](
 			s.natsClient, t, func(msg nats.DefaultUnsettedPayload, msgType string) bool {
 				return msgType == "default_unsetted"
 			},
 		)
 
-		log.Printf("Ожидаем событие default_setted")
 		testData.setDefaultCommittedEvent = nats.FindMessageByFilter[nats.DefaultSettedPayload](
 			s.natsClient, t, func(msg nats.DefaultSettedPayload, msgType string) bool {
 				return msgType == "set_default_committed"
 			},
 		)
 
-		// Проверяем порядок событий по sequence number
-		sCtx.Assert().Less(
-			testData.setDefaultStartedEvent.Seq,
-			testData.defaultUnsettedEvent.Seq,
-			"set_default_started произошло раньше default_unsetted",
-		)
-		sCtx.Assert().Less(
-			testData.defaultUnsettedEvent.Seq,
-			testData.setDefaultCommittedEvent.Seq,
-			"default_unsetted произошло раньше set_default_committed",
-		)
+		sCtx.Assert().Less(testData.setDefaultStartedEvent.Seq, testData.defaultUnsettedEvent.Seq, "set_default_started произошло раньше default_unsetted")
+		sCtx.Assert().Less(testData.defaultUnsettedEvent.Seq, testData.setDefaultCommittedEvent.Seq, "default_unsetted произошло раньше set_default_committed")
+		sCtx.Assert().Equal("set_default_started", testData.setDefaultStartedEvent.Type, "Тип события set_default_started")
+		sCtx.Assert().Equal("default_unsetted", testData.defaultUnsettedEvent.Type, "Тип события default_unsetted")
+		sCtx.Assert().Equal("set_default_committed", testData.setDefaultCommittedEvent.Type, "Тип события set_default_committed")
 
-		// Проверяем типы событий
-		sCtx.Assert().Equal(
-			"set_default_started",
-			testData.setDefaultStartedEvent.Type,
-			"Тип события set_default_started",
-		)
-		sCtx.Assert().Equal(
-			"default_unsetted",
-			testData.defaultUnsettedEvent.Type,
-			"Тип события default_unsetted",
-		)
-		sCtx.Assert().Equal(
-			"set_default_committed",
-			testData.setDefaultCommittedEvent.Type,
-			"Тип события set_default_committed",
-		)
-
-		sCtx.WithAttachments(allure.NewAttachment(
-			"SetDefaultStarted Event", allure.JSON,
-			utils.CreatePrettyJSON(testData.setDefaultStartedEvent),
-		))
-		sCtx.WithAttachments(allure.NewAttachment(
-			"DefaultUnsetted Event", allure.JSON,
-			utils.CreatePrettyJSON(testData.defaultUnsettedEvent),
-		))
-		sCtx.WithAttachments(allure.NewAttachment(
-			"SetDefaultCommitted Event", allure.JSON,
-			utils.CreatePrettyJSON(testData.setDefaultCommittedEvent),
-		))
+		sCtx.WithAttachments(allure.NewAttachment("SetDefaultStarted Event", allure.JSON, utils.CreatePrettyJSON(testData.setDefaultStartedEvent)))
+		sCtx.WithAttachments(allure.NewAttachment("DefaultUnsetted Event", allure.JSON, utils.CreatePrettyJSON(testData.defaultUnsettedEvent)))
+		sCtx.WithAttachments(allure.NewAttachment("SetDefaultCommitted Event", allure.JSON, utils.CreatePrettyJSON(testData.setDefaultCommittedEvent)))
 	})
 }
 

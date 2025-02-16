@@ -1,26 +1,26 @@
 package test
 
 import (
+	"context"
+	"fmt"
+	"testing"
+
 	client "CB_auto/internal/client"
 	publicAPI "CB_auto/internal/client/public"
 	"CB_auto/internal/client/public/models"
 	"CB_auto/internal/config"
 	"CB_auto/internal/database"
-	"CB_auto/pkg/utils"
-	"context"
-	"fmt"
-	"testing"
-
 	"CB_auto/internal/database/wallet"
+	"CB_auto/internal/transport/kafka"
 	"CB_auto/internal/transport/nats"
 	"CB_auto/internal/transport/redis"
+	"CB_auto/pkg/utils"
+	"CB_auto/test/e2e/constants"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
-
-	"CB_auto/internal/transport/kafka"
-	"CB_auto/test/e2e/constants"
 )
 
 type CreateWalletSuite struct {
@@ -124,19 +124,10 @@ func (s *CreateWalletSuite) TestCreateWallet(t provider.T) {
 		createResp := s.publicService.FastRegistration(createReq)
 		testData.registrationResponse = &createResp.Body
 
-		sCtx.Assert().NotEmpty(
-			createResp.Body.Username,
-			"Username в ответе регистрации не пустой",
-		)
-		sCtx.Assert().NotEmpty(
-			createResp.Body.Password,
-			"Password в ответе регистрации не пустой",
-		)
+		sCtx.Assert().NotEmpty(createResp.Body.Username, "Username в ответе регистрации не пустой")
+		sCtx.Assert().NotEmpty(createResp.Body.Password, "Password в ответе регистрации не пустой")
 
-		sCtx.WithAttachments(allure.NewAttachment(
-			"FastRegistration Request", allure.JSON,
-			utils.CreateHttpAttachRequest(createReq),
-		))
+		sCtx.WithAttachments(allure.NewAttachment("FastRegistration Request", allure.JSON, utils.CreateHttpAttachRequest(createReq)))
 		sCtx.WithAttachments(allure.NewAttachment(
 			"FastRegistration Response", allure.JSON,
 			utils.CreateHttpAttachResponse(createResp),
@@ -172,14 +163,8 @@ func (s *CreateWalletSuite) TestCreateWallet(t provider.T) {
 		authResp := s.publicService.TokenCheck(authReq)
 		testData.authResponse = &authResp.Body
 
-		sCtx.Assert().NotEmpty(
-			authResp.Body.Token,
-			"Токен авторизации не пустой",
-		)
-		sCtx.Assert().NotEmpty(
-			authResp.Body.RefreshToken,
-			"Refresh токен не пустой",
-		)
+		sCtx.Assert().NotEmpty(authResp.Body.Token, "Токен авторизации не пустой")
+		sCtx.Assert().NotEmpty(authResp.Body.RefreshToken, "Refresh токен не пустой")
 
 		sCtx.WithAttachments(allure.NewAttachment(
 			"TokenCheck Request", allure.JSON,
@@ -205,20 +190,10 @@ func (s *CreateWalletSuite) TestCreateWallet(t provider.T) {
 		createResp := s.publicService.CreateWallet(createReq)
 		testData.createWalletResponse = &createResp.Body
 
-		sCtx.Assert().Equal(
-			201,
-			createResp.StatusCode,
-			"Статус код ответа равен 201",
-		)
+		sCtx.Assert().Equal(201, createResp.StatusCode, "Статус код ответа равен 201")
 
-		sCtx.WithAttachments(allure.NewAttachment(
-			"CreateWallet Request", allure.JSON,
-			utils.CreateHttpAttachRequest(createReq),
-		))
-		sCtx.WithAttachments(allure.NewAttachment(
-			"CreateWallet Response", allure.JSON,
-			utils.CreateHttpAttachResponse(createResp),
-		))
+		sCtx.WithAttachments(allure.NewAttachment("CreateWallet Request", allure.JSON, utils.CreateHttpAttachRequest(createReq)))
+		sCtx.WithAttachments(allure.NewAttachment("CreateWallet Response", allure.JSON, utils.CreateHttpAttachResponse(createResp)))
 	})
 
 	t.WithNewStep("Проверка создания кошелька в NATS.", func(sCtx provider.StepCtx) {
@@ -240,10 +215,7 @@ func (s *CreateWalletSuite) TestCreateWallet(t provider.T) {
 		sCtx.Assert().False(testData.walletCreatedEvent.Payload.IsDefault, "Кошелёк в ивенте `wallet_created` не помечен как дефолтный")
 		sCtx.Assert().False(testData.walletCreatedEvent.Payload.IsBasic, "Кошелёк в ивенте `wallet_created` не помечен как базовый")
 
-		sCtx.WithAttachments(allure.NewAttachment(
-			"NATS Wallet Message", allure.JSON,
-			utils.CreatePrettyJSON(testData.walletCreatedEvent.Payload),
-		))
+		sCtx.WithAttachments(allure.NewAttachment("NATS Wallet Message", allure.JSON, utils.CreatePrettyJSON(testData.walletCreatedEvent.Payload)))
 	})
 
 	t.WithNewAsyncStep("Проверка получения списка кошельков.", func(sCtx provider.StepCtx) {
@@ -263,67 +235,26 @@ func (s *CreateWalletSuite) TestCreateWallet(t provider.T) {
 			}
 		}
 
-		sCtx.Assert().NotNil(
-			foundWallet,
-			"Кошелёк найден в списке",
-		)
-		sCtx.Assert().Equal(
-			"USD",
-			foundWallet.Currency,
-			"Валюта кошелька совпадает с ожидаемой",
-		)
-		sCtx.Assert().Equal(
-			constants.ZeroAmount,
-			foundWallet.Balance,
-			"Баланс кошелька равен 0",
-		)
-		sCtx.Assert().False(
-			foundWallet.Default,
-			"Кошелёк не помечен как \"по умолчанию\"",
-		)
+		sCtx.Assert().NotNil(foundWallet, "Кошелёк найден в списке")
+		sCtx.Assert().Equal("USD", foundWallet.Currency, "Валюта кошелька совпадает с ожидаемой")
+		sCtx.Assert().Equal(constants.ZeroAmount, foundWallet.Balance, "Баланс кошелька равен 0")
+		sCtx.Assert().False(foundWallet.Default, "Кошелёк не помечен как \"по умолчанию\"")
 
-		sCtx.WithAttachments(allure.NewAttachment(
-			"GetWallets Request", allure.JSON,
-			utils.CreateHttpAttachRequest(getWalletsReq),
-		))
-		sCtx.WithAttachments(allure.NewAttachment(
-			"GetWallets Response", allure.JSON,
-			utils.CreateHttpAttachResponse(getWalletsResp),
-		))
+		sCtx.WithAttachments(allure.NewAttachment("GetWallets Request", allure.JSON, utils.CreateHttpAttachRequest(getWalletsReq)))
+		sCtx.WithAttachments(allure.NewAttachment("GetWallets Response", allure.JSON, utils.CreateHttpAttachResponse(getWalletsResp)))
 	})
 
 	t.WithNewAsyncStep("Проверка создания кошелька в БД.", func(sCtx provider.StepCtx) {
 		walletRepo := wallet.NewRepository(s.walletDB.DB)
 		walletFromDatabase := walletRepo.GetWalletByUUID(t, testData.walletCreatedEvent.Payload.WalletUUID)
 
-		sCtx.Assert().Equal(
-			testData.walletCreatedEvent.Payload.WalletUUID,
-			walletFromDatabase.UUID,
-			"UUID кошелька в БД совпадает с UUID из ивента `wallet_created`",
-		)
-		sCtx.Assert().Equal(
-			"USD",
-			walletFromDatabase.Currency,
-			"Валюта в БД совпадает с валютой из ивента `wallet_created`",
-		)
-		sCtx.Assert().Equal(
-			constants.ZeroAmount,
-			walletFromDatabase.Balance.String(),
-			"Баланс в БД равен 0",
-		)
-		sCtx.Assert().False(
-			walletFromDatabase.IsDefault,
-			"Кошелёк не помечен как \"по умолчанию\" в БД",
-		)
-		sCtx.Assert().False(
-			walletFromDatabase.IsBasic,
-			"Кошелёк не помечен как базовый в БД",
-		)
+		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.WalletUUID, walletFromDatabase.UUID, "UUID кошелька в БД совпадает с UUID из ивента `wallet_created`")
+		sCtx.Assert().Equal("USD", walletFromDatabase.Currency, "Валюта в БД совпадает с валютой из ивента `wallet_created`")
+		sCtx.Assert().Equal(constants.ZeroAmount, walletFromDatabase.Balance.String(), "Баланс в БД равен 0")
+		sCtx.Assert().False(walletFromDatabase.IsDefault, "Кошелёк не помечен как \"по умолчанию\" в БД")
+		sCtx.Assert().False(walletFromDatabase.IsBasic, "Кошелёк не помечен как базовый в БД")
 
-		sCtx.WithAttachments(allure.NewAttachment(
-			"Wallet DB Data", allure.JSON,
-			utils.CreatePrettyJSON(walletFromDatabase),
-		))
+		sCtx.WithAttachments(allure.NewAttachment("Wallet DB Data", allure.JSON, utils.CreatePrettyJSON(walletFromDatabase)))
 	})
 
 	t.WithNewAsyncStep("Проверка значения в Redis.", func(sCtx provider.StepCtx) {
@@ -338,26 +269,11 @@ func (s *CreateWalletSuite) TestCreateWallet(t provider.T) {
 			}
 		}
 
-		sCtx.Assert().Equal(
-			"USD",
-			foundWallet.Currency,
-			"Валюта в Redis совпадает с валютой из ивента `wallet_created`",
-		)
-		sCtx.Assert().Equal(
-			int(nats.TypeReal),
-			foundWallet.Type,
-			"Тип кошелька в Redis – реальный",
-		)
-		sCtx.Assert().Equal(
-			int(nats.StatusEnabled),
-			foundWallet.Status,
-			"Статус кошелька в Redis – включён",
-		)
+		sCtx.Assert().Equal("USD", foundWallet.Currency, "Валюта в Redis совпадает с валютой из ивента `wallet_created`")
+		sCtx.Assert().Equal(int(nats.TypeReal), foundWallet.Type, "Тип кошелька в Redis – реальный")
+		sCtx.Assert().Equal(int(nats.StatusEnabled), foundWallet.Status, "Статус кошелька в Redis – включён")
 
-		sCtx.WithAttachments(allure.NewAttachment(
-			"Redis Value", allure.JSON,
-			utils.CreatePrettyJSON(wallets),
-		))
+		sCtx.WithAttachments(allure.NewAttachment("Redis Value", allure.JSON, utils.CreatePrettyJSON(wallets)))
 	})
 }
 
