@@ -2,12 +2,13 @@ package redis
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"time"
 
-	"CB_auto/test/config"
+	"CB_auto/internal/config"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	redis "github.com/redis/go-redis/v9"
@@ -58,13 +59,18 @@ func (r *RedisClient) Get(key string) (string, error) {
 	return val, nil
 }
 
-func (r *RedisClient) GetWithRetry(t provider.T, key string) string {
+func (r *RedisClient) GetWithRetry(t provider.T, key string) WalletsMap {
 	var lastErr error
 	delay := r.retryDelay
+	var result WalletsMap
+
 	for i := 0; i < r.retryAttempts; i++ {
 		value, err := r.Get(key)
 		if err == nil && value != "" {
-			return value
+			if err := json.Unmarshal([]byte(value), &result); err != nil {
+				t.Fatalf("Failed to unmarshal Redis value: %v", err)
+			}
+			return result
 		}
 		lastErr = err
 		log.Printf("Attempt %d: Redis key %s not found or empty, retrying in %v...", i+1, key, delay)
@@ -72,7 +78,7 @@ func (r *RedisClient) GetWithRetry(t provider.T, key string) string {
 		delay *= 2
 	}
 	t.Fatalf("Не удалось получить значение из Redis после %d попыток: %v", r.retryAttempts, lastErr)
-	return ""
+	return nil
 }
 
 func (r *RedisClient) Close() error {

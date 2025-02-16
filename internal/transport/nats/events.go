@@ -35,7 +35,7 @@ type (
 	WalletType   int8
 )
 
-type WalletPayload struct {
+type WalletCreatedPayload struct {
 	WalletUUID      string       `json:"wallet_uuid"`
 	PlayerUUID      string       `json:"player_uuid"`
 	PlayerBonusUUID string       `json:"player_bonus_uuid"`

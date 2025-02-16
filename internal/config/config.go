@@ -73,7 +73,7 @@ func (k *KafkaConfig) GetTimeout() time.Duration {
 }
 
 func ReadConfig() (*Config, error) {
-	file, err := os.Open("config.json")
+	file, err := os.Open("../../config.json")
 	if err != nil {
 		return nil, fmt.Errorf("open config file failed: %w", err)
 	}

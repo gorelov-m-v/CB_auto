@@ -1,8 +1,8 @@
 package cap
 
 import (
-	httpClient "CB_auto/test/transport/http"
-	"CB_auto/test/transport/http/cap/models"
+	httpClient "CB_auto/internal/client"
+	"CB_auto/internal/client/cap/models"
 	"fmt"
 	"log"
 	"net/http"
