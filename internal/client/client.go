@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"CB_auto/test/config"
+	"CB_auto/internal/config"
 )
 
 type Client struct {

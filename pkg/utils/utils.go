@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"CB_auto/test/transport/http"
+	client "CB_auto/internal/client"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -10,7 +10,7 @@ import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
 
-func CreateHttpAttachRequest[T any](req *http.Request[T]) []byte {
+func CreateHttpAttachRequest[T any](req *client.Request[T]) []byte {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Method: %s\n", req.Method))
 	sb.WriteString(fmt.Sprintf("Path: %s\n", req.Path))
@@ -43,7 +43,7 @@ func CreateHttpAttachRequest[T any](req *http.Request[T]) []byte {
 	return []byte(sb.String())
 }
 
-func CreateHttpAttachResponse[V any](resp *http.Response[V]) []byte {
+func CreateHttpAttachResponse[V any](resp *client.Response[V]) []byte {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("StatusCode: %d\n", resp.StatusCode))
 	if len(resp.Headers) > 0 {

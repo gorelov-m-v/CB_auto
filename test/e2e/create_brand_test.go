@@ -1,13 +1,13 @@
 package test
 
 import (
-	"CB_auto/test/config"
-	"CB_auto/test/transport/database"
-	"CB_auto/test/transport/database/brand"
-	httpClient "CB_auto/test/transport/http"
-	capAPI "CB_auto/test/transport/http/cap"
-	"CB_auto/test/transport/http/cap/models"
-	"CB_auto/test/utils"
+	client "CB_auto/internal/client"
+	capAPI "CB_auto/internal/client/cap"
+	"CB_auto/internal/client/cap/models"
+	"CB_auto/internal/config"
+	"CB_auto/internal/database"
+	"CB_auto/internal/database/brand"
+	"CB_auto/pkg/utils"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -16,7 +16,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 
-	"CB_auto/test/transport/kafka"
+	"CB_auto/internal/transport/kafka"
 
 	"github.com/google/uuid"
 	"github.com/ozontech/allure-go/pkg/allure"
@@ -26,7 +26,7 @@ import (
 
 type CreateBrandSuite struct {
 	suite.Suite
-	client     *httpClient.Client
+	client     *client.Client
 	config     *config.Config
 	database   *database.Connector
 	capService capAPI.CapAPI
@@ -43,7 +43,7 @@ func (s *CreateBrandSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация http-клиента и CAP API сервиса.", func(sCtx provider.StepCtx) {
-		client, err := httpClient.InitClient(s.config, httpClient.Cap)
+		client, err := client.InitClient(s.config, client.Cap)
 		if err != nil {
 			t.Fatalf("InitClient не удался: %v", err)
 		}
@@ -88,13 +88,13 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 
 	type TestData struct {
 		adminResponse          *models.AdminCheckResponseBody
-		createRequest          *httpClient.Request[models.CreateCapBrandRequestBody]
+		createRequest          *client.Request[models.CreateCapBrandRequestBody]
 		createCapBrandResponse *models.CreateCapBrandResponseBody
 	}
 	var testData TestData
 
 	t.WithNewStep("Получение/Обновление токена авторизации CAP.", func(sCtx provider.StepCtx) {
-		adminReq := &httpClient.Request[models.AdminCheckRequestBody]{
+		adminReq := &client.Request[models.AdminCheckRequestBody]{
 			Body: &models.AdminCheckRequestBody{
 				UserName: s.config.HTTP.CapUsername,
 				Password: s.config.HTTP.CapPassword,
@@ -113,7 +113,7 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 			"en": brandName,
 		}
 
-		createReq := &httpClient.Request[models.CreateCapBrandRequestBody]{
+		createReq := &client.Request[models.CreateCapBrandRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", testData.adminResponse.Token),
 				"Platform-Nodeid": s.config.Node.ProjectID,
@@ -134,7 +134,7 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 	})
 
 	t.WithNewStep("Проверка создания бренда в CAP через GET.", func(sCtx provider.StepCtx) {
-		getReq := &httpClient.Request[struct{}]{
+		getReq := &client.Request[struct{}]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", testData.adminResponse.Token),
 				"Platform-Nodeid": s.config.Node.ProjectID,
@@ -197,7 +197,7 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 	})
 
 	t.WithNewStep("Удаление бренда.", func(sCtx provider.StepCtx) {
-		deleteReq := &httpClient.Request[struct{}]{
+		deleteReq := &client.Request[struct{}]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", testData.adminResponse.Token),
 				"Platform-Nodeid": s.config.Node.ProjectID,
@@ -217,12 +217,16 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 
 func (s *CreateBrandSuite) AfterAll(t provider.T) {
 	t.WithNewStep("Закрытие соединения с Kafka.", func(sCtx provider.StepCtx) {
-		s.kafka.Close(t)
+		if s.kafka != nil {
+			s.kafka.Close(t)
+		}
 	})
 
 	t.WithNewStep("Закрытие соединения с базой данных.", func(sCtx provider.StepCtx) {
-		if err := s.database.Close(); err != nil {
-			t.Fatalf("Ошибка при закрытии соединения с базой данных: %v", err)
+		if s.database != nil {
+			if err := s.database.Close(); err != nil {
+				t.Fatalf("Ошибка при закрытии соединения с базой данных: %v", err)
+			}
 		}
 	})
 }

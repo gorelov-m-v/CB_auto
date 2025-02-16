@@ -1,0 +1,48 @@
+{
+  "http": {
+    "cap_url": "https://cap.beta-09.b2bdev.pro",
+    "public_url": "https://beta-09.b2bdev.pro",
+    "timeout": 10,
+    "cap_username": "admin",
+    "cap_password": "admin"
+  },
+  "node": {
+    "group_id": "4c59ecfb-9571-4d2e-8e8b-4558636049fc",
+    "project_id": "068f20a5-7c0a-4226-bf5e-6648c735a12b",
+    "default_country": "LV",
+    "default_currency": "EUR"
+  },
+  "mysql": {
+    "driverName": "mysql",
+    "dsn": "mgorelov:iiYWevaX9mATBIs1i4QX9Z3Yy@tcp(mysql-development-01.b2bdev.pro:3306)/beta-09_core",
+    "pingTimeout": 20000000000,
+    "connMaxLifetime": 60000000000,
+    "connMaxIdleTime": 30000000000,
+    "maxOpenConns": 10,
+    "maxIdleConns": 5
+  },
+  "kafka": {
+    "brokers": "kafka-development-01.b2bdev.pro:9092",
+    "brand_topic": "beta-09_core.gambling.v1.Brand",
+    "player_topic": "beta-09_player.v1.account",
+    "timeout": 60
+  },
+  "nats": {
+    "hosts": "nats://nats-development-01.b2bdev.pro:4222,nats://nats-development-02.b2bdev.pro:4222,nats://nats-development-03.b2bdev.pro:4222",
+    "reconnect_wait": 1,
+    "max_reconnects": 3,
+    "timeout": 2,
+    "stream_timeout": 60,
+    "stream_prefix": "beta-09_"
+  },
+  "redis": {
+    "addr": "redis-inmem-development-02.b2bdev.pro:6389",
+    "password": "",
+    "db": 9,
+    "dial_timeout": 10,
+    "read_timeout": 10,
+    "write_timeout": 10,
+    "retryAttempts": 5,
+    "retryDelay": 1
+  }
+}

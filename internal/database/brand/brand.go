@@ -1,7 +1,7 @@
 package brand
 
 import (
-	"CB_auto/test/transport/database"
+	"CB_auto/internal/database"
 	"context"
 	"database/sql"
 	"errors"

@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"CB_auto/test/config"
+	"CB_auto/internal/config"
 
 	"github.com/nats-io/nats.go"
 	"github.com/ozontech/allure-go/pkg/framework/provider"

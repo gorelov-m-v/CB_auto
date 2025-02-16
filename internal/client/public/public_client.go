@@ -1,8 +1,8 @@
 package public
 
 import (
-	httpClient "CB_auto/test/transport/http"
-	"CB_auto/test/transport/http/public/models"
+	httpClient "CB_auto/internal/client"
+	"CB_auto/internal/client/public/models"
 	"fmt"
 	"log"
 	"net/http"
