@@ -8,13 +8,16 @@ import (
 )
 
 type MySQLConfig struct {
-	DriverName      string        `json:"driverName"`
-	DSN             string        `json:"dsn"`
-	PingTimeout     time.Duration `json:"pingTimeout"`
-	ConnMaxLifetime time.Duration `json:"connMaxLifetime"`
-	ConnMaxIdleTime time.Duration `json:"connMaxIdleTime"`
-	MaxOpenConns    int           `json:"maxOpenConns"`
-	MaxIdleConns    int           `json:"maxIdleConns"`
+	DriverName      string        `json:"driver_name"`
+	DSNCore         string        `json:"dsn_core"`
+	DSNWallet       string        `json:"dsn_wallet"`
+	PingTimeout     time.Duration `json:"ping_timeout"`
+	ConnMaxLifetime time.Duration `json:"conn_max_lifetime"`
+	ConnMaxIdleTime time.Duration `json:"conn_max_idle_time"`
+	MaxOpenConns    int           `json:"max_open_conns"`
+	MaxIdleConns    int           `json:"max_idle_conns"`
+	RetryAttempts   int           `json:"retry_attempts"`
+	RetryDelay      time.Duration `json:"retry_delay"`
 }
 
 type KafkaConfig struct {

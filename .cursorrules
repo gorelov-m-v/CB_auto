@@ -1,0 +1,15 @@
+Rules for HTTP:
+
+All HTTP requests for the address cap.beta-09.b2bdev.pro must be defined in the package internal/client/cap.
+Models should be stored in a separate file: internal/client/cap/models.go.
+The methods themselves must be implemented via an interface and stored in internal/client/cap/cap_client.go.
+
+All HTTP requests for the address beta-09.b2bdev.pro must be defined in the package internal/client/public.
+Models should be stored in a separate file: internal/client/public/models.go.
+The methods themselves must be implemented via an interface and stored in internal/client/public/cap_client.go.
+
+
+Rules for Database Queries:
+
+All database queries should be constructed in the internal/database package.
+If you are working with an entity for the first time, you must create a new package within internal/database.

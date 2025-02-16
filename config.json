@@ -13,8 +13,9 @@
     "default_currency": "EUR"
   },
   "mysql": {
-    "driverName": "mysql",
-    "dsn": "mgorelov:iiYWevaX9mATBIs1i4QX9Z3Yy@tcp(mysql-development-01.b2bdev.pro:3306)/beta-09_core",
+    "driver_name": "mysql",
+    "dsn_core": "mgorelov:iiYWevaX9mATBIs1i4QX9Z3Yy@tcp(mysql-development-01.b2bdev.pro:3306)/beta-09_core",
+    "dsn_wallet": "mgorelov:iiYWevaX9mATBIs1i4QX9Z3Yy@tcp(mysql-development-01.b2bdev.pro:3306)/beta-09_wallet",
     "pingTimeout": 20000000000,
     "connMaxLifetime": 60000000000,
     "connMaxIdleTime": 30000000000,
