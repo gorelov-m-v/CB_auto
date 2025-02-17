@@ -48,3 +48,13 @@ type GetCapBrandResponseBody struct {
 	Logo        string            `json:"logo"`
 	ColorLogo   string            `json:"colorLogo"`
 }
+
+type BlockersRequestBody struct {
+	GamblingEnabled bool `json:"gamblingEnabled"`
+	BettingEnabled  bool `json:"bettingEnabled"`
+}
+
+type GetBlockersResponseBody struct {
+	GamblingEnabled bool `json:"gamblingEnabled"`
+	BettingEnabled  bool `json:"bettingEnabled"`
+}

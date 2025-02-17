@@ -13,6 +13,8 @@ type CapAPI interface {
 	CreateCapBrand(req *httpClient.Request[models.CreateCapBrandRequestBody]) *httpClient.Response[models.CreateCapBrandResponseBody]
 	GetCapBrand(req *httpClient.Request[struct{}]) *httpClient.Response[models.GetCapBrandResponseBody]
 	DeleteCapBrand(req *httpClient.Request[struct{}]) *httpClient.Response[struct{}]
+	UpdateBlockers(req *httpClient.Request[models.BlockersRequestBody]) *httpClient.Response[struct{}]
+	GetBlockers(req *httpClient.Request[any]) *httpClient.Response[models.GetBlockersResponseBody]
 }
 
 type capClient struct {
@@ -81,6 +83,38 @@ func (c *capClient) DeleteCapBrand(req *httpClient.Request[struct{}]) *httpClien
 			StatusCode: http.StatusInternalServerError,
 			Error: &httpClient.ErrorResponse{
 				Body: fmt.Sprintf("DeleteCapBrand failed: %v", err),
+			},
+		}
+	}
+	return resp
+}
+
+func (c *capClient) UpdateBlockers(req *httpClient.Request[models.BlockersRequestBody]) *httpClient.Response[struct{}] {
+	req.Method = "PATCH"
+	req.Path = "/_cap/api/v1/players/{player_uuid}/blockers"
+	resp, err := httpClient.DoRequest[models.BlockersRequestBody, struct{}](c.client, req)
+	if err != nil {
+		log.Printf("UpdateBlockers failed: %v", err)
+		return &httpClient.Response[struct{}]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &httpClient.ErrorResponse{
+				Body: fmt.Sprintf("UpdateBlockers failed: %v", err),
+			},
+		}
+	}
+	return resp
+}
+
+func (c *capClient) GetBlockers(req *httpClient.Request[any]) *httpClient.Response[models.GetBlockersResponseBody] {
+	req.Method = "GET"
+	req.Path = "/_cap/api/v1/players/{player_uuid}/blockers"
+	resp, err := httpClient.DoRequest[any, models.GetBlockersResponseBody](c.client, req)
+	if err != nil {
+		log.Printf("GetBlockers failed: %v", err)
+		return &httpClient.Response[models.GetBlockersResponseBody]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &httpClient.ErrorResponse{
+				Body: fmt.Sprintf("GetBlockers failed: %v", err),
 			},
 		}
 	}
