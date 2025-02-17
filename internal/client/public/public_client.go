@@ -14,6 +14,7 @@ type PublicAPI interface {
 	GetWallets(req *httpClient.Request[any]) *httpClient.Response[models.GetWalletsResponseBody]
 	CreateWallet(req *httpClient.Request[models.CreateWalletRequestBody]) *httpClient.Response[models.CreateWalletResponseBody]
 	SwitchWallet(req *httpClient.Request[models.SwitchWalletRequestBody]) *httpClient.Response[struct{}]
+	RemoveWallet(req *httpClient.Request[any]) *httpClient.Response[struct{}]
 }
 
 type publicClient struct {
@@ -98,6 +99,22 @@ func (c *publicClient) SwitchWallet(req *httpClient.Request[models.SwitchWalletR
 			StatusCode: http.StatusInternalServerError,
 			Error: &httpClient.ErrorResponse{
 				Body: fmt.Sprintf("SwitchWallet failed: %v", err),
+			},
+		}
+	}
+	return resp
+}
+
+func (c *publicClient) RemoveWallet(req *httpClient.Request[any]) *httpClient.Response[struct{}] {
+	req.Method = "DELETE"
+	req.Path = "/_front_api/api/v1/wallets/remove"
+	resp, err := httpClient.DoRequest[any, struct{}](c.client, req)
+	if err != nil {
+		log.Printf("RemoveWallet failed: %v", err)
+		return &httpClient.Response[struct{}]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &httpClient.ErrorResponse{
+				Body: fmt.Sprintf("RemoveWallet failed: %v", err),
 			},
 		}
 	}

@@ -3,6 +3,9 @@ package wallet
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"log"
+	"strings"
 
 	"CB_auto/internal/database"
 
@@ -43,15 +46,25 @@ func NewRepository(db *sql.DB) *Repository {
 	}
 }
 
-func (r *Repository) GetWalletByUUID(t provider.T, uuid string) *Wallet {
-	query := `
-        SELECT * FROM wallet 
-        WHERE uuid = ?
-    `
+func (r *Repository) GetWallet(t provider.T, filters map[string]interface{}) *Wallet {
+	var conditions []string
+	var args []interface{}
+
+	query := `SELECT * FROM wallet`
+
+	if len(filters) > 0 {
+		for key, value := range filters {
+			conditions = append(conditions, fmt.Sprintf("%s = ?", key))
+			args = append(args, value)
+		}
+		query += ` WHERE ` + strings.Join(conditions, " AND ")
+	}
+
+	log.Printf("Executing query: %s with args: %v", query, args)
 
 	var wallet Wallet
 	err := r.ExecuteWithRetry(context.Background(), func(ctx context.Context) error {
-		return r.DB().QueryRowContext(ctx, query, uuid).Scan(
+		return r.DB().QueryRowContext(ctx, query, args...).Scan(
 			&wallet.UUID,
 			&wallet.PlayerUUID,
 			&wallet.Currency,
