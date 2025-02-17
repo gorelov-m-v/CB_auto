@@ -10,6 +10,7 @@ import (
 	"CB_auto/internal/client/public/models"
 	"CB_auto/internal/config"
 	"CB_auto/internal/database"
+	"CB_auto/internal/database/wallet"
 	"CB_auto/internal/transport/kafka"
 	"CB_auto/internal/transport/nats"
 	"CB_auto/internal/transport/redis"
@@ -270,6 +271,19 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 		sCtx.WithAttachments(allure.NewAttachment("SetDefaultStarted Event", allure.JSON, utils.CreatePrettyJSON(testData.setDefaultStartedEvent)))
 		sCtx.WithAttachments(allure.NewAttachment("DefaultUnsetted Event", allure.JSON, utils.CreatePrettyJSON(testData.defaultUnsettedEvent)))
 		sCtx.WithAttachments(allure.NewAttachment("SetDefaultCommitted Event", allure.JSON, utils.CreatePrettyJSON(testData.setDefaultCommittedEvent)))
+	})
+
+	t.WithNewAsyncStep("Смены дефолтного кошелька в БД.", func(sCtx provider.StepCtx) {
+		walletRepo := wallet.NewRepository(s.walletDB.DB)
+
+		oldDefaultWallet := walletRepo.GetWallet(t, map[string]interface{}{"uuid": testData.mainWalletCreatedEvent.Payload.WalletUUID})
+		newDefaultWallet := walletRepo.GetWallet(t, map[string]interface{}{"uuid": testData.additionalWalletCreatedEvent.Payload.WalletUUID})
+
+		sCtx.Assert().True(newDefaultWallet.IsDefault, "Новый кошелёк помечен как дефолтный в БД")
+		sCtx.Assert().False(oldDefaultWallet.IsDefault, "Старый кошелёк больше не помечен как дефолтный в БД")
+
+		sCtx.WithAttachments(allure.NewAttachment("Old Wallet DB Data", allure.JSON, utils.CreatePrettyJSON(oldDefaultWallet)))
+		sCtx.WithAttachments(allure.NewAttachment("New Wallet DB Data", allure.JSON, utils.CreatePrettyJSON(newDefaultWallet)))
 	})
 }
 

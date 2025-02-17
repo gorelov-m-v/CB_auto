@@ -7,7 +7,9 @@ import (
 type EventType string
 
 const (
-	WalletCreated EventType = "wallet_created"
+	WalletCreated  EventType = "wallet_created"
+	WalletDisabled EventType = "wallet_disabled"
+	BlockersSetted EventType = "setting_prevent_gamble_setted"
 )
 
 const (
@@ -64,4 +66,14 @@ type DefaultUnsettedPayload struct {
 type DefaultSettedPayload struct {
 	UUID      string `json:"uuid"`
 	CreatedAt int64  `json:"created_at"`
+}
+
+type WalletDisabledPayload struct {
+	CreatedAt int64 `json:"created_at"`
+}
+
+type BlockersSettedPayload struct {
+	IsGamblingActive bool  `json:"is_gambling_active"`
+	IsBettingActive  bool  `json:"is_betting_active"`
+	CreatedAt        int64 `json:"created_at"`
 }
