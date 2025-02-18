@@ -118,7 +118,7 @@ func FindMessageByFilter[T any](n *NatsClient, t provider.T, filter func(T, stri
 	msgBuffer := make([]*nats.Msg, 0)
 	log.Printf("Starting to look for message with timeout %v", n.timeout)
 
-	maxAttempts := 5 // Увеличиваем количество попыток
+	maxAttempts := 5
 	attempt := 1
 	for {
 		select {

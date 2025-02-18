@@ -157,8 +157,8 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 				"Content-Type": "application/json",
 			},
 			Body: &capModels.AdminCheckRequestBody{
-				UserName: s.config.Cap.AdminUsername,
-				Password: s.config.Cap.AdminPassword,
+				UserName: s.config.HTTP.CapUsername,
+				Password: s.config.HTTP.CapPassword,
 			},
 		}
 		authResp := s.capService.CheckAdmin(authReq)
@@ -214,7 +214,7 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 	})
 
 	t.WithNewAsyncStep("Проверка блокировок в БД.", func(sCtx provider.StepCtx) {
-		walletRepo := wallet.NewRepository(s.walletDB.DB, &s.config.MySQL)
+		walletRepo := wallet.NewRepository(s.walletDB.DB(), &s.config.MySQL)
 		walletFromDatabase := walletRepo.GetWallet(t, map[string]interface{}{
 			"player_uuid": testData.playerRegistrationMessage.Player.ExternalID,
 		})

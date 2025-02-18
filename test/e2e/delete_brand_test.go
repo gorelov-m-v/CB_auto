@@ -91,7 +91,7 @@ func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 	t.Tags("CAP", "Brands", "Platform")
 	t.Title("Проверка удаления бренда.")
 
-	brandRepo := brand.NewRepository(s.database.DB, &s.config.MySQL)
+	brandRepo := brand.NewRepository(s.database.DB(), &s.config.MySQL)
 
 	var testData struct {
 		authResponse   *models.AdminCheckResponseBody
@@ -103,8 +103,8 @@ func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 	t.WithNewStep("Авторизация администратора в CAP.", func(sCtx provider.StepCtx) {
 		authReq := &client.Request[models.AdminCheckRequestBody]{
 			Body: &models.AdminCheckRequestBody{
-				UserName: s.config.Cap.AdminUsername,
-				Password: s.config.Cap.AdminPassword,
+				UserName: s.config.HTTP.CapUsername,
+				Password: s.config.HTTP.CapPassword,
 			},
 		}
 		authResp := s.capService.CheckAdmin(authReq)

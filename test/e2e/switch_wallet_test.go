@@ -265,7 +265,7 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 	})
 
 	t.WithNewAsyncStep("Смены дефолтного кошелька в БД.", func(sCtx provider.StepCtx) {
-		walletRepo := wallet.NewRepository(s.walletDB.DB, &s.config.MySQL)
+		walletRepo := wallet.NewRepository(s.walletDB.DB(), &s.config.MySQL)
 
 		oldDefaultWallet := walletRepo.GetWallet(t, map[string]interface{}{"uuid": testData.mainWalletCreatedEvent.Payload.WalletUUID})
 		newDefaultWallet := walletRepo.GetWallet(t, map[string]interface{}{"uuid": testData.additionalWalletCreatedEvent.Payload.WalletUUID})

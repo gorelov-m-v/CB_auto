@@ -236,7 +236,7 @@ func (s *CreateWalletSuite) TestCreateWallet(t provider.T) {
 	})
 
 	t.WithNewAsyncStep("Проверка создания кошелька в БД.", func(sCtx provider.StepCtx) {
-		walletRepo := wallet.NewRepository(s.walletDB.DB, &s.config.MySQL)
+		walletRepo := wallet.NewRepository(s.walletDB.DB(), &s.config.MySQL)
 		walletFromDatabase := walletRepo.GetWallet(t, map[string]interface{}{"uuid": testData.walletCreatedEvent.Payload.WalletUUID})
 
 		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.WalletUUID, walletFromDatabase.UUID, "UUID кошелька в БД совпадает с UUID из ивента `wallet_created`")

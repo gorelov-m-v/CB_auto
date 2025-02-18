@@ -73,7 +73,7 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 	t.Tags("CAP", "Brands", "Platform")
 	t.Title("Проверка получения бренда из БД по универсальным фильтрам.")
 
-	brandRepo := brand.NewRepository(s.database.DB, &s.config.MySQL)
+	brandRepo := brand.NewRepository(s.database.DB(), &s.config.MySQL)
 
 	var testData struct {
 		adminResponse          *models.AdminCheckResponseBody
