@@ -1,7 +1,6 @@
 package test
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -79,15 +78,7 @@ func (s *RemoveWalletSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Соединение с базой данных wallet.", func(sCtx provider.StepCtx) {
-		connector, err := database.OpenConnector(context.Background(), database.Config{
-			DriverName:      s.config.MySQL.DriverName,
-			DSN:             s.config.MySQL.DSNWallet,
-			PingTimeout:     s.config.MySQL.PingTimeout,
-			ConnMaxLifetime: s.config.MySQL.ConnMaxLifetime,
-			ConnMaxIdleTime: s.config.MySQL.ConnMaxIdleTime,
-			MaxOpenConns:    s.config.MySQL.MaxOpenConns,
-			MaxIdleConns:    s.config.MySQL.MaxIdleConns,
-		})
+		connector, err := database.OpenConnector(&s.config.MySQL, database.Wallet)
 		if err != nil {
 			t.Fatalf("OpenConnector для wallet не удался: %v", err)
 		}
@@ -281,7 +272,7 @@ func (s *RemoveWalletSuite) TestRemoveWallet(t provider.T) {
 	})
 
 	t.WithNewAsyncStep("Проверка отключения кошелька в БД.", func(sCtx provider.StepCtx) {
-		walletRepo := wallet.NewRepository(s.walletDB.DB)
+		walletRepo := wallet.NewRepository(s.walletDB.DB, &s.config.MySQL)
 		walletFromDatabase := walletRepo.GetWallet(t, map[string]interface{}{
 			"uuid":          testData.additionalWalletCreatedEvent.Payload.WalletUUID,
 			"wallet_status": int(nats.StatusDisabled),

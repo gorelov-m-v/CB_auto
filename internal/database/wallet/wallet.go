@@ -7,6 +7,7 @@ import (
 	"log"
 	"strings"
 
+	"CB_auto/internal/config"
 	"CB_auto/internal/database"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
@@ -37,12 +38,14 @@ type Wallet struct {
 }
 
 type Repository struct {
-	database.Repository
+	db  *sql.DB
+	cfg *config.MySQLConfig
 }
 
-func NewRepository(db *sql.DB) *Repository {
+func NewRepository(db *sql.DB, mysqlConfig *config.MySQLConfig) *Repository {
 	return &Repository{
-		Repository: database.NewRepository(db),
+		db:  db,
+		cfg: mysqlConfig,
 	}
 }
 
@@ -63,8 +66,8 @@ func (r *Repository) GetWallet(t provider.T, filters map[string]interface{}) *Wa
 	log.Printf("Executing query: %s with args: %v", query, args)
 
 	var wallet Wallet
-	err := r.ExecuteWithRetry(context.Background(), func(ctx context.Context) error {
-		return r.DB().QueryRowContext(ctx, query, args...).Scan(
+	err := database.ExecuteWithRetry(context.Background(), r.cfg, func(ctx context.Context) error {
+		return r.db.QueryRowContext(ctx, query, args...).Scan(
 			&wallet.UUID,
 			&wallet.PlayerUUID,
 			&wallet.Currency,

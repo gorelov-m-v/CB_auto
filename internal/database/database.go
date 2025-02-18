@@ -1,6 +1,7 @@
 package database
 
 import (
+	"CB_auto/internal/config"
 	"context"
 	"database/sql"
 	"fmt"
@@ -10,55 +11,24 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-type Repository struct {
-	db            *sql.DB
-	retryAttempts int
-	retryDelay    time.Duration
-}
-
-func NewRepository(db *sql.DB) Repository {
-	return Repository{
-		db:            db,
-		retryAttempts: 3,           // значение по умолчанию
-		retryDelay:    time.Second, // значение по умолчанию
-	}
-}
-
-func (r *Repository) ExecuteWithRetry(ctx context.Context, operation func(context.Context) error) error {
+func ExecuteWithRetry(ctx context.Context, cfg *config.MySQLConfig, operation func(context.Context) error) error {
 	var lastErr error
-	for attempt := 0; attempt < r.retryAttempts; attempt++ {
+	for attempt := 0; attempt < cfg.RetryAttempts; attempt++ {
 		if err := operation(ctx); err == nil {
 			return nil
 		} else if err == sql.ErrNoRows {
 			lastErr = err
-			log.Printf("No rows found, attempt %d/%d", attempt+1, r.retryAttempts)
+			log.Printf("No rows found, attempt %d/%d", attempt+1, cfg.RetryAttempts)
 		} else {
 			lastErr = err
-			log.Printf("Database operation failed, attempt %d/%d: %v", attempt+1, r.retryAttempts, err)
+			log.Printf("Database operation failed, attempt %d/%d: %v", attempt+1, cfg.RetryAttempts, err)
 		}
 
-		if attempt < r.retryAttempts-1 {
-			time.Sleep(r.retryDelay)
+		if attempt < cfg.RetryAttempts-1 {
+			time.Sleep(cfg.RetryDelay * time.Second)
 		}
 	}
-	return fmt.Errorf("operation failed after %d attempts: %w", r.retryAttempts, lastErr)
-}
-
-func (r *Repository) DB() *sql.DB {
-	return r.db
-}
-
-type Config struct {
-	DriverName string
-	DSN        string
-
-	PingTimeout     time.Duration
-	ConnMaxLifetime time.Duration
-	ConnMaxIdleTime time.Duration
-	MaxOpenConns    int
-	MaxIdleConns    int
-	RetryAttempts   int
-	RetryDelay      time.Duration
+	return fmt.Errorf("operation failed after %d attempts: %w", cfg.RetryAttempts, lastErr)
 }
 
 type Connector struct {
@@ -70,8 +40,20 @@ func NewConnector(db *sqlx.DB) Connector {
 	return Connector{db: db}
 }
 
-func OpenConnector(ctx context.Context, config Config) (Connector, error) {
-	db, err := sqlx.Open(config.DriverName, config.DSN)
+type DSNType string
+
+const (
+	Core   DSNType = "core"
+	Wallet DSNType = "wallet"
+)
+
+func OpenConnector(config *config.MySQLConfig, dsnType DSNType) (Connector, error) {
+	dsn := config.DSNCore
+	if dsnType == Wallet {
+		dsn = config.DSNWallet
+	}
+
+	db, err := sqlx.Open(config.DriverName, dsn)
 	if err != nil {
 		return Connector{}, fmt.Errorf("open database: %w", err)
 	}
@@ -83,14 +65,17 @@ func OpenConnector(ctx context.Context, config Config) (Connector, error) {
 		db.SetMaxIdleConns(config.MaxIdleConns)
 	}
 
-	if err := pingDB(ctx, db, config.PingTimeout); err != nil {
+	if err := pingDB(context.Background(), db, config.PingTimeout); err != nil {
 		if err := db.Close(); err != nil {
 			log.Printf("failed to close db connection: %v", err)
 		}
 		return Connector{}, fmt.Errorf("ping db: %w", err)
 	}
 
-	return Connector{db: db, DB: db.DB}, nil
+	return Connector{
+		db: db,
+		DB: db.DB,
+	}, nil
 }
 
 func (c Connector) QueryContext(ctx context.Context, query string, args ...interface{}) (*sqlx.Rows, error) {
