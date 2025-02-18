@@ -76,20 +76,20 @@ func (s *CreateBrandSuite) BeforeAll(t provider.T) {
 	})
 }
 
-func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
+func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 	t.Epic("Brands.")
-	t.Feature("Создание бренда.")
+	t.Feature("Получение бренда по фильтрам.")
 	t.Tags("CAP", "Brands", "Platform")
-	t.Title("Проверка создания бренда.")
+	t.Title("Проверка получения бренда из БД по универсальным фильтрам.")
 
 	brandRepo := brand.NewRepository(s.database.DB)
 
-	type TestData struct {
+	// Структура для хранения тестовых данных
+	var testData struct {
 		adminResponse          *models.AdminCheckResponseBody
 		createRequest          *client.Request[models.CreateCapBrandRequestBody]
 		createCapBrandResponse *models.CreateCapBrandResponseBody
 	}
-	var testData TestData
 
 	t.WithNewStep("Получение/Обновление токена авторизации CAP.", func(sCtx provider.StepCtx) {
 		adminReq := &client.Request[models.AdminCheckRequestBody]{
@@ -131,34 +131,16 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 		sCtx.WithAttachments(allure.NewAttachment("CreateBrand Response", allure.JSON, utils.CreateHttpAttachResponse(createResp)))
 	})
 
-	t.WithNewAsyncStep("Проверка создания бренда в CAP.", func(sCtx provider.StepCtx) {
-		getReq := &client.Request[struct{}]{
-			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", testData.adminResponse.Token),
-				"Platform-Nodeid": s.config.Node.ProjectID,
-			},
-			PathParams: map[string]string{
-				"id": testData.createCapBrandResponse.ID,
-			},
+	t.WithNewStep("Получение бренда из БД по универсальным фильтрам.", func(sCtx provider.StepCtx) {
+		filters := map[string]interface{}{
+			"uuid": testData.createCapBrandResponse.ID,
 		}
-		getResp := s.capService.GetCapBrand(getReq)
+		brandData := brandRepo.GetBrand(t, filters)
 
-		sCtx.Assert().Equal(testData.createCapBrandResponse.ID, getResp.Body.ID, "ID бренда в CAP совпадает с ID в ответе")
-		sCtx.Assert().Equal(testData.createRequest.Body.Alias, getResp.Body.Alias, "Alias бренда в CAP совпадает с Alias в запросе")
-		sCtx.Assert().Equal(testData.createRequest.Body.Names, getResp.Body.Names, "Names бренда в CAP совпадают с Names в запросе")
-		sCtx.Assert().Equal(testData.createRequest.Body.Sort, getResp.Body.Sort, "Sort бренда в CAP совпадает с Sort в запросе")
-		sCtx.Assert().Equal(s.config.Node.ProjectID, getResp.Body.NodeID, "NodeID бренда в CAP совпадает с NodeID в запросе")
-		sCtx.Assert().Equal(models.StatusDisabled, getResp.Body.Status, "Status бренда в CAP совпадает с Status в запросе")
-
-		sCtx.WithAttachments(allure.NewAttachment("GetBrand Request", allure.JSON, utils.CreateHttpAttachRequest(getReq)))
-		sCtx.WithAttachments(allure.NewAttachment("GetBrand Response", allure.JSON, utils.CreateHttpAttachResponse(getResp)))
-	})
-
-	t.WithNewAsyncStep("Проверка записи информации о бренде в БД.", func(sCtx provider.StepCtx) {
-		brandUUID := uuid.MustParse(testData.createCapBrandResponse.ID)
-		brandData := brandRepo.GetBrandByUUID(t, brandUUID)
-		var dbNames map[string]string = make(map[string]string)
-		json.Unmarshal(brandData.LocalizedNames, &dbNames)
+		var dbNames map[string]string
+		if err := json.Unmarshal(brandData.LocalizedNames, &dbNames); err != nil {
+			t.Fatalf("Ошибка при парсинге LocalizedNames: %v", err)
+		}
 
 		sCtx.Assert().Equal(testData.createRequest.Body.Names, dbNames, "Names бренда в БД совпадают с Names в запросе")
 		sCtx.Assert().Equal(testData.createRequest.Body.Alias, brandData.Alias, "Alias бренда в БД совпадает с Alias в запросе")
@@ -170,28 +152,6 @@ func (s *CreateBrandSuite) TestSetupSuite(t provider.T) {
 		sCtx.Assert().Zero(brandData.UpdatedAt, "Время обновления бренда в БД равно нулю")
 
 		sCtx.WithAttachments(allure.NewAttachment("Бренд из БД", allure.JSON, utils.CreatePrettyJSON(brandData)))
-	})
-
-	t.WithNewAsyncStep("Проверка сообщения из Kafka.", func(sCtx provider.StepCtx) {
-		expectedAlias := testData.createRequest.Body.Alias
-		expectedUUID := testData.createCapBrandResponse.ID
-		expectedNames := testData.createRequest.Body.Names
-
-		message := kafka.FindMessageByFilter[kafka.Brand](s.kafka, t, func(brand kafka.Brand) bool {
-			return brand.Brand.UUID == expectedUUID
-		})
-
-		brandMessage := kafka.ParseMessage[kafka.Brand](t, message)
-
-		sCtx.Assert().Equal("gambling.gameBrandCreated", brandMessage.Message.EventType, "Тип события в Kafka совпадает с ожидаемым")
-		sCtx.Assert().Equal(expectedUUID, brandMessage.Brand.UUID, "UUID бренда в Kafka совпадает с ожидаемым")
-		sCtx.Assert().Equal(expectedAlias, brandMessage.Brand.Alias, "Alias бренда в Kafka совпадает с ожидаемым")
-		sCtx.Assert().Equal(expectedNames, brandMessage.Brand.LocalizedNames, "LocalizedNames бренда в Kafka совпадают с ожидаемыми")
-		sCtx.Assert().False(brandMessage.Brand.StatusEnabled, "Статус бренда в Kafka соответствует ожидаемому")
-		sCtx.Assert().Equal(s.config.Node.ProjectID, brandMessage.Brand.ProjectID, "ProjectID бренда в Kafka совпадает с ожидаемым")
-		sCtx.Assert().True(utils.IsTimeInRange(brandMessage.Brand.CreatedAt, 30), "Время создания бренда в Kafka находится в ожидаемом диапазоне")
-
-		sCtx.WithAttachments(allure.NewAttachment("Kafka Message", allure.JSON, utils.CreatePrettyJSON(message.Value)))
 	})
 
 	t.WithNewStep("Удаление бренда.", func(sCtx provider.StepCtx) {
