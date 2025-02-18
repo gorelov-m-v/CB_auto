@@ -1,25 +1,29 @@
 package brand
 
 import (
-	"CB_auto/internal/database"
 	"context"
 	"database/sql"
+	"fmt"
+	"log"
+	"strings"
 	"time"
+
+	"CB_auto/internal/database"
 
 	"github.com/google/uuid"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
 
 type Brand struct {
-	UUID           uuid.UUID
-	NodeUUID       uuid.UUID
-	Alias          string
-	LocalizedNames []byte
-	Sort           int
-	Status         int
-	Description    string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	UUID           uuid.UUID `db:"uuid"`
+	Alias          string    `db:"alias"`
+	LocalizedNames []byte    `db:"localized_names"`
+	Description    string    `db:"description"`
+	NodeUUID       uuid.UUID `db:"node_uuid"`
+	Status         int       `db:"status"`
+	Sort           int       `db:"sort"`
+	CreatedAt      time.Time `db:"created_at"`
+	UpdatedAt      time.Time `db:"updated_at"`
 }
 
 type Repository struct {
@@ -32,7 +36,10 @@ func NewRepository(db *sql.DB) *Repository {
 	}
 }
 
-func (r *Repository) GetBrandByUUID(t provider.T, brandID uuid.UUID) *Brand {
+func (r *Repository) GetBrand(t provider.T, filters map[string]interface{}) *Brand {
+	conditions := []string{}
+	args := []interface{}{}
+
 	query := `
 		SELECT 
 			uuid,
@@ -43,29 +50,28 @@ func (r *Repository) GetBrandByUUID(t provider.T, brandID uuid.UUID) *Brand {
 			status,
 			sort,
 			created_at,
-			created_by,
-			updated_at,
-			updated_by,
-			deleted_at,
-			deleted_by,
-			alias_for_index,
-			icon,
-			logo
-		FROM brand 
-		WHERE uuid = ?
+			updated_at
+		FROM brand
 	`
 
+	if len(filters) > 0 {
+		for key, value := range filters {
+			conditions = append(conditions, fmt.Sprintf("%s = ?", key))
+			args = append(args, value)
+		}
+		query += " WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	log.Printf("Executing query: %s with args: %v", query, args)
+
 	var brand Brand
-	var createdBy string
-	var updatedBy, deletedBy, aliasForIndex, icon, logo database.NullString
-	var deletedAt database.NullInt64
-	var localizedNamesRaw []byte
 	var createdAtUnix int64
-	var updatedAtUnix database.NullInt64
+	var updatedAtUnix sql.NullInt64
 	var nodeUUIDStr string
+	var localizedNamesRaw []byte
 
 	err := r.ExecuteWithRetry(context.Background(), func(ctx context.Context) error {
-		return r.DB().QueryRowContext(ctx, query, brandID).Scan(
+		return r.DB().QueryRowContext(ctx, query, args...).Scan(
 			&brand.UUID,
 			&brand.Alias,
 			&localizedNamesRaw,
@@ -74,17 +80,9 @@ func (r *Repository) GetBrandByUUID(t provider.T, brandID uuid.UUID) *Brand {
 			&brand.Status,
 			&brand.Sort,
 			&createdAtUnix,
-			&createdBy,
 			&updatedAtUnix,
-			&updatedBy,
-			&deletedAt,
-			&deletedBy,
-			&aliasForIndex,
-			&icon,
-			&logo,
 		)
 	})
-
 	if err != nil {
 		t.Fatalf("Ошибка при получении данных бренда: %v", err)
 	}
