@@ -209,6 +209,25 @@ func (s *CreateWalletSuite) TestCreateWallet(t provider.T) {
 		sCtx.WithAttachments(allure.NewAttachment("NATS Wallet Message", allure.JSON, utils.CreatePrettyJSON(testData.walletCreatedEvent.Payload)))
 	})
 
+	t.WithNewStep("Проверка значения в Redis.", func(sCtx provider.StepCtx) {
+		key := testData.playerRegistrationMessage.Player.ExternalID
+		wallets := s.redisClient.GetWithRetry(t, key)
+
+		var foundWallet redis.WalletData
+		for _, w := range wallets {
+			if w.WalletUUID == testData.walletCreatedEvent.Payload.WalletUUID {
+				foundWallet = w
+				break
+			}
+		}
+
+		sCtx.Assert().Equal("USD", foundWallet.Currency, "Валюта в Redis совпадает с валютой из ивента `wallet_created`")
+		sCtx.Assert().Equal(int(nats.TypeReal), foundWallet.Type, "Тип кошелька в Redis – реальный")
+		sCtx.Assert().Equal(int(nats.StatusEnabled), foundWallet.Status, "Статус кошелька в Redis – включён")
+
+		sCtx.WithAttachments(allure.NewAttachment("Redis Value", allure.JSON, utils.CreatePrettyJSON(wallets)))
+	})
+
 	t.WithNewAsyncStep("Проверка получения списка кошельков.", func(sCtx provider.StepCtx) {
 		getWalletsReq := &client.Request[any]{
 			Headers: map[string]string{
@@ -246,25 +265,6 @@ func (s *CreateWalletSuite) TestCreateWallet(t provider.T) {
 		sCtx.Assert().False(walletFromDatabase.IsBasic, "Кошелёк не помечен как базовый в БД")
 
 		sCtx.WithAttachments(allure.NewAttachment("Wallet DB Data", allure.JSON, utils.CreatePrettyJSON(walletFromDatabase)))
-	})
-
-	t.WithNewAsyncStep("Проверка значения в Redis.", func(sCtx provider.StepCtx) {
-		key := testData.playerRegistrationMessage.Player.ExternalID
-		wallets := s.redisClient.GetWithRetry(t, key)
-
-		var foundWallet redis.WalletData
-		for _, w := range wallets {
-			if w.WalletUUID == testData.walletCreatedEvent.Payload.WalletUUID {
-				foundWallet = w
-				break
-			}
-		}
-
-		sCtx.Assert().Equal("USD", foundWallet.Currency, "Валюта в Redis совпадает с валютой из ивента `wallet_created`")
-		sCtx.Assert().Equal(int(nats.TypeReal), foundWallet.Type, "Тип кошелька в Redis – реальный")
-		sCtx.Assert().Equal(int(nats.StatusEnabled), foundWallet.Status, "Статус кошелька в Redis – включён")
-
-		sCtx.WithAttachments(allure.NewAttachment("Redis Value", allure.JSON, utils.CreatePrettyJSON(wallets)))
 	})
 }
 
