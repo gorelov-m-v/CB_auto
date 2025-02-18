@@ -39,26 +39,37 @@ func NewRepository(db *sql.DB, mysqlConfig *config.MySQLConfig) *Repository {
 	}
 }
 
+var allowedFields = map[string]bool{
+	"uuid":   true,
+	"alias":  true,
+	"status": true,
+}
+
 func (r *Repository) GetBrand(t provider.T, filters map[string]interface{}) *Brand {
+	if err := r.db.Ping(); err != nil {
+		t.Fatalf("Ошибка подключения к БД: %v", err)
+	}
+
 	conditions := []string{}
 	args := []interface{}{}
 
-	query := `
-		SELECT 
-			uuid,
-			alias,
-			localized_names,
-			description,
-			node_uuid,
-			status,
-			sort,
-			created_at,
-			updated_at
-		FROM brand
-	`
+	query := `SELECT 
+		uuid,
+		alias,
+		localized_names,
+		description,
+		node_uuid,
+		status,
+		sort,
+		created_at,
+		updated_at
+	FROM brand`
 
 	if len(filters) > 0 {
 		for key, value := range filters {
+			if !allowedFields[key] {
+				t.Fatalf("Недопустимое поле для фильтрации: %s", key)
+			}
 			conditions = append(conditions, fmt.Sprintf("%s = ?", key))
 			args = append(args, value)
 		}
@@ -66,6 +77,7 @@ func (r *Repository) GetBrand(t provider.T, filters map[string]interface{}) *Bra
 	}
 
 	log.Printf("Executing query: %s with args: %v", query, args)
+	log.Printf("Using database: %v", r.db.Stats())
 
 	var brand Brand
 	var createdAtUnix int64

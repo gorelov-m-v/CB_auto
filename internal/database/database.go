@@ -12,9 +12,12 @@ import (
 )
 
 func ExecuteWithRetry(ctx context.Context, cfg *config.MySQLConfig, operation func(context.Context) error) error {
+	delayInSeconds := time.Duration(cfg.RetryDelay) * time.Second
+	log.Printf("Starting database operation with %d attempts and %v delay", cfg.RetryAttempts, delayInSeconds)
 	var lastErr error
 	for attempt := 0; attempt < cfg.RetryAttempts; attempt++ {
 		if err := operation(ctx); err == nil {
+			log.Printf("Database operation succeeded on attempt %d", attempt+1)
 			return nil
 		} else if err == sql.ErrNoRows {
 			lastErr = err
@@ -25,7 +28,8 @@ func ExecuteWithRetry(ctx context.Context, cfg *config.MySQLConfig, operation fu
 		}
 
 		if attempt < cfg.RetryAttempts-1 {
-			time.Sleep(cfg.RetryDelay * time.Second)
+			log.Printf("Waiting %v before next attempt", delayInSeconds)
+			time.Sleep(delayInSeconds)
 		}
 	}
 	return fmt.Errorf("operation failed after %d attempts: %w", cfg.RetryAttempts, lastErr)

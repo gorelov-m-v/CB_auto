@@ -49,14 +49,50 @@ func NewRepository(db *sql.DB, mysqlConfig *config.MySQLConfig) *Repository {
 	}
 }
 
+var allowedFields = map[string]bool{
+	"uuid":          true,
+	"player_uuid":   true,
+	"currency":      true,
+	"wallet_status": true,
+	"balance":       true,
+}
+
 func (r *Repository) GetWallet(t provider.T, filters map[string]interface{}) *Wallet {
+	if err := r.db.Ping(); err != nil {
+		t.Fatalf("Ошибка подключения к БД: %v", err)
+	}
+
 	var conditions []string
 	var args []interface{}
 
-	query := `SELECT * FROM wallet`
+	query := `SELECT 
+		uuid,
+		player_uuid,
+		currency,
+		wallet_status,
+		balance,
+		created_at,
+		updated_at,
+		is_default,
+		is_basic,
+		is_blocked,
+		wallet_type,
+		seq,
+		is_gambling_active,
+		is_betting_active,
+		deposit_amount,
+		profit_amount,
+		node_uuid,
+		is_sumsub_verified,
+		available_withdrawal,
+		is_kyc_verified
+	FROM wallet`
 
 	if len(filters) > 0 {
 		for key, value := range filters {
+			if !allowedFields[key] {
+				t.Fatalf("Недопустимое поле для фильтрации: %s", key)
+			}
 			conditions = append(conditions, fmt.Sprintf("%s = ?", key))
 			args = append(args, value)
 		}
@@ -64,6 +100,7 @@ func (r *Repository) GetWallet(t provider.T, filters map[string]interface{}) *Wa
 	}
 
 	log.Printf("Executing query: %s with args: %v", query, args)
+	log.Printf("Using database: %v", r.db.Stats())
 
 	var wallet Wallet
 	err := database.ExecuteWithRetry(context.Background(), r.cfg, func(ctx context.Context) error {
