@@ -1,7 +1,6 @@
 package test
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -50,15 +49,7 @@ func (s *CreateBrandSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Соединение с базой данных.", func(sCtx provider.StepCtx) {
-		connector, err := database.OpenConnector(context.Background(), database.Config{
-			DriverName:      s.config.MySQL.DriverName,
-			DSN:             s.config.MySQL.DSNCore,
-			PingTimeout:     s.config.MySQL.PingTimeout,
-			ConnMaxLifetime: s.config.MySQL.ConnMaxLifetime,
-			ConnMaxIdleTime: s.config.MySQL.ConnMaxIdleTime,
-			MaxOpenConns:    s.config.MySQL.MaxOpenConns,
-			MaxIdleConns:    s.config.MySQL.MaxIdleConns,
-		})
+		connector, err := database.OpenConnector(&s.config.MySQL, database.Core)
 		if err != nil {
 			t.Fatalf("OpenConnector не удался: %v", err)
 		}
@@ -82,9 +73,8 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 	t.Tags("CAP", "Brands", "Platform")
 	t.Title("Проверка получения бренда из БД по универсальным фильтрам.")
 
-	brandRepo := brand.NewRepository(s.database.DB)
+	brandRepo := brand.NewRepository(s.database.DB, &s.config.MySQL)
 
-	// Структура для хранения тестовых данных
 	var testData struct {
 		adminResponse          *models.AdminCheckResponseBody
 		createRequest          *client.Request[models.CreateCapBrandRequestBody]

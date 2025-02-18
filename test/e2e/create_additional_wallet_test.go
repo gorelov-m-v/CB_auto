@@ -1,7 +1,6 @@
 package test
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -80,15 +79,7 @@ func (s *CreateWalletSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Соединение с базой данных wallet.", func(sCtx provider.StepCtx) {
-		connector, err := database.OpenConnector(context.Background(), database.Config{
-			DriverName:      s.config.MySQL.DriverName,
-			DSN:             s.config.MySQL.DSNWallet,
-			PingTimeout:     s.config.MySQL.PingTimeout,
-			ConnMaxLifetime: s.config.MySQL.ConnMaxLifetime,
-			ConnMaxIdleTime: s.config.MySQL.ConnMaxIdleTime,
-			MaxOpenConns:    s.config.MySQL.MaxOpenConns,
-			MaxIdleConns:    s.config.MySQL.MaxIdleConns,
-		})
+		connector, err := database.OpenConnector(&s.config.MySQL, database.Wallet)
 		if err != nil {
 			t.Fatalf("OpenConnector для wallet не удался: %v", err)
 		}
@@ -245,7 +236,7 @@ func (s *CreateWalletSuite) TestCreateWallet(t provider.T) {
 	})
 
 	t.WithNewAsyncStep("Проверка создания кошелька в БД.", func(sCtx provider.StepCtx) {
-		walletRepo := wallet.NewRepository(s.walletDB.DB)
+		walletRepo := wallet.NewRepository(s.walletDB.DB, &s.config.MySQL)
 		walletFromDatabase := walletRepo.GetWallet(t, map[string]interface{}{"uuid": testData.walletCreatedEvent.Payload.WalletUUID})
 
 		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.WalletUUID, walletFromDatabase.UUID, "UUID кошелька в БД совпадает с UUID из ивента `wallet_created`")
