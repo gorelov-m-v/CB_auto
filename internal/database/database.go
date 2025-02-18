@@ -33,7 +33,6 @@ func ExecuteWithRetry(ctx context.Context, cfg *config.MySQLConfig, operation fu
 
 type Connector struct {
 	db *sqlx.DB
-	DB *sql.DB
 }
 
 func NewConnector(db *sqlx.DB) Connector {
@@ -74,7 +73,6 @@ func OpenConnector(config *config.MySQLConfig, dsnType DSNType) (Connector, erro
 
 	return Connector{
 		db: db,
-		DB: db.DB,
 	}, nil
 }
 
@@ -102,7 +100,7 @@ func (c Connector) SqlxDB() *sqlx.DB {
 	return c.db
 }
 
-func (c Connector) SqlDB() *sql.DB {
+func (c Connector) DB() *sql.DB {
 	return c.db.DB
 }
 

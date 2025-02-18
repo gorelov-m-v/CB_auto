@@ -62,16 +62,6 @@ type RedisConfig struct {
 	RetryDelay    time.Duration `json:"retryDelay"`
 }
 
-type CapConfig struct {
-	AdminUsername string `json:"admin_username"`
-	AdminPassword string `json:"admin_password"`
-}
-
-type DBConfig struct {
-	RetryAttempts int           `json:"retry_attempts"`
-	RetryDelay    time.Duration `json:"retry_delay"`
-}
-
 type Config struct {
 	HTTP  HTTPConfig  `json:"http"`
 	Node  NodeConfig  `json:"node"`
@@ -79,8 +69,6 @@ type Config struct {
 	Kafka KafkaConfig `json:"kafka"`
 	Nats  NatsConfig  `json:"nats"`
 	Redis RedisConfig `json:"redis"`
-	Cap   CapConfig   `json:"cap"`
-	DB    DBConfig    `json:"db"`
 }
 
 func (k *KafkaConfig) GetTimeout() time.Duration {

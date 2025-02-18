@@ -272,7 +272,7 @@ func (s *RemoveWalletSuite) TestRemoveWallet(t provider.T) {
 	})
 
 	t.WithNewAsyncStep("Проверка отключения кошелька в БД.", func(sCtx provider.StepCtx) {
-		walletRepo := wallet.NewRepository(s.walletDB.DB, &s.config.MySQL)
+		walletRepo := wallet.NewRepository(s.walletDB.DB(), &s.config.MySQL)
 		walletFromDatabase := walletRepo.GetWallet(t, map[string]interface{}{
 			"uuid":          testData.additionalWalletCreatedEvent.Payload.WalletUUID,
 			"wallet_status": int(nats.StatusDisabled),
