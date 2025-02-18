@@ -50,6 +50,10 @@ func NewRepository(db *sql.DB, mysqlConfig *config.MySQLConfig) *Repository {
 }
 
 func (r *Repository) GetWallet(t provider.T, filters map[string]interface{}) *Wallet {
+	if err := r.db.Ping(); err != nil {
+		t.Fatalf("Ошибка подключения к БД: %v", err)
+	}
+
 	var conditions []string
 	var args []interface{}
 
@@ -64,6 +68,7 @@ func (r *Repository) GetWallet(t provider.T, filters map[string]interface{}) *Wa
 	}
 
 	log.Printf("Executing query: %s with args: %v", query, args)
+	log.Printf("Using database: %v", r.db.Stats())
 
 	var wallet Wallet
 	err := database.ExecuteWithRetry(context.Background(), r.cfg, func(ctx context.Context) error {

@@ -40,6 +40,10 @@ func NewRepository(db *sql.DB, mysqlConfig *config.MySQLConfig) *Repository {
 }
 
 func (r *Repository) GetBrand(t provider.T, filters map[string]interface{}) *Brand {
+	if err := r.db.Ping(); err != nil {
+		t.Fatalf("Ошибка подключения к БД: %v", err)
+	}
+
 	conditions := []string{}
 	args := []interface{}{}
 
@@ -66,6 +70,7 @@ func (r *Repository) GetBrand(t provider.T, filters map[string]interface{}) *Bra
 	}
 
 	log.Printf("Executing query: %s with args: %v", query, args)
+	log.Printf("Using database: %v", r.db.Stats())
 
 	var brand Brand
 	var createdAtUnix int64
