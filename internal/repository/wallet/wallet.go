@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"CB_auto/internal/config"
-	"CB_auto/internal/database"
+	"CB_auto/internal/repository"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/shopspring/decimal"
@@ -103,7 +103,7 @@ func (r *Repository) GetWallet(t provider.T, filters map[string]interface{}) *Wa
 	log.Printf("Using database: %v", r.db.Stats())
 
 	var wallet Wallet
-	err := database.ExecuteWithRetry(context.Background(), r.cfg, func(ctx context.Context) error {
+	err := repository.ExecuteWithRetry(context.Background(), r.cfg, func(ctx context.Context) error {
 		return r.db.QueryRowContext(ctx, query, args...).Scan(
 			&wallet.UUID,
 			&wallet.PlayerUUID,
