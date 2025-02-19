@@ -1,4 +1,4 @@
-package http
+package client
 
 import (
 	"bytes"
@@ -11,49 +11,18 @@ import (
 	"strings"
 	"time"
 
+	"CB_auto/internal/client/types"
 	"CB_auto/internal/config"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
 
-type Client struct {
-	httpClient *http.Client
-	serviceURL string
-}
-
-type Request[T any] struct {
-	Method      string            `json:"method"`
-	Path        string            `json:"path"`
-	PathParams  map[string]string `json:"path_params,omitempty"`
-	QueryParams map[string]string `json:"query_params,omitempty"`
-	Headers     map[string]string `json:"headers,omitempty"`
-	Body        *T                `json:"body,omitempty"`
-}
-
-type Response[V any] struct {
-	Body       V              `json:"body"`
-	StatusCode int            `json:"status_code"`
-	Headers    http.Header    `json:"headers"`
-	Error      *ErrorResponse `json:"error,omitempty"`
-}
-
-type ErrorResponse struct {
-	Body string `json:"body"`
-}
-
-type ClientType string
-
-const (
-	Cap    ClientType = "cap"
-	Public ClientType = "public"
-)
-
-func InitClient(t provider.T, cfg *config.Config, clientType ClientType) *Client {
+func InitClient(t provider.T, cfg *config.Config, clientType types.ClientType) *types.Client {
 	var baseURL string
 	switch clientType {
-	case Cap:
+	case types.Cap:
 		baseURL = cfg.HTTP.CapURL
-	case Public:
+	case types.Public:
 		baseURL = cfg.HTTP.PublicURL
 	default:
 		t.Fatalf("Неизвестный тип клиента: %s", clientType)
@@ -64,16 +33,16 @@ func InitClient(t provider.T, cfg *config.Config, clientType ClientType) *Client
 		t.Fatalf("Ошибка при парсинге URL: %v", err)
 	}
 
-	return &Client{
-		serviceURL: u.String(),
-		httpClient: &http.Client{
+	return &types.Client{
+		ServiceURL: u.String(),
+		HttpClient: &http.Client{
 			Timeout: time.Duration(cfg.HTTP.Timeout) * time.Second,
 		},
 	}
 }
 
-func DoRequest[T any, V any](c *Client, r *Request[T]) (*Response[V], error) {
-	req, err := makeRequest(c.serviceURL, r)
+func DoRequest[T any, V any](c *types.Client, r *types.Request[T]) (*types.Response[V], error) {
+	req, err := makeRequest(c.ServiceURL, r)
 	if err != nil {
 		return nil, fmt.Errorf("makeRequest failed: %v", err)
 	}
@@ -84,7 +53,7 @@ func DoRequest[T any, V any](c *Client, r *Request[T]) (*Response[V], error) {
 		log.Printf("Request Body: %s", string(bodyBytes))
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.HttpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("httpClient.Do failed: %v", err)
 	}
@@ -97,13 +66,13 @@ func DoRequest[T any, V any](c *Client, r *Request[T]) (*Response[V], error) {
 
 	log.Printf("Response Status: %d, Headers: %+v, Body: %s", resp.StatusCode, resp.Header, string(bodyBytes))
 
-	response := &Response[V]{
+	response := &types.Response[V]{
 		StatusCode: resp.StatusCode,
 		Headers:    resp.Header,
 	}
 
 	if resp.StatusCode >= 400 {
-		response.Error = &ErrorResponse{Body: string(bodyBytes)}
+		response.Error = &types.ErrorResponse{Body: string(bodyBytes)}
 		return response, nil
 	}
 
@@ -116,7 +85,7 @@ func DoRequest[T any, V any](c *Client, r *Request[T]) (*Response[V], error) {
 	return response, nil
 }
 
-func makeRequest[T any](serviceURL string, r *Request[T]) (*http.Request, error) {
+func makeRequest[T any](serviceURL string, r *types.Request[T]) (*http.Request, error) {
 	path := r.Path
 	if len(r.PathParams) > 0 {
 		for key, value := range r.PathParams {

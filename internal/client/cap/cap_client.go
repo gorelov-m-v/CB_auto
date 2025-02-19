@@ -3,6 +3,7 @@ package cap
 import (
 	httpClient "CB_auto/internal/client"
 	"CB_auto/internal/client/cap/models"
+	"CB_auto/internal/client/types"
 	"CB_auto/internal/config"
 	"fmt"
 	"log"
@@ -13,38 +14,38 @@ import (
 
 type CapAPI interface {
 	GetToken() string
-	CheckAdmin(req *httpClient.Request[models.AdminCheckRequestBody]) *httpClient.Response[models.AdminCheckResponseBody]
-	CreateCapBrand(req *httpClient.Request[models.CreateCapBrandRequestBody]) *httpClient.Response[models.CreateCapBrandResponseBody]
-	GetCapBrand(req *httpClient.Request[struct{}]) *httpClient.Response[models.GetCapBrandResponseBody]
-	DeleteCapBrand(req *httpClient.Request[struct{}]) *httpClient.Response[struct{}]
-	UpdateBlockers(req *httpClient.Request[models.BlockersRequestBody]) *httpClient.Response[struct{}]
-	GetBlockers(req *httpClient.Request[any]) *httpClient.Response[models.GetBlockersResponseBody]
+	CheckAdmin(req *types.Request[models.AdminCheckRequestBody]) *types.Response[models.AdminCheckResponseBody]
+	CreateCapBrand(req *types.Request[models.CreateCapBrandRequestBody]) *types.Response[models.CreateCapBrandResponseBody]
+	GetCapBrand(req *types.Request[struct{}]) *types.Response[models.GetCapBrandResponseBody]
+	DeleteCapBrand(req *types.Request[struct{}]) *types.Response[struct{}]
+	UpdateBlockers(req *types.Request[models.BlockersRequestBody]) *types.Response[struct{}]
+	GetBlockers(req *types.Request[any]) *types.Response[models.GetBlockersResponseBody]
 }
 
 type capClient struct {
-	client       *httpClient.Client
+	client       *types.Client
 	tokenStorage *TokenStorage
 }
 
-func NewCapClient(t provider.T, cfg *config.Config, client *httpClient.Client) CapAPI {
-	c := &capClient{client: client}
-	c.tokenStorage = NewTokenStorage(t, cfg, c)
-	return c
+func NewClient(t provider.T, cfg *config.Config, baseClient *types.Client) CapAPI {
+	client := &capClient{client: baseClient}
+	client.tokenStorage = NewTokenStorage(t, cfg, client)
+	return client
 }
 
 func (c *capClient) GetToken() string {
 	return c.tokenStorage.GetToken()
 }
 
-func (c *capClient) CheckAdmin(req *httpClient.Request[models.AdminCheckRequestBody]) *httpClient.Response[models.AdminCheckResponseBody] {
+func (c *capClient) CheckAdmin(req *types.Request[models.AdminCheckRequestBody]) *types.Response[models.AdminCheckResponseBody] {
 	req.Method = "POST"
 	req.Path = "/_cap/api/token/check"
 	resp, err := httpClient.DoRequest[models.AdminCheckRequestBody, models.AdminCheckResponseBody](c.client, req)
 	if err != nil {
 		log.Printf("CheckAdmin failed: %v", err)
-		return &httpClient.Response[models.AdminCheckResponseBody]{
+		return &types.Response[models.AdminCheckResponseBody]{
 			StatusCode: http.StatusInternalServerError,
-			Error: &httpClient.ErrorResponse{
+			Error: &types.ErrorResponse{
 				Body: fmt.Sprintf("CheckAdmin failed: %v", err),
 			},
 		}
@@ -52,15 +53,15 @@ func (c *capClient) CheckAdmin(req *httpClient.Request[models.AdminCheckRequestB
 	return resp
 }
 
-func (c *capClient) CreateCapBrand(req *httpClient.Request[models.CreateCapBrandRequestBody]) *httpClient.Response[models.CreateCapBrandResponseBody] {
+func (c *capClient) CreateCapBrand(req *types.Request[models.CreateCapBrandRequestBody]) *types.Response[models.CreateCapBrandResponseBody] {
 	req.Method = "POST"
 	req.Path = "/_cap/api/v1/brands"
 	resp, err := httpClient.DoRequest[models.CreateCapBrandRequestBody, models.CreateCapBrandResponseBody](c.client, req)
 	if err != nil {
 		log.Printf("CreateCapBrand failed: %v", err)
-		return &httpClient.Response[models.CreateCapBrandResponseBody]{
+		return &types.Response[models.CreateCapBrandResponseBody]{
 			StatusCode: http.StatusInternalServerError,
-			Error: &httpClient.ErrorResponse{
+			Error: &types.ErrorResponse{
 				Body: fmt.Sprintf("CreateCapBrand failed: %v", err),
 			},
 		}
@@ -68,15 +69,15 @@ func (c *capClient) CreateCapBrand(req *httpClient.Request[models.CreateCapBrand
 	return resp
 }
 
-func (c *capClient) GetCapBrand(req *httpClient.Request[struct{}]) *httpClient.Response[models.GetCapBrandResponseBody] {
+func (c *capClient) GetCapBrand(req *types.Request[struct{}]) *types.Response[models.GetCapBrandResponseBody] {
 	req.Method = "GET"
 	req.Path = "/_cap/api/v1/brands/{id}"
 	resp, err := httpClient.DoRequest[struct{}, models.GetCapBrandResponseBody](c.client, req)
 	if err != nil {
 		log.Printf("GetCapBrand failed: %v", err)
-		return &httpClient.Response[models.GetCapBrandResponseBody]{
+		return &types.Response[models.GetCapBrandResponseBody]{
 			StatusCode: http.StatusInternalServerError,
-			Error: &httpClient.ErrorResponse{
+			Error: &types.ErrorResponse{
 				Body: fmt.Sprintf("GetCapBrand failed: %v", err),
 			},
 		}
@@ -84,15 +85,15 @@ func (c *capClient) GetCapBrand(req *httpClient.Request[struct{}]) *httpClient.R
 	return resp
 }
 
-func (c *capClient) DeleteCapBrand(req *httpClient.Request[struct{}]) *httpClient.Response[struct{}] {
+func (c *capClient) DeleteCapBrand(req *types.Request[struct{}]) *types.Response[struct{}] {
 	req.Method = "DELETE"
 	req.Path = "/_cap/api/v1/brands/{id}"
 	resp, err := httpClient.DoRequest[struct{}, struct{}](c.client, req)
 	if err != nil {
 		log.Printf("DeleteCapBrand failed: %v", err)
-		return &httpClient.Response[struct{}]{
+		return &types.Response[struct{}]{
 			StatusCode: http.StatusInternalServerError,
-			Error: &httpClient.ErrorResponse{
+			Error: &types.ErrorResponse{
 				Body: fmt.Sprintf("DeleteCapBrand failed: %v", err),
 			},
 		}
@@ -100,15 +101,15 @@ func (c *capClient) DeleteCapBrand(req *httpClient.Request[struct{}]) *httpClien
 	return resp
 }
 
-func (c *capClient) UpdateBlockers(req *httpClient.Request[models.BlockersRequestBody]) *httpClient.Response[struct{}] {
+func (c *capClient) UpdateBlockers(req *types.Request[models.BlockersRequestBody]) *types.Response[struct{}] {
 	req.Method = "PATCH"
 	req.Path = "/_cap/api/v1/players/{player_uuid}/blockers"
 	resp, err := httpClient.DoRequest[models.BlockersRequestBody, struct{}](c.client, req)
 	if err != nil {
 		log.Printf("UpdateBlockers failed: %v", err)
-		return &httpClient.Response[struct{}]{
+		return &types.Response[struct{}]{
 			StatusCode: http.StatusInternalServerError,
-			Error: &httpClient.ErrorResponse{
+			Error: &types.ErrorResponse{
 				Body: fmt.Sprintf("UpdateBlockers failed: %v", err),
 			},
 		}
@@ -116,15 +117,15 @@ func (c *capClient) UpdateBlockers(req *httpClient.Request[models.BlockersReques
 	return resp
 }
 
-func (c *capClient) GetBlockers(req *httpClient.Request[any]) *httpClient.Response[models.GetBlockersResponseBody] {
+func (c *capClient) GetBlockers(req *types.Request[any]) *types.Response[models.GetBlockersResponseBody] {
 	req.Method = "GET"
 	req.Path = "/_cap/api/v1/players/{player_uuid}/blockers"
 	resp, err := httpClient.DoRequest[any, models.GetBlockersResponseBody](c.client, req)
 	if err != nil {
 		log.Printf("GetBlockers failed: %v", err)
-		return &httpClient.Response[models.GetBlockersResponseBody]{
+		return &types.Response[models.GetBlockersResponseBody]{
 			StatusCode: http.StatusInternalServerError,
-			Error: &httpClient.ErrorResponse{
+			Error: &types.ErrorResponse{
 				Body: fmt.Sprintf("GetBlockers failed: %v", err),
 			},
 		}

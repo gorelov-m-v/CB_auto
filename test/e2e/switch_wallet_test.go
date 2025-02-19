@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"testing"
 
-	client "CB_auto/internal/client"
+	"CB_auto/internal/client/factory"
 	publicAPI "CB_auto/internal/client/public"
 	"CB_auto/internal/client/public/models"
+	clientTypes "CB_auto/internal/client/types"
 	"CB_auto/internal/config"
 	"CB_auto/internal/repository"
 	"CB_auto/internal/repository/wallet"
@@ -23,7 +24,6 @@ import (
 
 type SwitchWalletSuite struct {
 	suite.Suite
-	client        *client.Client
 	config        *config.Config
 	publicService publicAPI.PublicAPI
 	natsClient    *nats.NatsClient
@@ -38,8 +38,7 @@ func (s *SwitchWalletSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация http-клиента и Public API сервиса.", func(sCtx provider.StepCtx) {
-		s.client = client.InitClient(t, s.config, client.Public)
-		s.publicService = publicAPI.NewPublicClient(s.client)
+		s.publicService = factory.InitClient[publicAPI.PublicAPI](t, s.config, clientTypes.Public)
 	})
 
 	t.WithNewStep("Инициализация NATS клиента.", func(sCtx provider.StepCtx) {
@@ -81,7 +80,7 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 	var testData TestData
 
 	t.WithNewStep("Регистрация пользователя.", func(sCtx provider.StepCtx) {
-		createReq := &client.Request[models.FastRegistrationRequestBody]{
+		createReq := &clientTypes.Request[models.FastRegistrationRequestBody]{
 			Headers: map[string]string{
 				"Content-Type": "application/json",
 			},
@@ -114,7 +113,7 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 	})
 
 	t.WithNewStep("Получение токена авторизации.", func(sCtx provider.StepCtx) {
-		authReq := &client.Request[models.TokenCheckRequestBody]{
+		authReq := &clientTypes.Request[models.TokenCheckRequestBody]{
 			Headers: map[string]string{
 				"Content-Type": "application/json",
 			},
@@ -149,7 +148,7 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 	})
 
 	t.WithNewStep("Создание дополнительного кошелька.", func(sCtx provider.StepCtx) {
-		createReq := &client.Request[models.CreateWalletRequestBody]{
+		createReq := &clientTypes.Request[models.CreateWalletRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", testData.authResponse.Token),
 				"Platform-Locale": "en",
@@ -185,7 +184,7 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 	})
 
 	t.WithNewStep("Переключение дефолтного кошелька.", func(sCtx provider.StepCtx) {
-		switchReq := &client.Request[models.SwitchWalletRequestBody]{
+		switchReq := &clientTypes.Request[models.SwitchWalletRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", testData.authResponse.Token),
 				"Platform-Locale": "en",

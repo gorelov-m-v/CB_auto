@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	httpClient "CB_auto/internal/client"
 	"CB_auto/internal/client/cap/models"
+	"CB_auto/internal/client/types"
 	"CB_auto/internal/config"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
@@ -81,7 +81,7 @@ func (s *TokenStorage) GetToken() string {
 }
 
 func (s *TokenStorage) refreshToken() {
-	authReq := &httpClient.Request[models.AdminCheckRequestBody]{
+	authReq := &types.Request[models.AdminCheckRequestBody]{
 		Body: &models.AdminCheckRequestBody{
 			UserName: s.config.HTTP.CapUsername,
 			Password: s.config.HTTP.CapPassword,
