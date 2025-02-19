@@ -36,53 +36,28 @@ type UpdateBlockersSuite struct {
 
 func (s *UpdateBlockersSuite) BeforeAll(t provider.T) {
 	t.WithNewStep("Чтение конфигурационного файла.", func(sCtx provider.StepCtx) {
-		cfg, err := config.ReadConfig()
-		if err != nil {
-			t.Fatalf("Ошибка при чтении конфигурации: %v", err)
-		}
-		s.config = cfg
+		s.config = config.ReadConfig(t)
 	})
 
 	t.WithNewStep("Инициализация http-клиентов и сервисов.", func(sCtx provider.StepCtx) {
-		publicClient, err := client.InitClient(s.config, client.Public)
-		if err != nil {
-			t.Fatalf("InitClient для public не удался: %v", err)
-		}
-		s.client = publicClient
+		s.client = client.InitClient(t, s.config, client.Public)
 		s.publicService = publicAPI.NewPublicClient(s.client)
 
-		capClient, err := client.InitClient(s.config, client.Cap)
-		if err != nil {
-			t.Fatalf("InitClient для cap не удался: %v", err)
-		}
-		s.capClient = capClient
+		s.capClient = client.InitClient(t, s.config, client.Cap)
 		s.capService = capAPI.NewCapClient(s.capClient)
 	})
 
 	t.WithNewStep("Инициализация NATS клиента.", func(sCtx provider.StepCtx) {
-		natsClient, err := nats.NewClient(&s.config.Nats)
-		if err != nil {
-			t.Fatalf("NewClient NATS не удался: %v", err)
-		}
-		s.natsClient = natsClient
+		s.natsClient = nats.NewClient(t, &s.config.Nats)
 	})
 
 	t.WithNewStep("Инициализация Kafka.", func(sCtx provider.StepCtx) {
-		fmt.Printf("Initializing Kafka consumer for topic: %s\n", s.config.Kafka.PlayerTopic)
-		s.kafka = kafka.NewConsumer(
-			[]string{s.config.Kafka.Brokers},
-			s.config.Kafka.PlayerTopic,
-			s.config.Node.GroupID,
-			s.config.Kafka.GetTimeout(),
-		)
+		s.kafka = kafka.NewConsumer(t, s.config, kafka.PlayerTopic)
 		s.kafka.StartReading(t)
 	})
 
 	t.WithNewStep("Соединение с базой данных wallet.", func(sCtx provider.StepCtx) {
-		connector, err := repository.OpenConnector(&s.config.MySQL, repository.Wallet)
-		if err != nil {
-			t.Fatalf("OpenConnector для wallet не удался: %v", err)
-		}
+		connector := repository.OpenConnector(t, &s.config.MySQL, repository.Wallet)
 		s.walletDB = &connector
 	})
 }

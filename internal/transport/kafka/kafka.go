@@ -7,12 +7,15 @@ import (
 	"sync"
 	"time"
 
+	"CB_auto/internal/config"
+
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/segmentio/kafka-go"
 )
 
 type Kafka struct {
 	reader   *kafka.Reader
+	readers  []*kafka.Reader
 	Messages chan kafka.Message
 	Timeout  time.Duration
 	ctx      context.Context
@@ -21,23 +24,35 @@ type Kafka struct {
 	started  bool
 }
 
-func NewConsumer(brokers []string, topic string, groupID string, timeout time.Duration) *Kafka {
-	log.Printf("Creating new Kafka consumer: brokers=%v, topic=%s, groupID=%s", brokers, topic, groupID)
+type TopicType string
 
-	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:        brokers,
-		Topic:          topic,
-		GroupID:        groupID,
-		StartOffset:    kafka.LastOffset,
-		ReadBackoffMin: 100 * time.Millisecond,
-		ReadBackoffMax: 1 * time.Second,
-	})
+const (
+	BrandTopic  TopicType = "beta-09_core.gambling.v1.Brand"
+	PlayerTopic TopicType = "beta-09_player.v1.account"
+)
+
+func NewConsumer(t provider.T, cfg *config.Config, topicTypes ...TopicType) *Kafka {
+	var readers []*kafka.Reader
+	for _, topicType := range topicTypes {
+		topic := string(topicType)
+		log.Printf("Creating Kafka reader: brokers=%v, topic=%s, groupID=%s", cfg.Kafka.Brokers, topic, cfg.Node.GroupID)
+
+		reader := kafka.NewReader(kafka.ReaderConfig{
+			Brokers:        []string{cfg.Kafka.Brokers},
+			Topic:          topic,
+			GroupID:        cfg.Node.GroupID,
+			StartOffset:    kafka.LastOffset,
+			ReadBackoffMin: 100 * time.Millisecond,
+			ReadBackoffMax: 1 * time.Second,
+		})
+		readers = append(readers, reader)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Kafka{
-		reader:   reader,
+		readers:  readers,
 		Messages: make(chan kafka.Message, 100),
-		Timeout:  timeout,
+		Timeout:  cfg.Kafka.GetTimeout(),
 		ctx:      ctx,
 		cancel:   cancel,
 	}
@@ -48,11 +63,13 @@ func (k *Kafka) StartReading(t provider.T) {
 		return
 	}
 	k.started = true
-	k.wg.Add(1)
-	go k.readMessages()
+	k.wg.Add(len(k.readers))
+	for _, reader := range k.readers {
+		go k.readMessages(reader)
+	}
 }
 
-func (k *Kafka) readMessages() {
+func (k *Kafka) readMessages(reader *kafka.Reader) {
 	defer k.wg.Done()
 	log.Printf("Started reading messages")
 	for {
@@ -61,7 +78,7 @@ func (k *Kafka) readMessages() {
 			log.Printf("Stopping message reader")
 			return
 		default:
-			msg, err := k.reader.ReadMessage(k.ctx)
+			msg, err := reader.ReadMessage(k.ctx)
 			if err != nil {
 				if k.ctx.Err() != nil {
 					log.Printf("Message reading stopped: %v", err)
@@ -133,8 +150,10 @@ func (k *Kafka) Close(t provider.T) {
 
 	done := make(chan struct{})
 	go func() {
-		if err := k.reader.Close(); err != nil {
-			t.Errorf("Ошибка при закрытии Kafka reader: %v", err)
+		for _, reader := range k.readers {
+			if err := reader.Close(); err != nil {
+				t.Errorf("Ошибка при закрытии Kafka reader: %v", err)
+			}
 		}
 		close(done)
 	}()

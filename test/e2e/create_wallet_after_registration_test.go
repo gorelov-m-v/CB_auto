@@ -35,54 +35,29 @@ type FastRegistrationSuite struct {
 
 func (s *FastRegistrationSuite) BeforeAll(t provider.T) {
 	t.WithNewStep("Чтение конфигурационного файла.", func(sCtx provider.StepCtx) {
-		cfg, err := config.ReadConfig()
-		if err != nil {
-			t.Fatalf("Ошибка при чтении конфигурации: %v", err)
-		}
-		s.config = cfg
+		s.config = config.ReadConfig(t)
 	})
 
 	t.WithNewStep("Инициализация http-клиента и Public API сервиса.", func(sCtx provider.StepCtx) {
-		client, err := client.InitClient(s.config, client.Public)
-		if err != nil {
-			t.Fatalf("InitClient не удался: %v", err)
-		}
-		s.client = client
+		s.client = client.InitClient(t, s.config, client.Public)
 		s.publicService = publicAPI.NewPublicClient(s.client)
 	})
 
 	t.WithNewStep("Инициализация NATS клиента.", func(sCtx provider.StepCtx) {
-		natsClient, err := nats.NewClient(&s.config.Nats)
-		if err != nil {
-			t.Fatalf("NewClient NATS не удался: %v", err)
-		}
-		s.natsClient = natsClient
+		s.natsClient = nats.NewClient(t, &s.config.Nats)
 	})
 
 	t.WithNewStep("Инициализация Redis клиента.", func(sCtx provider.StepCtx) {
-		redisClient, err := redis.NewRedisClient(&s.config.Redis)
-		if err != nil {
-			t.Fatalf("Redis init failed: %v", err)
-		}
-		s.redisClient = redisClient
+		s.redisClient = redis.NewRedisClient(t, &s.config.Redis)
 	})
 
 	t.WithNewStep("Инициализация Kafka.", func(sCtx provider.StepCtx) {
-		fmt.Printf("Initializing Kafka consumer for topic: %s\n", s.config.Kafka.PlayerTopic)
-		s.kafka = kafka.NewConsumer(
-			[]string{s.config.Kafka.Brokers},
-			s.config.Kafka.PlayerTopic,
-			s.config.Node.GroupID,
-			s.config.Kafka.GetTimeout(),
-		)
+		s.kafka = kafka.NewConsumer(t, s.config, kafka.PlayerTopic)
 		s.kafka.StartReading(t)
 	})
 
 	t.WithNewStep("Соединение с базой данных wallet.", func(sCtx provider.StepCtx) {
-		connector, err := repository.OpenConnector(&s.config.MySQL, repository.Wallet)
-		if err != nil {
-			t.Fatalf("OpenConnector для wallet не удался: %v", err)
-		}
+		connector := repository.OpenConnector(t, &s.config.MySQL, repository.Wallet)
 		s.walletDB = &connector
 	})
 }
