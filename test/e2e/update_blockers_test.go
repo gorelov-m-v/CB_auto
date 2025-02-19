@@ -44,7 +44,7 @@ func (s *UpdateBlockersSuite) BeforeAll(t provider.T) {
 		s.publicService = publicAPI.NewPublicClient(s.client)
 
 		s.capClient = client.InitClient(t, s.config, client.Cap)
-		s.capService = capAPI.NewCapClient(s.capClient)
+		s.capService = capAPI.NewCapClient(t, s.config, s.capClient)
 	})
 
 	t.WithNewStep("Инициализация NATS клиента.", func(sCtx provider.StepCtx) {

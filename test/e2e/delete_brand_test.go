@@ -50,7 +50,7 @@ func (s *DeleteBrandSuite) BeforeAll(t provider.T) {
 
 	t.WithNewStep("Инициализация http-клиента и CAP API сервиса.", func(sCtx provider.StepCtx) {
 		s.client = client.InitClient(t, s.config, client.Cap)
-		s.capService = capAPI.NewCapClient(s.client)
+		s.capService = capAPI.NewCapClient(t, s.config, s.client)
 	})
 
 	t.WithNewStep("Соединение с базой данных.", func(sCtx provider.StepCtx) {

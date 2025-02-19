@@ -3,12 +3,16 @@ package cap
 import (
 	httpClient "CB_auto/internal/client"
 	"CB_auto/internal/client/cap/models"
+	"CB_auto/internal/config"
 	"fmt"
 	"log"
 	"net/http"
+
+	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
 
 type CapAPI interface {
+	GetToken() string
 	CheckAdmin(req *httpClient.Request[models.AdminCheckRequestBody]) *httpClient.Response[models.AdminCheckResponseBody]
 	CreateCapBrand(req *httpClient.Request[models.CreateCapBrandRequestBody]) *httpClient.Response[models.CreateCapBrandResponseBody]
 	GetCapBrand(req *httpClient.Request[struct{}]) *httpClient.Response[models.GetCapBrandResponseBody]
@@ -18,11 +22,18 @@ type CapAPI interface {
 }
 
 type capClient struct {
-	client *httpClient.Client
+	client       *httpClient.Client
+	tokenStorage *TokenStorage
 }
 
-func NewCapClient(client *httpClient.Client) CapAPI {
-	return &capClient{client: client}
+func NewCapClient(t provider.T, cfg *config.Config, client *httpClient.Client) CapAPI {
+	c := &capClient{client: client}
+	c.tokenStorage = NewTokenStorage(t, cfg, c)
+	return c
+}
+
+func (c *capClient) GetToken() string {
+	return c.tokenStorage.GetToken()
 }
 
 func (c *capClient) CheckAdmin(req *httpClient.Request[models.AdminCheckRequestBody]) *httpClient.Response[models.AdminCheckResponseBody] {

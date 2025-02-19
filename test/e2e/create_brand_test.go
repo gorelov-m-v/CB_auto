@@ -37,7 +37,7 @@ func (s *CreateBrandSuite) BeforeAll(t provider.T) {
 
 	t.WithNewStep("Инициализация http-клиента и CAP API сервиса.", func(sCtx provider.StepCtx) {
 		s.client = client.InitClient(t, s.config, client.Cap)
-		s.capService = capAPI.NewCapClient(s.client)
+		s.capService = capAPI.NewCapClient(t, s.config, s.client)
 	})
 
 	t.WithNewStep("Соединение с базой данных.", func(sCtx provider.StepCtx) {
@@ -87,8 +87,9 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 
 		testData.createRequest = &client.Request[models.CreateCapBrandRequestBody]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", testData.adminResponse.Token),
-				"Platform-Nodeid": s.config.Node.ProjectID,
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Platform-Locale": "en",
+				"Platform-NodeId": s.config.Node.ProjectID,
 			},
 			Body: &models.CreateCapBrandRequestBody{
 				Sort:        1,
