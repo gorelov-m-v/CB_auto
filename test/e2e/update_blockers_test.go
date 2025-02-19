@@ -72,7 +72,6 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 		registrationResponse      *publicModels.FastRegistrationResponseBody
 		playerRegistrationMessage *kafka.PlayerMessage
 		walletCreatedEvent        *nats.NatsMessage[nats.WalletCreatedPayload]
-		capAuthResponse           *capModels.AdminCheckResponseBody
 		blockersSettedEvent       *nats.NatsMessage[nats.BlockersSettedPayload]
 	}
 	var testData TestData
@@ -126,30 +125,10 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 		sCtx.WithAttachments(allure.NewAttachment("NATS Wallet Message", allure.JSON, utils.CreatePrettyJSON(testData.walletCreatedEvent)))
 	})
 
-	t.WithNewStep("Авторизация в CAP.", func(sCtx provider.StepCtx) {
-		authReq := &client.Request[capModels.AdminCheckRequestBody]{
-			Headers: map[string]string{
-				"Content-Type": "application/json",
-			},
-			Body: &capModels.AdminCheckRequestBody{
-				UserName: s.config.HTTP.CapUsername,
-				Password: s.config.HTTP.CapPassword,
-			},
-		}
-		authResp := s.capService.CheckAdmin(authReq)
-		testData.capAuthResponse = &authResp.Body
-
-		sCtx.Assert().NotEmpty(authResp.Body.Token, "Токен авторизации не пустой")
-		sCtx.Assert().NotEmpty(authResp.Body.RefreshToken, "Refresh токен не пустой")
-
-		sCtx.WithAttachments(allure.NewAttachment("CAP Auth Request", allure.JSON, utils.CreateHttpAttachRequest(authReq)))
-		sCtx.WithAttachments(allure.NewAttachment("CAP Auth Response", allure.JSON, utils.CreateHttpAttachResponse(authResp)))
-	})
-
 	t.WithNewStep("Обновление блокировок игрока.", func(sCtx provider.StepCtx) {
 		updateReq := &client.Request[capModels.BlockersRequestBody]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", testData.capAuthResponse.Token),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
 				"Platform-Locale": "en",
 				"Content-Type":    "application/json",
 			},
@@ -203,7 +182,7 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 	t.WithNewAsyncStep("Проверка получения блокировок через API.", func(sCtx provider.StepCtx) {
 		getBlockersReq := &client.Request[any]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", testData.capAuthResponse.Token),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
 				"Platform-Locale": "en",
 			},
 			PathParams: map[string]string{

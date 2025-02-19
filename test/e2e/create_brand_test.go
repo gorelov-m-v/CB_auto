@@ -60,24 +60,9 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 	brandRepo := brand.NewRepository(s.database.DB(), &s.config.MySQL)
 
 	var testData struct {
-		adminResponse          *models.AdminCheckResponseBody
 		createRequest          *client.Request[models.CreateCapBrandRequestBody]
 		createCapBrandResponse *models.CreateCapBrandResponseBody
 	}
-
-	t.WithNewStep("Получение/Обновление токена авторизации CAP.", func(sCtx provider.StepCtx) {
-		adminReq := &client.Request[models.AdminCheckRequestBody]{
-			Body: &models.AdminCheckRequestBody{
-				UserName: s.config.HTTP.CapUsername,
-				Password: s.config.HTTP.CapPassword,
-			},
-		}
-		adminResp := s.capService.CheckAdmin(adminReq)
-		testData.adminResponse = &adminResp.Body
-
-		sCtx.WithAttachments(allure.NewAttachment("CheckAdmin Request", allure.JSON, utils.CreateHttpAttachRequest(adminReq)))
-		sCtx.WithAttachments(allure.NewAttachment("CheckAdmin Response", allure.JSON, utils.CreateHttpAttachResponse(adminResp)))
-	})
 
 	t.WithNewStep("Создание бренда в CAP.", func(sCtx provider.StepCtx) {
 		brandName := utils.GenerateAlias()
@@ -132,7 +117,7 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 	t.WithNewStep("Удаление бренда.", func(sCtx provider.StepCtx) {
 		deleteReq := &client.Request[struct{}]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", testData.adminResponse.Token),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
 				"Platform-Nodeid": s.config.Node.ProjectID,
 			},
 			PathParams: map[string]string{

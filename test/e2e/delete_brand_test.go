@@ -78,34 +78,17 @@ func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 	brandRepo := brand.NewRepository(s.database.DB(), &s.config.MySQL)
 
 	var testData struct {
-		authResponse   *models.AdminCheckResponseBody
 		createResponse *models.CreateCapBrandResponseBody
 		brandAlias     string
 		deletedMessage *BrandDeletedMessage
 	}
-
-	t.WithNewStep("Авторизация администратора в CAP.", func(sCtx provider.StepCtx) {
-		authReq := &client.Request[models.AdminCheckRequestBody]{
-			Body: &models.AdminCheckRequestBody{
-				UserName: s.config.HTTP.CapUsername,
-				Password: s.config.HTTP.CapPassword,
-			},
-		}
-		authResp := s.capService.CheckAdmin(authReq)
-		testData.authResponse = &authResp.Body
-
-		sCtx.Assert().NotEmpty(authResp.Body.Token, "Токен авторизации не пустой")
-
-		sCtx.WithAttachments(allure.NewAttachment("Auth Request", allure.JSON, utils.CreateHttpAttachRequest(authReq)))
-		sCtx.WithAttachments(allure.NewAttachment("Auth Response", allure.JSON, utils.CreateHttpAttachResponse(authResp)))
-	})
 
 	t.WithNewStep("Создание бренда.", func(sCtx provider.StepCtx) {
 		uniqueAlias := generateUniqueName()
 		testData.brandAlias = uniqueAlias
 		createReq := &client.Request[models.CreateCapBrandRequestBody]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", testData.authResponse.Token),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
 				"Platform-NodeID": s.config.Node.ProjectID,
 			},
 			Body: &models.CreateCapBrandRequestBody{
@@ -141,7 +124,7 @@ func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 	t.WithNewStep("Удаление бренда.", func(sCtx provider.StepCtx) {
 		deleteReq := &client.Request[struct{}]{
 			Headers: map[string]string{
-				"Authorization": fmt.Sprintf("Bearer %s", testData.authResponse.Token),
+				"Authorization": fmt.Sprintf("Bearer %s", s.capService.GetToken()),
 			},
 			PathParams: map[string]string{
 				"id": testData.createResponse.ID,
