@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"CB_auto/internal/config"
+
+	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
 
 type Client struct {
@@ -46,7 +48,7 @@ const (
 	Public ClientType = "public"
 )
 
-func InitClient(cfg *config.Config, clientType ClientType) (*Client, error) {
+func InitClient(t provider.T, cfg *config.Config, clientType ClientType) *Client {
 	var baseURL string
 	switch clientType {
 	case Cap:
@@ -54,12 +56,12 @@ func InitClient(cfg *config.Config, clientType ClientType) (*Client, error) {
 	case Public:
 		baseURL = cfg.HTTP.PublicURL
 	default:
-		return nil, fmt.Errorf("unknown client type: %s", clientType)
+		t.Fatalf("Неизвестный тип клиента: %s", clientType)
 	}
 
 	u, err := url.Parse(baseURL)
 	if err != nil {
-		return nil, err
+		t.Fatalf("Ошибка при парсинге URL: %v", err)
 	}
 
 	return &Client{
@@ -67,7 +69,7 @@ func InitClient(cfg *config.Config, clientType ClientType) (*Client, error) {
 		httpClient: &http.Client{
 			Timeout: time.Duration(cfg.HTTP.Timeout) * time.Second,
 		},
-	}, nil
+	}
 }
 
 func DoRequest[T any, V any](c *Client, r *Request[T]) (*Response[V], error) {

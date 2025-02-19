@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
 
 func ExecuteWithRetry(ctx context.Context, cfg *config.MySQLConfig, operation func(context.Context) error) error {
@@ -50,7 +51,7 @@ const (
 	Wallet DSNType = "wallet"
 )
 
-func OpenConnector(config *config.MySQLConfig, dsnType DSNType) (Connector, error) {
+func OpenConnector(t provider.T, config *config.MySQLConfig, dsnType DSNType) Connector {
 	dsn := config.DSNCore
 	if dsnType == Wallet {
 		dsn = config.DSNWallet
@@ -58,7 +59,7 @@ func OpenConnector(config *config.MySQLConfig, dsnType DSNType) (Connector, erro
 
 	db, err := sqlx.Open(config.DriverName, dsn)
 	if err != nil {
-		return Connector{}, fmt.Errorf("open database: %w", err)
+		t.Fatalf("Ошибка открытия соединения с БД: %v", err)
 	}
 
 	db.SetConnMaxLifetime(config.ConnMaxLifetime)
@@ -72,12 +73,10 @@ func OpenConnector(config *config.MySQLConfig, dsnType DSNType) (Connector, erro
 		if err := db.Close(); err != nil {
 			log.Printf("failed to close db connection: %v", err)
 		}
-		return Connector{}, fmt.Errorf("ping db: %w", err)
+		t.Fatalf("Ошибка проверки соединения с БД: %v", err)
 	}
 
-	return Connector{
-		db: db,
-	}, nil
+	return Connector{db: db}
 }
 
 func (c Connector) QueryContext(ctx context.Context, query string, args ...interface{}) (*sqlx.Rows, error) {

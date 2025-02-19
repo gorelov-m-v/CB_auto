@@ -2,9 +2,10 @@ package config
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"time"
+
+	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
 
 type MySQLConfig struct {
@@ -21,10 +22,8 @@ type MySQLConfig struct {
 }
 
 type KafkaConfig struct {
-	Brokers     string        `json:"brokers"`
-	BrandTopic  string        `json:"brand_topic"`
-	PlayerTopic string        `json:"player_topic"`
-	Timeout     time.Duration `json:"timeout"`
+	Brokers string        `json:"brokers"`
+	Timeout time.Duration `json:"timeout"`
 }
 
 type NatsConfig struct {
@@ -75,18 +74,17 @@ func (k *KafkaConfig) GetTimeout() time.Duration {
 	return k.Timeout
 }
 
-func ReadConfig() (*Config, error) {
-	file, err := os.Open("../../config.json")
+func ReadConfig(t provider.T) *Config {
+	configFile, err := os.Open("../../config.json")
 	if err != nil {
-		return nil, fmt.Errorf("open config file failed: %w", err)
+		t.Fatalf("Ошибка открытия файла конфигурации: %v", err)
 	}
-	defer file.Close()
+	defer configFile.Close()
 
-	decoder := json.NewDecoder(file)
-	config := &Config{}
-	err = decoder.Decode(config)
-	if err != nil {
-		return nil, fmt.Errorf("config decode failed: %w", err)
+	var config Config
+	decoder := json.NewDecoder(configFile)
+	if err := decoder.Decode(&config); err != nil {
+		t.Fatalf("Ошибка декодирования конфигурации: %v", err)
 	}
 
 	config.MySQL.PingTimeout *= time.Nanosecond
@@ -94,5 +92,5 @@ func ReadConfig() (*Config, error) {
 	config.MySQL.ConnMaxIdleTime *= time.Nanosecond
 	config.Kafka.Timeout *= time.Second
 
-	return config, nil
+	return &config
 }

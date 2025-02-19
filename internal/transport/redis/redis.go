@@ -22,26 +22,25 @@ type RedisClient struct {
 	retryDelay    time.Duration
 }
 
-func NewRedisClient(cfg *config.RedisConfig) (*RedisClient, error) {
+func NewRedisClient(t provider.T, cfg *config.RedisConfig) *RedisClient {
 	client := redis.NewClient(&redis.Options{
 		Addr:         cfg.Addr,
 		Password:     cfg.Password,
 		DB:           cfg.DB,
-		DialTimeout:  cfg.DialTimeout * time.Second,
-		ReadTimeout:  cfg.ReadTimeout * time.Second,
-		WriteTimeout: cfg.WriteTimeout * time.Second,
+		DialTimeout:  time.Duration(cfg.DialTimeout) * time.Second,
+		ReadTimeout:  time.Duration(cfg.ReadTimeout) * time.Second,
+		WriteTimeout: time.Duration(cfg.WriteTimeout) * time.Second,
 	})
 
-	ctx := context.Background()
-	if err := client.Ping(ctx).Err(); err != nil {
-		return nil, fmt.Errorf("redis ping failed: %v", err)
+	if err := client.Ping(context.Background()).Err(); err != nil {
+		t.Fatalf("Ошибка подключения к Redis: %v", err)
 	}
 
 	return &RedisClient{
 		client:        client,
 		retryAttempts: cfg.RetryAttempts,
-		retryDelay:    cfg.RetryDelay * time.Second,
-	}, nil
+		retryDelay:    time.Duration(cfg.RetryDelay) * time.Second,
+	}
 }
 
 func (r *RedisClient) Get(key string) (string, error) {

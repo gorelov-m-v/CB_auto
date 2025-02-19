@@ -45,37 +45,21 @@ const (
 
 func (s *DeleteBrandSuite) BeforeAll(t provider.T) {
 	t.WithNewStep("Чтение конфигурационного файла.", func(sCtx provider.StepCtx) {
-		cfg, err := config.ReadConfig()
-		if err != nil {
-			t.Fatalf("Ошибка при чтении конфигурации: %v", err)
-		}
-		s.config = cfg
+		s.config = config.ReadConfig(t)
 	})
 
 	t.WithNewStep("Инициализация http-клиента и CAP API сервиса.", func(sCtx provider.StepCtx) {
-		client, err := client.InitClient(s.config, client.Cap)
-		if err != nil {
-			t.Fatalf("InitClient не удался: %v", err)
-		}
-		s.client = client
+		s.client = client.InitClient(t, s.config, client.Cap)
 		s.capService = capAPI.NewCapClient(s.client)
 	})
 
 	t.WithNewStep("Соединение с базой данных.", func(sCtx provider.StepCtx) {
-		connector, err := repository.OpenConnector(&s.config.MySQL, repository.Core)
-		if err != nil {
-			t.Fatalf("OpenConnector не удался: %v", err)
-		}
+		connector := repository.OpenConnector(t, &s.config.MySQL, repository.Core)
 		s.database = &connector
 	})
 
 	t.WithNewStep("Инициализация Kafka consumer.", func(sCtx provider.StepCtx) {
-		s.kafka = kafka.NewConsumer(
-			[]string{s.config.Kafka.Brokers},
-			s.config.Kafka.BrandTopic,
-			s.config.Node.GroupID,
-			s.config.Kafka.GetTimeout(),
-		)
+		s.kafka = kafka.NewConsumer(t, s.config, kafka.BrandTopic)
 		s.kafka.StartReading(t)
 	})
 }

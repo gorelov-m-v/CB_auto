@@ -3,7 +3,6 @@ package nats
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -36,33 +35,19 @@ type NatsMessage[T any] struct {
 	Type      string
 }
 
-func NewClient(cfg *config.NatsConfig) (*NatsClient, error) {
+func NewClient(t provider.T, cfg *config.NatsConfig) *NatsClient {
 	log.Printf("Creating new NATS client: hosts=%s", cfg.Hosts)
 
-	opts := []nats.Option{
-		nats.ReconnectWait(cfg.ReconnectWait * time.Second),
-		nats.MaxReconnects(cfg.MaxReconnects),
-		nats.Timeout(cfg.Timeout * time.Second),
-		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
-			log.Printf("NATS disconnected: %v", err)
-		}),
-		nats.ReconnectHandler(func(nc *nats.Conn) {
-			log.Printf("NATS reconnected to %v", nc.ConnectedUrl())
-		}),
-		nats.ErrorHandler(func(nc *nats.Conn, sub *nats.Subscription, err error) {
-			log.Printf("NATS error: %v", err)
-		}),
-	}
-
-	nc, err := nats.Connect(cfg.Hosts, opts...)
+	nc, err := nats.Connect(cfg.Hosts,
+		nats.ReconnectWait(time.Duration(cfg.ReconnectWait)*time.Second),
+		nats.MaxReconnects(cfg.MaxReconnects))
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to NATS: %w", err)
+		t.Fatalf("Ошибка подключения к NATS: %v", err)
 	}
 
 	js, err := nc.JetStream()
 	if err != nil {
-		nc.Close()
-		return nil, fmt.Errorf("failed to create JetStream context: %w", err)
+		t.Fatalf("Ошибка создания JetStream контекста: %v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -74,7 +59,7 @@ func NewClient(cfg *config.NatsConfig) (*NatsClient, error) {
 		ctx:      ctx,
 		cancel:   cancel,
 		timeout:  cfg.StreamTimeout * time.Second,
-	}, nil
+	}
 }
 
 func (n *NatsClient) Subscribe(t provider.T, subjectPattern string) {
@@ -176,7 +161,7 @@ func FindMessageByFilter[T any](n *NatsClient, t provider.T, filter func(T, stri
 			if attempt < maxAttempts {
 				log.Printf("No matching message found, attempt %d/%d", attempt, maxAttempts)
 				attempt++
-				time.Sleep(500 * time.Millisecond) // Увеличиваем интервал между попытками
+				time.Sleep(500 * time.Millisecond)
 			} else {
 				time.Sleep(100 * time.Millisecond)
 			}
