@@ -10,8 +10,8 @@ import (
 	capAPI "CB_auto/internal/client/cap"
 	"CB_auto/internal/client/cap/models"
 	"CB_auto/internal/config"
-	"CB_auto/internal/database"
-	"CB_auto/internal/database/brand"
+	"CB_auto/internal/repository"
+	"CB_auto/internal/repository/brand"
 	"CB_auto/internal/transport/kafka"
 	"CB_auto/pkg/utils"
 
@@ -24,7 +24,7 @@ type DeleteBrandSuite struct {
 	suite.Suite
 	client     *client.Client
 	config     *config.Config
-	database   *database.Connector
+	database   *repository.Connector
 	capService capAPI.CapAPI
 	kafka      *kafka.Kafka
 }
@@ -62,7 +62,7 @@ func (s *DeleteBrandSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Соединение с базой данных.", func(sCtx provider.StepCtx) {
-		connector, err := database.OpenConnector(&s.config.MySQL, database.Core)
+		connector, err := repository.OpenConnector(&s.config.MySQL, repository.Core)
 		if err != nil {
 			t.Fatalf("OpenConnector не удался: %v", err)
 		}

@@ -8,8 +8,8 @@ import (
 	publicAPI "CB_auto/internal/client/public"
 	"CB_auto/internal/client/public/models"
 	"CB_auto/internal/config"
-	"CB_auto/internal/database"
-	"CB_auto/internal/database/wallet"
+	"CB_auto/internal/repository"
+	"CB_auto/internal/repository/wallet"
 	"CB_auto/internal/transport/kafka"
 	"CB_auto/internal/transport/nats"
 	"CB_auto/internal/transport/redis"
@@ -29,7 +29,7 @@ type RemoveWalletSuite struct {
 	natsClient    *nats.NatsClient
 	redisClient   *redis.RedisClient
 	kafka         *kafka.Kafka
-	walletDB      *database.Connector
+	walletDB      *repository.Connector
 }
 
 func (s *RemoveWalletSuite) BeforeAll(t provider.T) {
@@ -78,7 +78,7 @@ func (s *RemoveWalletSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Соединение с базой данных wallet.", func(sCtx provider.StepCtx) {
-		connector, err := database.OpenConnector(&s.config.MySQL, database.Wallet)
+		connector, err := repository.OpenConnector(&s.config.MySQL, repository.Wallet)
 		if err != nil {
 			t.Fatalf("OpenConnector для wallet не удался: %v", err)
 		}
