@@ -203,7 +203,20 @@ func (s *CreateWalletSuite) TestCreateWallet(t provider.T) {
 		sCtx.WithAttachments(allure.NewAttachment("Redis Value", allure.JSON, utils.CreatePrettyJSON(wallets)))
 	})
 
-	t.WithNewAsyncStep("Проверка получения списка кошельков.", func(sCtx provider.StepCtx) {
+	t.WithNewStep("Проверка создания кошелька в БД.", func(sCtx provider.StepCtx) {
+		walletRepo := wallet.NewRepository(s.walletDB.DB(), &s.config.MySQL)
+		walletFromDatabase := walletRepo.GetWallet(t, map[string]interface{}{"uuid": testData.walletCreatedEvent.Payload.WalletUUID})
+
+		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.WalletUUID, walletFromDatabase.UUID, "UUID кошелька в БД совпадает с UUID из ивента `wallet_created`")
+		sCtx.Assert().Equal("USD", walletFromDatabase.Currency, "Валюта в БД совпадает с валютой из ивента `wallet_created`")
+		sCtx.Assert().Equal(constants.ZeroAmount, walletFromDatabase.Balance.String(), "Баланс в БД равен 0")
+		sCtx.Assert().False(walletFromDatabase.IsDefault, "Кошелёк не помечен как \"по умолчанию\" в БД")
+		sCtx.Assert().False(walletFromDatabase.IsBasic, "Кошелёк не помечен как базовый в БД")
+
+		sCtx.WithAttachments(allure.NewAttachment("Wallet DB Data", allure.JSON, utils.CreatePrettyJSON(walletFromDatabase)))
+	})
+
+	t.WithNewStep("Проверка получения списка кошельков.", func(sCtx provider.StepCtx) {
 		getWalletsReq := &client.Request[any]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", testData.authResponse.Token),
@@ -227,19 +240,6 @@ func (s *CreateWalletSuite) TestCreateWallet(t provider.T) {
 
 		sCtx.WithAttachments(allure.NewAttachment("GetWallets Request", allure.JSON, utils.CreateHttpAttachRequest(getWalletsReq)))
 		sCtx.WithAttachments(allure.NewAttachment("GetWallets Response", allure.JSON, utils.CreateHttpAttachResponse(getWalletsResp)))
-	})
-
-	t.WithNewAsyncStep("Проверка создания кошелька в БД.", func(sCtx provider.StepCtx) {
-		walletRepo := wallet.NewRepository(s.walletDB.DB(), &s.config.MySQL)
-		walletFromDatabase := walletRepo.GetWallet(t, map[string]interface{}{"uuid": testData.walletCreatedEvent.Payload.WalletUUID})
-
-		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.WalletUUID, walletFromDatabase.UUID, "UUID кошелька в БД совпадает с UUID из ивента `wallet_created`")
-		sCtx.Assert().Equal("USD", walletFromDatabase.Currency, "Валюта в БД совпадает с валютой из ивента `wallet_created`")
-		sCtx.Assert().Equal(constants.ZeroAmount, walletFromDatabase.Balance.String(), "Баланс в БД равен 0")
-		sCtx.Assert().False(walletFromDatabase.IsDefault, "Кошелёк не помечен как \"по умолчанию\" в БД")
-		sCtx.Assert().False(walletFromDatabase.IsBasic, "Кошелёк не помечен как базовый в БД")
-
-		sCtx.WithAttachments(allure.NewAttachment("Wallet DB Data", allure.JSON, utils.CreatePrettyJSON(walletFromDatabase)))
 	})
 }
 
