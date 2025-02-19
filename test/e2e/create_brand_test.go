@@ -6,9 +6,10 @@ import (
 	"net/http"
 	"testing"
 
-	client "CB_auto/internal/client"
 	capAPI "CB_auto/internal/client/cap"
 	"CB_auto/internal/client/cap/models"
+	"CB_auto/internal/client/factory"
+	clientTypes "CB_auto/internal/client/types"
 	"CB_auto/internal/config"
 	"CB_auto/internal/repository"
 	"CB_auto/internal/repository/brand"
@@ -23,7 +24,6 @@ import (
 
 type CreateBrandSuite struct {
 	suite.Suite
-	client     *client.Client
 	config     *config.Config
 	database   *repository.Connector
 	capService capAPI.CapAPI
@@ -36,8 +36,7 @@ func (s *CreateBrandSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация http-клиента и CAP API сервиса.", func(sCtx provider.StepCtx) {
-		s.client = client.InitClient(t, s.config, client.Cap)
-		s.capService = capAPI.NewCapClient(t, s.config, s.client)
+		s.capService = factory.InitClient[capAPI.CapAPI](t, s.config, clientTypes.Cap)
 	})
 
 	t.WithNewStep("Соединение с базой данных.", func(sCtx provider.StepCtx) {
@@ -60,24 +59,9 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 	brandRepo := brand.NewRepository(s.database.DB(), &s.config.MySQL)
 
 	var testData struct {
-		adminResponse          *models.AdminCheckResponseBody
-		createRequest          *client.Request[models.CreateCapBrandRequestBody]
+		createRequest          *clientTypes.Request[models.CreateCapBrandRequestBody]
 		createCapBrandResponse *models.CreateCapBrandResponseBody
 	}
-
-	t.WithNewStep("Получение/Обновление токена авторизации CAP.", func(sCtx provider.StepCtx) {
-		adminReq := &client.Request[models.AdminCheckRequestBody]{
-			Body: &models.AdminCheckRequestBody{
-				UserName: s.config.HTTP.CapUsername,
-				Password: s.config.HTTP.CapPassword,
-			},
-		}
-		adminResp := s.capService.CheckAdmin(adminReq)
-		testData.adminResponse = &adminResp.Body
-
-		sCtx.WithAttachments(allure.NewAttachment("CheckAdmin Request", allure.JSON, utils.CreateHttpAttachRequest(adminReq)))
-		sCtx.WithAttachments(allure.NewAttachment("CheckAdmin Response", allure.JSON, utils.CreateHttpAttachResponse(adminResp)))
-	})
 
 	t.WithNewStep("Создание бренда в CAP.", func(sCtx provider.StepCtx) {
 		brandName := utils.GenerateAlias()
@@ -85,7 +69,7 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 			"en": brandName,
 		}
 
-		testData.createRequest = &client.Request[models.CreateCapBrandRequestBody]{
+		testData.createRequest = &clientTypes.Request[models.CreateCapBrandRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
 				"Platform-Locale": "en",
@@ -130,9 +114,9 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 	})
 
 	t.WithNewStep("Удаление бренда.", func(sCtx provider.StepCtx) {
-		deleteReq := &client.Request[struct{}]{
+		deleteReq := &clientTypes.Request[struct{}]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", testData.adminResponse.Token),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
 				"Platform-Nodeid": s.config.Node.ProjectID,
 			},
 			PathParams: map[string]string{

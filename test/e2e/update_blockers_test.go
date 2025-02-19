@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"testing"
 
-	client "CB_auto/internal/client"
 	capAPI "CB_auto/internal/client/cap"
 	capModels "CB_auto/internal/client/cap/models"
+	"CB_auto/internal/client/factory"
 	publicAPI "CB_auto/internal/client/public"
 	publicModels "CB_auto/internal/client/public/models"
+	clientTypes "CB_auto/internal/client/types"
 	"CB_auto/internal/config"
 	"CB_auto/internal/repository"
 	"CB_auto/internal/repository/wallet"
@@ -24,8 +25,6 @@ import (
 
 type UpdateBlockersSuite struct {
 	suite.Suite
-	client        *client.Client
-	capClient     *client.Client
 	config        *config.Config
 	publicService publicAPI.PublicAPI
 	capService    capAPI.CapAPI
@@ -40,11 +39,8 @@ func (s *UpdateBlockersSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация http-клиентов и сервисов.", func(sCtx provider.StepCtx) {
-		s.client = client.InitClient(t, s.config, client.Public)
-		s.publicService = publicAPI.NewPublicClient(s.client)
-
-		s.capClient = client.InitClient(t, s.config, client.Cap)
-		s.capService = capAPI.NewCapClient(t, s.config, s.capClient)
+		s.publicService = factory.InitClient[publicAPI.PublicAPI](t, s.config, clientTypes.Public)
+		s.capService = factory.InitClient[capAPI.CapAPI](t, s.config, clientTypes.Cap)
 	})
 
 	t.WithNewStep("Инициализация NATS клиента.", func(sCtx provider.StepCtx) {
@@ -72,13 +68,12 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 		registrationResponse      *publicModels.FastRegistrationResponseBody
 		playerRegistrationMessage *kafka.PlayerMessage
 		walletCreatedEvent        *nats.NatsMessage[nats.WalletCreatedPayload]
-		capAuthResponse           *capModels.AdminCheckResponseBody
 		blockersSettedEvent       *nats.NatsMessage[nats.BlockersSettedPayload]
 	}
 	var testData TestData
 
 	t.WithNewStep("Регистрация пользователя.", func(sCtx provider.StepCtx) {
-		createReq := &client.Request[publicModels.FastRegistrationRequestBody]{
+		createReq := &clientTypes.Request[publicModels.FastRegistrationRequestBody]{
 			Headers: map[string]string{
 				"Content-Type": "application/json",
 			},
@@ -126,30 +121,10 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 		sCtx.WithAttachments(allure.NewAttachment("NATS Wallet Message", allure.JSON, utils.CreatePrettyJSON(testData.walletCreatedEvent)))
 	})
 
-	t.WithNewStep("Авторизация в CAP.", func(sCtx provider.StepCtx) {
-		authReq := &client.Request[capModels.AdminCheckRequestBody]{
-			Headers: map[string]string{
-				"Content-Type": "application/json",
-			},
-			Body: &capModels.AdminCheckRequestBody{
-				UserName: s.config.HTTP.CapUsername,
-				Password: s.config.HTTP.CapPassword,
-			},
-		}
-		authResp := s.capService.CheckAdmin(authReq)
-		testData.capAuthResponse = &authResp.Body
-
-		sCtx.Assert().NotEmpty(authResp.Body.Token, "Токен авторизации не пустой")
-		sCtx.Assert().NotEmpty(authResp.Body.RefreshToken, "Refresh токен не пустой")
-
-		sCtx.WithAttachments(allure.NewAttachment("CAP Auth Request", allure.JSON, utils.CreateHttpAttachRequest(authReq)))
-		sCtx.WithAttachments(allure.NewAttachment("CAP Auth Response", allure.JSON, utils.CreateHttpAttachResponse(authResp)))
-	})
-
 	t.WithNewStep("Обновление блокировок игрока.", func(sCtx provider.StepCtx) {
-		updateReq := &client.Request[capModels.BlockersRequestBody]{
+		updateReq := &clientTypes.Request[capModels.BlockersRequestBody]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", testData.capAuthResponse.Token),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
 				"Platform-Locale": "en",
 				"Content-Type":    "application/json",
 			},
@@ -201,9 +176,9 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 	})
 
 	t.WithNewAsyncStep("Проверка получения блокировок через API.", func(sCtx provider.StepCtx) {
-		getBlockersReq := &client.Request[any]{
+		getBlockersReq := &clientTypes.Request[any]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", testData.capAuthResponse.Token),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
 				"Platform-Locale": "en",
 			},
 			PathParams: map[string]string{
