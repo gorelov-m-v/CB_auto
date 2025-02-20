@@ -77,3 +77,37 @@ type BlockersSettedPayload struct {
 	IsBettingActive  bool  `json:"is_betting_active"`
 	CreatedAt        int64 `json:"created_at"`
 }
+
+type LimitChangedV2 struct {
+	EventType string       `json:"event_type"` // created, updated, deleted
+	Limits    []LimitEvent `json:"limits"`
+}
+
+type LimitEvent struct {
+	ID           string `json:"id"`
+	PlayerID     string `json:"playerId"`
+	LimitType    string `json:"limitType"`
+	IntervalType string `json:"intervalType,omitempty"`
+	Amount       string `json:"amount"`
+	CurrencyCode string `json:"currencyCode"`
+	Status       bool   `json:"status"`
+	StartedAt    int64  `json:"startedAt"`
+	ExpiresAt    *int64 `json:"expiresAt"`
+}
+
+const (
+	// Event Types
+	EventTypeCreated = "created"
+	EventTypeUpdated = "updated"
+	EventTypeDeleted = "deleted"
+
+	// Limit Types
+	LimitTypeSingleBet     = "single-bet"
+	LimitTypeCasinoLoss    = "casino-loss"
+	LimitTypeTurnoverFunds = "turnover-of-funds"
+
+	// Interval Types
+	IntervalTypeDaily   = "daily"
+	IntervalTypeWeekly  = "weekly"
+	IntervalTypeMonthly = "monthly"
+)

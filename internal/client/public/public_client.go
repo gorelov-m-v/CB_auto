@@ -16,6 +16,14 @@ type PublicAPI interface {
 	CreateWallet(req *types.Request[models.CreateWalletRequestBody]) *types.Response[models.CreateWalletResponseBody]
 	SwitchWallet(req *types.Request[models.SwitchWalletRequestBody]) *types.Response[struct{}]
 	RemoveWallet(req *types.Request[any]) *types.Response[struct{}]
+	SetSingleBetLimit(req *types.Request[models.SetSingleBetLimitRequestBody]) *types.Response[struct{}]
+	SetCasinoLossLimit(req *types.Request[models.SetCasinoLossLimitRequestBody]) *types.Response[struct{}]
+	GetTurnoverLimits(req *types.Request[any]) *types.Response[models.GetTurnoverLimitsResponseBody]
+	GetSingleBetLimits(req *types.Request[any]) *types.Response[models.GetSingleBetLimitsResponseBody]
+	SetRestriction(req *types.Request[models.SetRestrictionRequestBody]) *types.Response[models.SetRestrictionResponseBody]
+	GetRestriction(req *types.Request[any]) *types.Response[models.SetRestrictionResponseBody]
+	GetCasinoLossLimits(req *types.Request[any]) *types.Response[models.GetCasinoLossLimitsResponseBody]
+	SetTurnoverLimit(req *types.Request[models.SetTurnoverLimitRequestBody]) *types.Response[struct{}]
 }
 
 type publicClient struct {
@@ -116,6 +124,134 @@ func (c *publicClient) RemoveWallet(req *types.Request[any]) *types.Response[str
 			StatusCode: http.StatusInternalServerError,
 			Error: &types.ErrorResponse{
 				Body: fmt.Sprintf("RemoveWallet failed: %v", err),
+			},
+		}
+	}
+	return resp
+}
+
+func (c *publicClient) SetSingleBetLimit(req *types.Request[models.SetSingleBetLimitRequestBody]) *types.Response[struct{}] {
+	req.Method = "POST"
+	req.Path = "/_front_api/api/v1/player/single-limits/single-bet"
+	resp, err := httpClient.DoRequest[models.SetSingleBetLimitRequestBody, struct{}](c.client, req)
+	if err != nil {
+		log.Printf("SetSingleBetLimit failed: %v", err)
+		return &types.Response[struct{}]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("SetSingleBetLimit failed: %v", err),
+			},
+		}
+	}
+	return resp
+}
+
+func (c *publicClient) SetCasinoLossLimit(req *types.Request[models.SetCasinoLossLimitRequestBody]) *types.Response[struct{}] {
+	req.Method = "POST"
+	req.Path = "/_front_api/api/v1/player/recalculated-limits/casino-loss"
+	resp, err := httpClient.DoRequest[models.SetCasinoLossLimitRequestBody, struct{}](c.client, req)
+	if err != nil {
+		log.Printf("SetCasinoLossLimit failed: %v", err)
+		return &types.Response[struct{}]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("SetCasinoLossLimit failed: %v", err),
+			},
+		}
+	}
+	return resp
+}
+
+func (c *publicClient) GetTurnoverLimits(req *types.Request[any]) *types.Response[models.GetTurnoverLimitsResponseBody] {
+	req.Method = "GET"
+	req.Path = "/_front_api/api/v1/player/recalculated-limits/turnover-of-funds"
+	resp, err := httpClient.DoRequest[any, models.GetTurnoverLimitsResponseBody](c.client, req)
+	if err != nil {
+		log.Printf("GetTurnoverLimits failed: %v", err)
+		return &types.Response[models.GetTurnoverLimitsResponseBody]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("GetTurnoverLimits failed: %v", err),
+			},
+		}
+	}
+	return resp
+}
+
+func (c *publicClient) GetSingleBetLimits(req *types.Request[any]) *types.Response[models.GetSingleBetLimitsResponseBody] {
+	req.Method = "GET"
+	req.Path = "/_front_api/api/v1/player/single-limits/single-bet"
+	resp, err := httpClient.DoRequest[any, models.GetSingleBetLimitsResponseBody](c.client, req)
+	if err != nil {
+		log.Printf("GetSingleBetLimits failed: %v", err)
+		return &types.Response[models.GetSingleBetLimitsResponseBody]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("GetSingleBetLimits failed: %v", err),
+			},
+		}
+	}
+	return resp
+}
+
+func (c *publicClient) SetRestriction(req *types.Request[models.SetRestrictionRequestBody]) *types.Response[models.SetRestrictionResponseBody] {
+	req.Method = "POST"
+	req.Path = "/_front_api/api/v1/player/restrictions"
+	resp, err := httpClient.DoRequest[models.SetRestrictionRequestBody, models.SetRestrictionResponseBody](c.client, req)
+	if err != nil {
+		log.Printf("SetRestriction failed: %v", err)
+		return &types.Response[models.SetRestrictionResponseBody]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("SetRestriction failed: %v", err),
+			},
+		}
+	}
+	return resp
+}
+
+func (c *publicClient) GetRestriction(req *types.Request[any]) *types.Response[models.SetRestrictionResponseBody] {
+	req.Method = "GET"
+	req.Path = "/_front_api/api/v1/player/restrictions"
+	resp, err := httpClient.DoRequest[any, models.SetRestrictionResponseBody](c.client, req)
+	if err != nil {
+		log.Printf("GetRestriction failed: %v", err)
+		return &types.Response[models.SetRestrictionResponseBody]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("GetRestriction failed: %v", err),
+			},
+		}
+	}
+	return resp
+}
+
+func (c *publicClient) GetCasinoLossLimits(req *types.Request[any]) *types.Response[models.GetCasinoLossLimitsResponseBody] {
+	req.Method = "GET"
+	req.Path = "/_front_api/api/v1/player/recalculated-limits/casino-loss"
+	resp, err := httpClient.DoRequest[any, models.GetCasinoLossLimitsResponseBody](c.client, req)
+	if err != nil {
+		log.Printf("GetCasinoLossLimits failed: %v", err)
+		return &types.Response[models.GetCasinoLossLimitsResponseBody]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("GetCasinoLossLimits failed: %v", err),
+			},
+		}
+	}
+	return resp
+}
+
+func (c *publicClient) SetTurnoverLimit(req *types.Request[models.SetTurnoverLimitRequestBody]) *types.Response[struct{}] {
+	req.Method = "POST"
+	req.Path = "/_front_api/api/v1/player/recalculated-limits/turnover-of-funds"
+	resp, err := httpClient.DoRequest[models.SetTurnoverLimitRequestBody, struct{}](c.client, req)
+	if err != nil {
+		log.Printf("SetTurnoverLimit failed: %v", err)
+		return &types.Response[struct{}]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("SetTurnoverLimit failed: %v", err),
 			},
 		}
 	}

@@ -29,6 +29,7 @@ type TopicType string
 const (
 	BrandTopic  TopicType = "beta-09_core.gambling.v1.Brand"
 	PlayerTopic TopicType = "beta-09_player.v1.account"
+	LimitTopic  TopicType = "beta-09_limits.v2"
 )
 
 func NewConsumer(t provider.T, cfg *config.Config, topicTypes ...TopicType) *Kafka {

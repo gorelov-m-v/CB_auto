@@ -97,7 +97,7 @@ func (n *NatsClient) messageHandler(msg *nats.Msg) {
 }
 
 func FindMessageByFilter[T any](n *NatsClient, t provider.T, filter func(T, string) bool) *NatsMessage[T] {
-	ctx, cancel := context.WithTimeout(n.ctx, n.timeout)
+	ctx, cancel := context.WithTimeout(n.ctx, 30*time.Second)
 	defer cancel()
 
 	msgBuffer := make([]*nats.Msg, 0)
