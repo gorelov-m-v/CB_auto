@@ -93,10 +93,7 @@ func (s *CreateWalletSuite) TestCreateWallet(t provider.T) {
 		sCtx.Assert().NotEmpty(createResp.Body.Password, "Password в ответе регистрации не пустой")
 
 		sCtx.WithAttachments(allure.NewAttachment("FastRegistration Request", allure.JSON, utils.CreateHttpAttachRequest(createReq)))
-		sCtx.WithAttachments(allure.NewAttachment(
-			"FastRegistration Response", allure.JSON,
-			utils.CreateHttpAttachResponse(createResp),
-		))
+		sCtx.WithAttachments(allure.NewAttachment("FastRegistration Response", allure.JSON, utils.CreateHttpAttachResponse(createResp)))
 	})
 
 	t.WithNewStep("Получение сообщения о регистрации из топика player.v1.account.", func(sCtx provider.StepCtx) {

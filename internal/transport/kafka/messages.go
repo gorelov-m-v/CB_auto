@@ -35,3 +35,36 @@ type PlayerMessage struct {
 	} `json:"player"`
 	Context json.RawMessage `json:"context"`
 }
+
+// LimitMessage общая структура для всех типов лимитов
+type LimitMessage struct {
+	IntervalType string `json:"intervalType,omitempty"` // daily, weekly, monthly
+	LimitType    string `json:"limitType"`              // single-bet, casino-loss, turnover-of-funds
+	Amount       string `json:"amount"`
+	Spent        string `json:"spent,omitempty"`
+	Rest         string `json:"rest,omitempty"`
+	CurrencyCode string `json:"currencyCode"`
+	ID           string `json:"id"`
+	PlayerID     string `json:"playerId"`
+	Status       bool   `json:"status"`
+	StartedAt    int64  `json:"startedAt"`
+	ExpiresAt    *int64 `json:"expiresAt"`
+	EventType    string `json:"eventType"`
+}
+
+const (
+	// Event Types
+	LimitEventCreated = "created"
+	LimitEventUpdated = "updated"
+	LimitEventDeleted = "deleted"
+
+	// Limit Types
+	LimitTypeSingleBet     = "single-bet"
+	LimitTypeCasinoLoss    = "casino-loss"
+	LimitTypeTurnoverFunds = "turnover-of-funds"
+
+	// Interval Types
+	IntervalTypeDaily   = "daily"
+	IntervalTypeWeekly  = "weekly"
+	IntervalTypeMonthly = "monthly"
+)
