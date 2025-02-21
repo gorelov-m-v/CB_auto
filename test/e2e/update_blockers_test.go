@@ -16,10 +16,8 @@ import (
 	"CB_auto/internal/repository/wallet"
 	"CB_auto/internal/transport/kafka"
 	"CB_auto/internal/transport/nats"
-	"CB_auto/pkg/utils"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
 )
@@ -45,7 +43,7 @@ func (s *UpdateBlockersSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация NATS клиента.", func(sCtx provider.StepCtx) {
-		s.natsClient = nats.NewClient(t, &s.config.Nats)
+		s.natsClient = nats.NewClient(&s.config.Nats)
 	})
 
 	t.WithNewStep("Инициализация Kafka.", func(sCtx provider.StepCtx) {
@@ -90,7 +88,7 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 	})
 
 	t.WithNewStep("Получение сообщения о регистрации игрока из Kafka.", func(sCtx provider.StepCtx) {
-		message := kafka.FindMessageByFilter(s.kafka, t, func(msg kafka.PlayerMessage) bool {
+		message := kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
 			return msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
 		playerRegistrationMessage := kafka.ParseMessage[kafka.PlayerMessage](sCtx, message)
@@ -102,18 +100,16 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 			s.config.Nats.StreamPrefix,
 			testData.playerRegistrationMessage.Player.ExternalID,
 		)
-		s.natsClient.Subscribe(t, subject)
+		s.natsClient.SubscribeWithDeliverAll(subject)
 
 		testData.walletCreatedEvent = nats.FindMessageByFilter(
-			s.natsClient, t, func(wallet nats.WalletCreatedPayload, msgType string) bool {
+			sCtx, s.natsClient, func(wallet nats.WalletCreatedPayload, msgType string) bool {
 				return wallet.WalletType == nats.TypeReal &&
 					wallet.WalletStatus == nats.StatusEnabled &&
 					wallet.IsBasic
 			})
 
 		sCtx.Assert().NotEmpty(testData.walletCreatedEvent.Payload.WalletUUID, "UUID кошелька в ивенте `wallet_created` не пустой")
-
-		sCtx.WithAttachments(allure.NewAttachment("NATS Wallet Message", allure.JSON, utils.CreatePrettyJSON(testData.walletCreatedEvent)))
 	})
 
 	t.WithNewStep("Обновление блокировок игрока.", func(sCtx provider.StepCtx) {
@@ -141,18 +137,15 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 			s.config.Nats.StreamPrefix,
 			testData.playerRegistrationMessage.Player.ExternalID,
 		)
-		s.natsClient.Subscribe(t, subject)
+		s.natsClient.SubscribeWithDeliverAll(subject)
 
 		testData.blockersSettedEvent = nats.FindMessageByFilter(
-			s.natsClient, t, func(msg nats.BlockersSettedPayload, msgType string) bool {
+			sCtx, s.natsClient, func(msg nats.BlockersSettedPayload, msgType string) bool {
 				return msgType == "setting_prevent_gamble_setted"
-			},
-		)
+			})
 
 		sCtx.Assert().False(testData.blockersSettedEvent.Payload.IsGamblingActive, "Гэмблинг отключен")
 		sCtx.Assert().True(testData.blockersSettedEvent.Payload.IsBettingActive, "Беттинг включен")
-
-		sCtx.WithAttachments(allure.NewAttachment("BlockersSetted Event", allure.JSON, utils.CreatePrettyJSON(testData.blockersSettedEvent)))
 	})
 
 	t.WithNewAsyncStep("Проверка блокировок в БД.", func(sCtx provider.StepCtx) {

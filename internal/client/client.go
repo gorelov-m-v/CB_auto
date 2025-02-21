@@ -84,8 +84,8 @@ func DoRequest[T any, V any](sCtx provider.StepCtx, c *types.Client, request *ty
 		}
 	}
 
-	sCtx.WithAttachments(allure.NewAttachment("Registration Request", allure.JSON, utils.CreateHttpAttachRequest(request)))
-	sCtx.WithAttachments(allure.NewAttachment("Registration Response", allure.JSON, utils.CreateHttpAttachResponse(response)))
+	sCtx.WithAttachments(allure.NewAttachment("HTTP request", allure.JSON, utils.CreateHttpAttachRequest(request)))
+	sCtx.WithAttachments(allure.NewAttachment("HTTP response", allure.JSON, utils.CreateHttpAttachResponse(response)))
 
 	return response, nil
 }
