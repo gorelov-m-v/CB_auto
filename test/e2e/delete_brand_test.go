@@ -49,7 +49,7 @@ func (s *DeleteBrandSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация http-клиента и CAP API сервиса.", func(sCtx provider.StepCtx) {
-		s.capService = factory.InitClient[capAPI.CapAPI](t, s.config, clientTypes.Cap)
+		s.capService = factory.InitClient[capAPI.CapAPI](sCtx, s.config, clientTypes.Cap)
 	})
 
 	t.WithNewStep("Соединение с базой данных.", func(sCtx provider.StepCtx) {
@@ -100,7 +100,7 @@ func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 				Description: "Test brand description",
 			},
 		}
-		createResp := s.capService.CreateCapBrand(createReq)
+		createResp := s.capService.CreateCapBrand(sCtx, createReq)
 		testData.createResponse = &createResp.Body
 
 		sCtx.Assert().NotEmpty(createResp.Body.ID, "ID созданного бренда не пустой")
@@ -129,7 +129,7 @@ func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 				"id": testData.createResponse.ID,
 			},
 		}
-		deleteResp := s.capService.DeleteCapBrand(deleteReq)
+		deleteResp := s.capService.DeleteCapBrand(sCtx, deleteReq)
 
 		sCtx.Assert().Equal(204, deleteResp.StatusCode, "Статус код ответа равен 204")
 

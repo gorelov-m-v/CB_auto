@@ -79,20 +79,17 @@ type BlockersSettedPayload struct {
 }
 
 type LimitChangedV2 struct {
-	EventType string       `json:"event_type"` // created, updated, deleted
-	Limits    []LimitEvent `json:"limits"`
-}
-
-type LimitEvent struct {
-	ID           string `json:"id"`
-	PlayerID     string `json:"playerId"`
-	LimitType    string `json:"limitType"`
-	IntervalType string `json:"intervalType,omitempty"`
-	Amount       string `json:"amount"`
-	CurrencyCode string `json:"currencyCode"`
-	Status       bool   `json:"status"`
-	StartedAt    int64  `json:"startedAt"`
-	ExpiresAt    *int64 `json:"expiresAt"`
+	EventType string `json:"event_type"`
+	Limits    []struct {
+		ExternalID   string `json:"external_id"`
+		LimitType    string `json:"limit_type"`
+		IntervalType string `json:"interval_type"`
+		Amount       string `json:"amount"`
+		CurrencyCode string `json:"currency_code"`
+		StartedAt    int64  `json:"started_at"`
+		ExpiresAt    int64  `json:"expires_at"`
+		Status       bool   `json:"status"`
+	} `json:"limits"`
 }
 
 const (

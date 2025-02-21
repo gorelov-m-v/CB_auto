@@ -1,6 +1,7 @@
 package factory
 
 import (
+	"log"
 	"net/http"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
 
-func InitClient[T any](t provider.T, cfg *config.Config, clientType types.ClientType) T {
+func InitClient[T any](sCtx provider.StepCtx, cfg *config.Config, clientType types.ClientType) T {
 	baseClient := &types.Client{
 		HttpClient: &http.Client{
 			Timeout: time.Duration(cfg.HTTP.Timeout) * time.Second,
@@ -22,12 +23,12 @@ func InitClient[T any](t provider.T, cfg *config.Config, clientType types.Client
 	switch clientType {
 	case types.Cap:
 		baseClient.ServiceURL = cfg.HTTP.CapURL
-		return cap.NewClient(t, cfg, baseClient).(T)
+		return cap.NewClient(sCtx, cfg, baseClient).(T)
 	case types.Public:
 		baseClient.ServiceURL = cfg.HTTP.PublicURL
 		return public.NewClient(baseClient).(T)
 	default:
-		t.Fatalf("Неизвестный тип клиента: %s", clientType)
+		log.Printf("Неизвестный тип клиента: %s", clientType)
 		return *new(T)
 	}
 }

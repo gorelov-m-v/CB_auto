@@ -24,7 +24,7 @@ type TokenStorage struct {
 
 	client   CapAPI
 	config   *config.Config
-	provider provider.T
+	provider provider.StepCtx
 }
 
 type jwtClaims struct {
@@ -50,11 +50,11 @@ func parseJWT(token string) (time.Time, error) {
 	return time.Unix(claims.ExpiresAt, 0), nil
 }
 
-func NewTokenStorage(t provider.T, cfg *config.Config, client CapAPI) *TokenStorage {
+func NewTokenStorage(sCtx provider.StepCtx, cfg *config.Config, client CapAPI) *TokenStorage {
 	storage := &TokenStorage{
 		client:   client,
 		config:   cfg,
-		provider: t,
+		provider: sCtx,
 	}
 	storage.refreshToken()
 	return storage
@@ -88,7 +88,7 @@ func (s *TokenStorage) refreshToken() {
 		},
 	}
 
-	authResp := s.client.CheckAdmin(authReq)
+	authResp := s.client.CheckAdmin(s.provider, authReq)
 	s.token = authResp.Body.Token
 	s.refToken = authResp.Body.RefreshToken
 

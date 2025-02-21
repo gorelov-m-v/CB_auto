@@ -203,3 +203,23 @@ func mapEventData(data interface{}, target interface{}) error {
 	}
 	return json.Unmarshal(jsonData, target)
 }
+
+func (c *NatsClient) SubscribeWithDeliverAll(t provider.T, subject string) {
+	// Создаем опции для подписки
+	opts := []nats.SubOpt{
+		nats.DeliverAll(),                 // Доставлять все сообщения
+		nats.AckExplicit(),                // Явное подтверждение сообщений
+		nats.ReplayInstant(),              // Мгновенное воспроизведение
+		nats.StartSequence(1),             // Начинаем с первого сообщения
+		nats.BindStream("beta-09_wallet"), // Привязываемся к стриму
+	}
+
+	sub, err := c.js.Subscribe(subject, func(msg *nats.Msg) {
+		c.Messages <- msg
+	}, opts...)
+
+	if err != nil {
+		t.Fatalf("Ошибка при подписке на NATS: %v", err)
+	}
+	c.subs = append(c.subs, sub)
+}
