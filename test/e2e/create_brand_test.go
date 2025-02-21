@@ -17,7 +17,6 @@ import (
 	"CB_auto/pkg/utils"
 
 	"github.com/google/uuid"
-	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
 )
@@ -36,7 +35,7 @@ func (s *CreateBrandSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация http-клиента и CAP API сервиса.", func(sCtx provider.StepCtx) {
-		s.capService = factory.InitClient[capAPI.CapAPI](t, s.config, clientTypes.Cap)
+		s.capService = factory.InitClient[capAPI.CapAPI](sCtx, s.config, clientTypes.Cap)
 	})
 
 	t.WithNewStep("Соединение с базой данных.", func(sCtx provider.StepCtx) {
@@ -59,17 +58,16 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 	brandRepo := brand.NewRepository(s.database.DB(), &s.config.MySQL)
 
 	var testData struct {
-		createRequest          *clientTypes.Request[models.CreateCapBrandRequestBody]
-		createCapBrandResponse *models.CreateCapBrandResponseBody
+		createCapBrandRequest  *clientTypes.Request[models.CreateCapBrandRequestBody]
+		createCapBrandResponse *clientTypes.Response[models.CreateCapBrandResponseBody]
 	}
 
 	t.WithNewStep("Создание бренда в CAP.", func(sCtx provider.StepCtx) {
-		brandName := utils.GenerateAlias()
 		names := map[string]string{
-			"en": brandName,
+			"en": utils.GenerateAlias(),
 		}
 
-		testData.createRequest = &clientTypes.Request[models.CreateCapBrandRequestBody]{
+		testData.createCapBrandRequest = &clientTypes.Request[models.CreateCapBrandRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
 				"Platform-Locale": "en",
@@ -77,22 +75,18 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 			},
 			Body: &models.CreateCapBrandRequestBody{
 				Sort:        1,
-				Alias:       brandName,
+				Alias:       utils.GenerateAlias(),
 				Names:       names,
 				Description: utils.GenerateAlias(),
 			},
 		}
 
-		createResp := s.capService.CreateCapBrand(testData.createRequest)
-		testData.createCapBrandResponse = &createResp.Body
-
-		sCtx.WithAttachments(allure.NewAttachment("CreateBrand Request", allure.JSON, utils.CreateHttpAttachRequest(testData.createRequest)))
-		sCtx.WithAttachments(allure.NewAttachment("CreateBrand Response", allure.JSON, utils.CreateHttpAttachResponse(createResp)))
+		testData.createCapBrandResponse = s.capService.CreateCapBrand(sCtx, testData.createCapBrandRequest)
 	})
 
 	t.WithNewStep("Получение бренда из БД по универсальным фильтрам.", func(sCtx provider.StepCtx) {
 		filters := map[string]interface{}{
-			"uuid": testData.createCapBrandResponse.ID,
+			"uuid": testData.createCapBrandResponse.Body.ID,
 		}
 		brandData := brandRepo.GetBrand(t, filters)
 
@@ -101,34 +95,30 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 			t.Fatalf("Ошибка при парсинге LocalizedNames: %v", err)
 		}
 
-		sCtx.Assert().Equal(testData.createRequest.Body.Names, dbNames, "Names бренда в БД совпадают с Names в запросе")
-		sCtx.Assert().Equal(testData.createRequest.Body.Alias, brandData.Alias, "Alias бренда в БД совпадает с Alias в запросе")
-		sCtx.Assert().Equal(testData.createRequest.Body.Sort, brandData.Sort, "Sort бренда в БД совпадает с Sort в запросе")
-		sCtx.Assert().Equal(testData.createRequest.Body.Description, brandData.Description, "Description бренда в БД совпадает с Description в запросе")
+		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Names, dbNames, "Names бренда в БД совпадают с Names в запросе")
+		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Alias, brandData.Alias, "Alias бренда в БД совпадает с Alias в запросе")
+		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Sort, brandData.Sort, "Sort бренда в БД совпадает с Sort в запросе")
+		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Description, brandData.Description, "Description бренда в БД совпадает с Description в запросе")
 		sCtx.Assert().Equal(uuid.MustParse(s.config.Node.ProjectID), brandData.NodeUUID, "NodeUUID бренда в БД совпадает с NodeUUID в запросе")
 		sCtx.Assert().Equal(models.StatusDisabled, brandData.Status, "Status бренда в БД совпадает с Status в запросе")
 		sCtx.Assert().NotZero(brandData.CreatedAt, "Время создания бренда в БД не равно нулю")
 		sCtx.Assert().Zero(brandData.UpdatedAt, "Время обновления бренда в БД равно нулю")
-
-		sCtx.WithAttachments(allure.NewAttachment("Бренд из БД", allure.JSON, utils.CreatePrettyJSON(brandData)))
 	})
 
 	t.WithNewStep("Удаление бренда.", func(sCtx provider.StepCtx) {
-		deleteReq := &clientTypes.Request[struct{}]{
+		req := &clientTypes.Request[struct{}]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
 				"Platform-Nodeid": s.config.Node.ProjectID,
 			},
 			PathParams: map[string]string{
-				"id": testData.createCapBrandResponse.ID,
+				"id": testData.createCapBrandResponse.Body.ID,
 			},
 		}
 
-		deleteResp := s.capService.DeleteCapBrand(deleteReq)
+		deleteResp := s.capService.DeleteCapBrand(sCtx, req)
 
 		sCtx.Assert().Equal(http.StatusNoContent, deleteResp.StatusCode, "Статус ответа при удалении бренда в CAP соответствует ожидаемому")
-
-		sCtx.WithAttachments(allure.NewAttachment("DeleteBrand Request", allure.JSON, utils.CreateHttpAttachRequest(deleteReq)))
 	})
 }
 

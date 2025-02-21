@@ -9,7 +9,9 @@ import (
 
 	"CB_auto/internal/config"
 	"CB_auto/internal/repository"
+	"CB_auto/pkg/utils"
 
+	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/shopspring/decimal"
 )
@@ -57,9 +59,9 @@ var allowedFields = map[string]bool{
 	"balance":       true,
 }
 
-func (r *Repository) GetWallet(t provider.T, filters map[string]interface{}) *Wallet {
+func (r *Repository) GetWallet(sCtx provider.StepCtx, filters map[string]interface{}) *Wallet {
 	if err := r.db.Ping(); err != nil {
-		t.Fatalf("Ошибка подключения к БД: %v", err)
+		log.Printf("Ошибка подключения к БД: %v", err)
 	}
 
 	var conditions []string
@@ -91,7 +93,7 @@ func (r *Repository) GetWallet(t provider.T, filters map[string]interface{}) *Wa
 	if len(filters) > 0 {
 		for key, value := range filters {
 			if !allowedFields[key] {
-				t.Fatalf("Недопустимое поле для фильтрации: %s", key)
+				log.Printf("Недопустимое поле для фильтрации: %s", key)
 			}
 			conditions = append(conditions, fmt.Sprintf("%s = ?", key))
 			args = append(args, value)
@@ -128,8 +130,10 @@ func (r *Repository) GetWallet(t provider.T, filters map[string]interface{}) *Wa
 		)
 	})
 	if err != nil {
-		t.Fatalf("Ошибка при получении данных кошелька: %v", err)
+		log.Printf("Ошибка при получении данных кошелька: %v", err)
 	}
+
+	sCtx.WithAttachments(allure.NewAttachment("Wallet DB Data", allure.JSON, utils.CreatePrettyJSON(wallet)))
 
 	return &wallet
 }

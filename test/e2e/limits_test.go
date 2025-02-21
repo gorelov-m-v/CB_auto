@@ -1,10 +1,8 @@
-//go:build !race
-// +build !race
-
 package test
 
 import (
 	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
@@ -38,7 +36,7 @@ func (s *LimitsSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация Public API клиента", func(sCtx provider.StepCtx) {
-		s.publicClient = factory.InitClient[publicAPI.PublicAPI](t, s.config, clientTypes.Public)
+		s.publicClient = factory.InitClient[publicAPI.PublicAPI](sCtx, s.config, clientTypes.Public)
 	})
 
 	t.WithNewStep("Инициализация Kafka клиента", func(sCtx provider.StepCtx) {
@@ -77,39 +75,35 @@ func (s *LimitsSuite) TestLimits(t provider.T) {
 	}
 
 	t.WithNewStep("Регистрация нового игрока", func(sCtx provider.StepCtx) {
-		regReq := &clientTypes.Request[models.FastRegistrationRequestBody]{
+		req := &clientTypes.Request[models.FastRegistrationRequestBody]{
 			Body: &models.FastRegistrationRequestBody{
 				Country:  s.config.Node.DefaultCountry,
 				Currency: s.config.Node.DefaultCurrency,
 			},
 		}
-		testData.registrationResponse = s.publicClient.FastRegistration(regReq)
-		sCtx.Assert().Equal(200, testData.registrationResponse.StatusCode, "Успешная регистрация")
+		testData.registrationResponse = s.publicClient.FastRegistration(sCtx, req)
 
-		sCtx.WithAttachments(allure.NewAttachment("Registration Request", allure.JSON, utils.CreateHttpAttachRequest(regReq)))
-		sCtx.WithAttachments(allure.NewAttachment("Registration Response", allure.JSON, utils.CreateHttpAttachResponse(testData.registrationResponse)))
+		sCtx.Assert().Equal(200, testData.registrationResponse.StatusCode, "Успешная регистрация")
 	})
 
 	t.WithNewStep("Получение токена авторизации", func(sCtx provider.StepCtx) {
-		authReq := &clientTypes.Request[models.TokenCheckRequestBody]{
+		req := &clientTypes.Request[models.TokenCheckRequestBody]{
 			Body: &models.TokenCheckRequestBody{
 				Username: testData.registrationResponse.Body.Username,
 				Password: testData.registrationResponse.Body.Password,
 			},
 		}
-		testData.authorizationResponse = s.publicClient.TokenCheck(authReq)
-		sCtx.Assert().Equal(200, testData.authorizationResponse.StatusCode, "Успешная авторизация")
+		testData.authorizationResponse = s.publicClient.TokenCheck(sCtx, req)
 
-		sCtx.WithAttachments(allure.NewAttachment("Auth Request", allure.JSON, utils.CreateHttpAttachRequest(authReq)))
-		sCtx.WithAttachments(allure.NewAttachment("Auth Response", allure.JSON, utils.CreateHttpAttachResponse(testData.authorizationResponse)))
+		sCtx.Assert().Equal(200, testData.authorizationResponse.StatusCode, "Успешная авторизация")
 	})
 
 	t.WithNewStep("Проверка сообщения в Kafka о регистрации игрока", func(sCtx provider.StepCtx) {
-		playerMsg := kafka.FindMessageByFilter(s.kafka, t, func(msg kafka.PlayerMessage) bool {
+		message := kafka.FindMessageByFilter(s.kafka, t, func(msg kafka.PlayerMessage) bool {
 			return msg.Message.EventType == "player.signUpFast" &&
 				msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
-		testData.registrationMessage = kafka.ParseMessage[kafka.PlayerMessage](t, playerMsg)
+		testData.registrationMessage = kafka.ParseMessage[kafka.PlayerMessage](sCtx, message)
 
 		sCtx.Assert().NotEmpty(testData.registrationMessage.Player.ID, "ID игрока не пустой")
 
@@ -128,12 +122,9 @@ func (s *LimitsSuite) TestLimits(t provider.T) {
 		}
 		testData.setSingleBetLimitReq = req
 
-		resp := s.publicClient.SetSingleBetLimit(req)
+		resp := s.publicClient.SetSingleBetLimit(sCtx, req)
 
-		sCtx.Assert().Equal(201, resp.StatusCode, "Лимит на ставку установлен")
-
-		sCtx.WithAttachments(allure.NewAttachment("Set Single Bet Limit Request", allure.JSON, utils.CreateHttpAttachRequest(req)))
-		sCtx.WithAttachments(allure.NewAttachment("Set Single Bet Limit Response", allure.JSON, utils.CreateHttpAttachResponse(resp)))
+		sCtx.Assert().Equal(http.StatusCreated, resp.StatusCode, "Лимит на ставку установлен")
 	})
 
 	t.WithNewStep("Установка лимита на проигрыш", func(sCtx provider.StepCtx) {
@@ -150,7 +141,7 @@ func (s *LimitsSuite) TestLimits(t provider.T) {
 		}
 		testData.setCasinoLossLimitReq = req
 
-		resp := s.publicClient.SetCasinoLossLimit(req)
+		resp := s.publicClient.SetCasinoLossLimit(sCtx, req)
 
 		sCtx.Assert().Equal(201, resp.StatusCode, "Лимит на проигрыш установлен")
 
@@ -159,7 +150,7 @@ func (s *LimitsSuite) TestLimits(t provider.T) {
 	})
 
 	t.WithNewStep("Установка лимита на оборот средств", func(sCtx provider.StepCtx) {
-		req := &clientTypes.Request[models.SetTurnoverLimitRequestBody]{
+		testData.setTurnoverLimitReq = &clientTypes.Request[models.SetTurnoverLimitRequestBody]{
 			Headers: map[string]string{
 				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
 			},
@@ -170,18 +161,14 @@ func (s *LimitsSuite) TestLimits(t provider.T) {
 				StartedAt: time.Now().Unix(),
 			},
 		}
-		testData.setTurnoverLimitReq = req
 
-		resp := s.publicClient.SetTurnoverLimit(req)
+		resp := s.publicClient.SetTurnoverLimit(sCtx, testData.setTurnoverLimitReq)
 
-		sCtx.Assert().Equal(201, resp.StatusCode, "Лимит на оборот средств установлен")
-
-		sCtx.WithAttachments(allure.NewAttachment("Set Turnover Limit Request", allure.JSON, utils.CreateHttpAttachRequest(req)))
-		sCtx.WithAttachments(allure.NewAttachment("Set Turnover Limit Response", allure.JSON, utils.CreateHttpAttachResponse(resp)))
+		sCtx.Assert().Equal(http.StatusCreated, resp.StatusCode, "Лимит на оборот средств установлен")
 	})
 
 	t.WithNewStep("Проверка сообщения в Kafka о создании лимита на одиночную ставку", func(sCtx provider.StepCtx) {
-		singleBetMsg := kafka.FindMessageByFilter(s.kafka, t, func(msg kafka.LimitMessage) bool {
+		message := kafka.FindMessageByFilter(s.kafka, t, func(msg kafka.LimitMessage) bool {
 			match := msg.EventType == kafka.LimitEventCreated &&
 				msg.LimitType == kafka.LimitTypeSingleBet &&
 				msg.PlayerID == testData.registrationMessage.Player.ExternalID &&
@@ -190,7 +177,7 @@ func (s *LimitsSuite) TestLimits(t provider.T) {
 			return match
 		})
 
-		limitMsg := kafka.ParseMessage[kafka.LimitMessage](t, singleBetMsg)
+		limitMsg := kafka.ParseMessage[kafka.LimitMessage](sCtx, message)
 
 		sCtx.Assert().NotEmpty(limitMsg.ID, "ID лимита на ставку не пустой")
 		sCtx.Assert().Equal(testData.registrationMessage.Player.ExternalID, limitMsg.PlayerID, "ID игрока в лимите на ставку совпадает с ID игрока в регистрационном сообщении")
@@ -206,7 +193,7 @@ func (s *LimitsSuite) TestLimits(t provider.T) {
 	})
 
 	t.WithNewStep("Проверка сообщения в Kafka о создании лимита на проигрыш", func(sCtx provider.StepCtx) {
-		casinoLossMsg := kafka.FindMessageByFilter(s.kafka, t, func(msg kafka.LimitMessage) bool {
+		message := kafka.FindMessageByFilter(s.kafka, t, func(msg kafka.LimitMessage) bool {
 			match := msg.EventType == kafka.LimitEventCreated &&
 				msg.LimitType == kafka.LimitTypeCasinoLoss &&
 				msg.IntervalType == kafka.IntervalTypeDaily &&
@@ -216,7 +203,7 @@ func (s *LimitsSuite) TestLimits(t provider.T) {
 				msg.CurrencyCode == s.config.Node.DefaultCurrency
 			return match
 		})
-		casinoLimitMsg := kafka.ParseMessage[kafka.LimitMessage](t, casinoLossMsg)
+		casinoLimitMsg := kafka.ParseMessage[kafka.LimitMessage](sCtx, message)
 
 		sCtx.Assert().NotEmpty(casinoLimitMsg.ID, "ID лимита на проигрыш не пустой")
 		sCtx.Assert().Equal(testData.registrationMessage.Player.ExternalID, casinoLimitMsg.PlayerID, "ID игрока в лимите на проигрыш совпадает с ID игрока в регистрационном сообщении")
@@ -231,7 +218,7 @@ func (s *LimitsSuite) TestLimits(t provider.T) {
 	})
 
 	t.WithNewStep("Проверка сообщения в Kafka о создании лимита на оборот средств", func(sCtx provider.StepCtx) {
-		turnoverMsg := kafka.FindMessageByFilter(s.kafka, t, func(msg kafka.LimitMessage) bool {
+		message := kafka.FindMessageByFilter(s.kafka, t, func(msg kafka.LimitMessage) bool {
 			match := msg.EventType == kafka.LimitEventCreated &&
 				msg.LimitType == kafka.LimitTypeTurnoverFunds &&
 				msg.IntervalType == kafka.IntervalTypeDaily &&
@@ -240,7 +227,7 @@ func (s *LimitsSuite) TestLimits(t provider.T) {
 				msg.CurrencyCode == s.config.Node.DefaultCurrency
 			return match
 		})
-		testData.turnoverLimitMessage = kafka.ParseMessage[kafka.LimitMessage](t, turnoverMsg)
+		testData.turnoverLimitMessage = kafka.ParseMessage[kafka.LimitMessage](sCtx, message)
 
 		sCtx.Assert().NotEmpty(testData.turnoverLimitMessage.ID, "ID лимита на оборот средств не пустой")
 		sCtx.Assert().Equal(testData.registrationMessage.Player.ExternalID, testData.turnoverLimitMessage.PlayerID, "ID игрока в лимите на оборот средств совпадает с ID игрока в регистрационном сообщении")
@@ -260,9 +247,9 @@ func (s *LimitsSuite) TestLimits(t provider.T) {
 				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
 			},
 		}
-		testData.singleBetLimitResponse = s.publicClient.GetSingleBetLimits(req)
+		testData.singleBetLimitResponse = s.publicClient.GetSingleBetLimits(sCtx, req)
 
-		sCtx.Assert().Equal(200, testData.singleBetLimitResponse.StatusCode, "Лимиты получены")
+		sCtx.Assert().Equal(http.StatusOK, testData.singleBetLimitResponse.StatusCode, "Лимиты получены")
 		sCtx.Assert().NotEmpty(testData.singleBetLimitResponse.Body, "Список лимитов не пустой")
 
 		limit := testData.singleBetLimitResponse.Body[0]
@@ -272,8 +259,6 @@ func (s *LimitsSuite) TestLimits(t provider.T) {
 		sCtx.Assert().True(limit.Required, "Лимит обязательный")
 		sCtx.Assert().Empty(limit.UpcomingChanges, "Нет предстоящих изменений")
 		sCtx.Assert().Nil(limit.DeactivatedAt, "Лимит не деактивирован")
-
-		sCtx.WithAttachments(allure.NewAttachment("Single Bet Limits", allure.JSON, utils.CreateHttpAttachResponse(testData.singleBetLimitResponse)))
 	})
 
 	t.WithNewStep("Получение лимита на оборот средств", func(sCtx provider.StepCtx) {
@@ -282,9 +267,9 @@ func (s *LimitsSuite) TestLimits(t provider.T) {
 				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
 			},
 		}
-		resp := s.publicClient.GetTurnoverLimits(req)
+		resp := s.publicClient.GetTurnoverLimits(sCtx, req)
 
-		sCtx.Assert().Equal(200, resp.StatusCode, "Лимиты получены")
+		sCtx.Assert().Equal(http.StatusOK, resp.StatusCode, "Лимиты получены")
 		sCtx.Assert().NotEmpty(resp.Body, "Список лимитов не пустой")
 
 		limit := resp.Body[0]
@@ -299,8 +284,6 @@ func (s *LimitsSuite) TestLimits(t provider.T) {
 		sCtx.Assert().NotNil(limit.ExpiresAt, "Время окончания установлено")
 		sCtx.Assert().Equal("0", limit.Spent, "Потраченная сумма равна 0")
 		sCtx.Assert().Equal(limit.Amount, limit.Rest, "Остаток равен сумме лимита")
-
-		sCtx.WithAttachments(allure.NewAttachment("Turnover Limits", allure.JSON, utils.CreateHttpAttachResponse(resp)))
 	})
 
 	t.WithNewStep("Получение лимита на проигрыш", func(sCtx provider.StepCtx) {
@@ -309,9 +292,9 @@ func (s *LimitsSuite) TestLimits(t provider.T) {
 				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
 			},
 		}
-		testData.casinoLossLimitResponse = s.publicClient.GetCasinoLossLimits(req)
+		testData.casinoLossLimitResponse = s.publicClient.GetCasinoLossLimits(sCtx, req)
 
-		sCtx.Assert().Equal(200, testData.casinoLossLimitResponse.StatusCode, "Лимиты получены")
+		sCtx.Assert().Equal(http.StatusOK, testData.casinoLossLimitResponse.StatusCode, "Лимиты получены")
 		sCtx.Assert().NotEmpty(testData.casinoLossLimitResponse.Body, "Список лимитов не пустой")
 
 		limit := testData.casinoLossLimitResponse.Body[0]
@@ -325,63 +308,64 @@ func (s *LimitsSuite) TestLimits(t provider.T) {
 		sCtx.Assert().NotNil(limit.ExpiresAt, "Время окончания установлено")
 		sCtx.Assert().Equal("0", limit.Spent, "Потраченная сумма равна 0")
 		sCtx.Assert().Equal(limit.Amount, limit.Rest, "Остаток равен сумме лимита")
-
-		sCtx.WithAttachments(allure.NewAttachment("Casino Loss Limits", allure.JSON, utils.CreateHttpAttachResponse(testData.casinoLossLimitResponse)))
 	})
 
 	t.WithNewStep("Проверка сообщения в NATS о создании лимита на одиночную ставку", func(sCtx provider.StepCtx) {
-		singleBetEvent := nats.FindMessageByFilter[nats.LimitEvent](s.natsClient, t, func(msg nats.LimitEvent, msgType string) bool {
-			return msgType == "created" &&
-				msg.LimitType == nats.LimitTypeSingleBet &&
-				msg.PlayerID == testData.registrationMessage.Player.ExternalID
+		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
+		s.natsClient.SubscribeWithDeliverAll(t, subject)
+
+		singleBetEvent := nats.FindMessageByFilter(s.natsClient, t, func(msg nats.LimitChangedV2, msgType string) bool {
+			return msg.EventType == "created" &&
+				len(msg.Limits) > 0 &&
+				msg.Limits[0].LimitType == nats.LimitTypeSingleBet
 		})
 
-		sCtx.Assert().NotEmpty(singleBetEvent.Payload.ID, "ID лимита на ставку не пустой")
-		sCtx.Assert().Equal(testData.registrationMessage.Player.ExternalID, singleBetEvent.Payload.PlayerID, "ID игрока в лимите на ставку совпадает")
-		sCtx.Assert().Equal(testData.setSingleBetLimitReq.Body.Amount, singleBetEvent.Payload.Amount, "Сумма лимита на ставку совпадает")
-		sCtx.Assert().Equal(testData.setSingleBetLimitReq.Body.Currency, singleBetEvent.Payload.CurrencyCode, "Валюта лимита на ставку совпадает")
-		sCtx.Assert().Equal(nats.LimitTypeSingleBet, singleBetEvent.Payload.LimitType, "Тип лимита на ставку совпадает")
-		sCtx.Assert().True(singleBetEvent.Payload.Status, "Статус лимита на ставку установлен")
-		sCtx.Assert().Nil(singleBetEvent.Payload.ExpiresAt, "Время окончания лимита на ставку не установлено")
-		sCtx.Assert().True(utils.IsTimeInRange(singleBetEvent.Payload.StartedAt, 10), "Время начала лимита на ставку входит в интервал времени")
+		limit := singleBetEvent.Payload.Limits[0]
+		sCtx.Assert().NotEmpty(limit.ExternalID, "ID лимита на ставку не пустой")
+		sCtx.Assert().Equal(testData.setSingleBetLimitReq.Body.Amount, limit.Amount, "Сумма лимита на ставку совпадает")
+		sCtx.Assert().Equal(testData.setSingleBetLimitReq.Body.Currency, limit.CurrencyCode, "Валюта лимита на ставку совпадает")
+		sCtx.Assert().Equal(nats.LimitTypeSingleBet, limit.LimitType, "Тип лимита на ставку совпадает")
+		sCtx.Assert().True(limit.Status, "Статус лимита на ставку установлен")
+		sCtx.Assert().Zero(limit.ExpiresAt, "Время окончания лимита на ставку не установлено для single-bet")
+		sCtx.Assert().True(utils.IsTimeInRange(limit.StartedAt, 10), "Время начала лимита на ставку входит в интервал времени")
 
 		sCtx.WithAttachments(allure.NewAttachment("Single Bet Limit NATS Event", allure.JSON, utils.CreatePrettyJSON(singleBetEvent)))
 	})
 
 	t.WithNewStep("Проверка сообщения в NATS о создании лимита на проигрыш", func(sCtx provider.StepCtx) {
-		casinoLossEvent := nats.FindMessageByFilter[nats.LimitEvent](s.natsClient, t, func(msg nats.LimitEvent, msgType string) bool {
-			return msgType == "created" &&
-				msg.LimitType == nats.LimitTypeCasinoLoss &&
-				msg.PlayerID == testData.registrationMessage.Player.ExternalID
+		casinoLossEvent := nats.FindMessageByFilter(s.natsClient, t, func(msg nats.LimitChangedV2, msgType string) bool {
+			return msg.EventType == "created" &&
+				len(msg.Limits) > 0 &&
+				msg.Limits[0].LimitType == nats.LimitTypeCasinoLoss
 		})
 
-		sCtx.Assert().NotEmpty(casinoLossEvent.Payload.ID, "ID лимита на проигрыш не пустой")
-		sCtx.Assert().Equal(testData.registrationMessage.Player.ExternalID, casinoLossEvent.Payload.PlayerID, "ID игрока в лимите на проигрыш совпадает")
-		sCtx.Assert().Equal(testData.setCasinoLossLimitReq.Body.Amount, casinoLossEvent.Payload.Amount, "Сумма лимита на проигрыш совпадает")
-		sCtx.Assert().Equal(testData.setCasinoLossLimitReq.Body.Currency, casinoLossEvent.Payload.CurrencyCode, "Валюта лимита на проигрыш совпадает")
-		sCtx.Assert().Equal(nats.LimitTypeCasinoLoss, casinoLossEvent.Payload.LimitType, "Тип лимита на проигрыш совпадает")
-		sCtx.Assert().True(casinoLossEvent.Payload.Status, "Статус лимита на проигрыш установлен")
-		sCtx.Assert().NotNil(casinoLossEvent.Payload.ExpiresAt, "Время окончания лимита на проигрыш установлено")
-		sCtx.Assert().True(utils.IsTimeInRange(casinoLossEvent.Payload.StartedAt, 10), "Время начала лимита на проигрыш входит в интервал времени")
+		limit := casinoLossEvent.Payload.Limits[0]
+		sCtx.Assert().NotEmpty(limit.ExternalID, "ID лимита на проигрыш не пустой")
+		sCtx.Assert().Equal(testData.setCasinoLossLimitReq.Body.Amount, limit.Amount, "Сумма лимита на проигрыш совпадает")
+		sCtx.Assert().Equal(testData.setCasinoLossLimitReq.Body.Currency, limit.CurrencyCode, "Валюта лимита на проигрыш совпадает")
+		sCtx.Assert().Equal(nats.LimitTypeCasinoLoss, limit.LimitType, "Тип лимита на проигрыш совпадает")
+		sCtx.Assert().True(limit.Status, "Статус лимита на проигрыш установлен")
+		sCtx.Assert().NotNil(limit.ExpiresAt, "Время окончания лимита на проигрыш установлено")
+		sCtx.Assert().True(utils.IsTimeInRange(limit.StartedAt, 10), "Время начала лимита на проигрыш входит в интервал времени")
 
 		sCtx.WithAttachments(allure.NewAttachment("Casino Loss Limit NATS Event", allure.JSON, utils.CreatePrettyJSON(casinoLossEvent)))
 	})
 
 	t.WithNewStep("Проверка сообщения в NATS о создании лимита на оборот средств", func(sCtx provider.StepCtx) {
-		turnoverEvent := nats.FindMessageByFilter[nats.LimitEvent](s.natsClient, t, func(msg nats.LimitEvent, msgType string) bool {
-			return msgType == "created" &&
-				msg.LimitType == nats.LimitTypeTurnoverFunds &&
-				msg.PlayerID == testData.registrationMessage.Player.ExternalID
+		turnoverEvent := nats.FindMessageByFilter(s.natsClient, t, func(msg nats.LimitChangedV2, msgType string) bool {
+			return msg.EventType == "created" &&
+				len(msg.Limits) > 0 &&
+				msg.Limits[0].LimitType == nats.LimitTypeTurnoverFunds
 		})
 
-		sCtx.Assert().NotEmpty(turnoverEvent.Payload.ID, "ID лимита на оборот средств не пустой")
-		sCtx.Assert().Equal(testData.registrationMessage.Player.ExternalID, turnoverEvent.Payload.PlayerID, "ID игрока в лимите на оборот средств совпадает")
-		sCtx.Assert().Equal(testData.setTurnoverLimitReq.Body.Amount, turnoverEvent.Payload.Amount, "Сумма лимита на оборот средств совпадает")
-		sCtx.Assert().Equal(testData.setTurnoverLimitReq.Body.Currency, turnoverEvent.Payload.CurrencyCode, "Валюта лимита на оборот средств совпадает")
-		sCtx.Assert().Equal(nats.LimitTypeTurnoverFunds, turnoverEvent.Payload.LimitType, "Тип лимита на оборот средств совпадает")
-		sCtx.Assert().True(turnoverEvent.Payload.Status, "Статус лимита на оборот средств установлен")
-		sCtx.Assert().NotNil(turnoverEvent.Payload.ExpiresAt, "Время окончания лимита на оборот средств установлено")
-		sCtx.Assert().True(utils.IsTimeInRange(turnoverEvent.Payload.StartedAt, 10), "Время начала лимита на оборот средств входит в интервал времени")
+		limit := turnoverEvent.Payload.Limits[0]
+		sCtx.Assert().NotEmpty(limit.ExternalID, "ID лимита на оборот средств не пустой")
+		sCtx.Assert().Equal(testData.setTurnoverLimitReq.Body.Amount, limit.Amount, "Сумма лимита на оборот средств совпадает")
+		sCtx.Assert().Equal(testData.setTurnoverLimitReq.Body.Currency, limit.CurrencyCode, "Валюта лимита на оборот средств совпадает")
+		sCtx.Assert().Equal(nats.LimitTypeTurnoverFunds, limit.LimitType, "Тип лимита на оборот средств совпадает")
+		sCtx.Assert().True(limit.Status, "Статус лимита на оборот средств установлен")
+		sCtx.Assert().NotZero(limit.ExpiresAt, "Время окончания лимита на оборот средств установлено")
+		sCtx.Assert().True(utils.IsTimeInRange(limit.StartedAt, 10), "Время начала лимита на оборот средств входит в интервал времени")
 
 		sCtx.WithAttachments(allure.NewAttachment("Turnover Limit NATS Event", allure.JSON, utils.CreatePrettyJSON(turnoverEvent)))
 	})

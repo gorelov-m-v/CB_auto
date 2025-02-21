@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"CB_auto/internal/config"
+	"CB_auto/pkg/utils"
 
+	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/segmentio/kafka-go"
 )
@@ -166,11 +168,14 @@ func (k *Kafka) Close(t provider.T) {
 	}
 }
 
-func ParseMessage[T any](t provider.T, message kafka.Message) T {
+func ParseMessage[T any](sCtx provider.StepCtx, message kafka.Message) T {
 	var data T
 	if err := json.Unmarshal(message.Value, &data); err != nil {
-		t.Fatalf("Ошибка при парсинге сообщения Kafka: %v", err)
+		log.Printf("Ошибка при парсинге сообщения Kafka: %v", err)
 	}
+
+	sCtx.WithAttachments(allure.NewAttachment("Kafka Message", allure.JSON, utils.CreatePrettyJSON(data)))
+
 	return data
 }
 

@@ -2,6 +2,7 @@ package test
 
 import (
 	"fmt"
+	"net/http"
 	"testing"
 
 	"CB_auto/internal/client/factory"
@@ -38,7 +39,7 @@ func (s *RemoveWalletSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация http-клиента и Public API сервиса.", func(sCtx provider.StepCtx) {
-		s.publicService = factory.InitClient[publicAPI.PublicAPI](t, s.config, clientTypes.Public)
+		s.publicService = factory.InitClient[publicAPI.PublicAPI](sCtx, s.config, clientTypes.Public)
 	})
 
 	t.WithNewStep("Инициализация NATS клиента.", func(sCtx provider.StepCtx) {
@@ -67,9 +68,9 @@ func (s *RemoveWalletSuite) TestRemoveWallet(t provider.T) {
 	t.Title("Проверка удаления дополнительного кошелька")
 
 	type TestData struct {
-		registrationResponse         *models.FastRegistrationResponseBody
-		authResponse                 *models.TokenCheckResponseBody
-		createWalletResponse         *models.CreateWalletResponseBody
+		registrationResponse         *clientTypes.Response[models.FastRegistrationResponseBody]
+		authResponse                 *clientTypes.Response[models.TokenCheckResponseBody]
+		createWalletResponse         *clientTypes.Response[models.CreateWalletResponseBody]
 		playerRegistrationMessage    *kafka.PlayerMessage
 		additionalWalletCreatedEvent *nats.NatsMessage[nats.WalletCreatedPayload]
 		walletDisabledEvent          *nats.NatsMessage[nats.WalletDisabledPayload]
@@ -77,7 +78,7 @@ func (s *RemoveWalletSuite) TestRemoveWallet(t provider.T) {
 	var testData TestData
 
 	t.WithNewStep("Регистрация пользователя.", func(sCtx provider.StepCtx) {
-		createReq := &clientTypes.Request[models.FastRegistrationRequestBody]{
+		req := &clientTypes.Request[models.FastRegistrationRequestBody]{
 			Headers: map[string]string{
 				"Content-Type": "application/json",
 			},
@@ -86,50 +87,42 @@ func (s *RemoveWalletSuite) TestRemoveWallet(t provider.T) {
 				Currency: s.config.Node.DefaultCurrency,
 			},
 		}
-		createResp := s.publicService.FastRegistration(createReq)
-		testData.registrationResponse = &createResp.Body
+		testData.registrationResponse = s.publicService.FastRegistration(sCtx, req)
 
-		sCtx.Assert().NotEmpty(createResp.Body.Username, "Username в ответе регистрации не пустой")
-		sCtx.Assert().NotEmpty(createResp.Body.Password, "Password в ответе регистрации не пустой")
-
-		sCtx.WithAttachments(allure.NewAttachment("FastRegistration Request", allure.JSON, utils.CreateHttpAttachRequest(createReq)))
-		sCtx.WithAttachments(allure.NewAttachment("FastRegistration Response", allure.JSON, utils.CreateHttpAttachResponse(createResp)))
+		sCtx.Assert().NotEmpty(testData.registrationResponse.Body.Username, "Username в ответе регистрации не пустой")
+		sCtx.Assert().NotEmpty(testData.registrationResponse.Body.Password, "Password в ответе регистрации не пустой")
 	})
 
 	t.WithNewStep("Получение сообщения о регистрации игрока из Kafka.", func(sCtx provider.StepCtx) {
-		message := kafka.FindMessageByFilter[kafka.PlayerMessage](s.kafka, t, func(msg kafka.PlayerMessage) bool {
-			return msg.Player.AccountID == testData.registrationResponse.Username
+		message := kafka.FindMessageByFilter(s.kafka, t, func(msg kafka.PlayerMessage) bool {
+			return msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
-		playerRegistrationMessage := kafka.ParseMessage[kafka.PlayerMessage](t, message)
+		playerRegistrationMessage := kafka.ParseMessage[kafka.PlayerMessage](sCtx, message)
 		testData.playerRegistrationMessage = &playerRegistrationMessage
 
 		sCtx.WithAttachments(allure.NewAttachment("Kafka Player Message", allure.JSON, utils.CreatePrettyJSON(testData.playerRegistrationMessage)))
 	})
 
 	t.WithNewStep("Получение токена авторизации.", func(sCtx provider.StepCtx) {
-		authReq := &clientTypes.Request[models.TokenCheckRequestBody]{
+		req := &clientTypes.Request[models.TokenCheckRequestBody]{
 			Headers: map[string]string{
 				"Content-Type": "application/json",
 			},
 			Body: &models.TokenCheckRequestBody{
-				Username: testData.registrationResponse.Username,
-				Password: testData.registrationResponse.Password,
+				Username: testData.registrationResponse.Body.Username,
+				Password: testData.registrationResponse.Body.Password,
 			},
 		}
-		authResp := s.publicService.TokenCheck(authReq)
-		testData.authResponse = &authResp.Body
+		testData.authResponse = s.publicService.TokenCheck(sCtx, req)
 
-		sCtx.Assert().NotEmpty(authResp.Body.Token, "Токен авторизации не пустой")
-		sCtx.Assert().NotEmpty(authResp.Body.RefreshToken, "Refresh токен не пустой")
-
-		sCtx.WithAttachments(allure.NewAttachment("TokenCheck Request", allure.JSON, utils.CreateHttpAttachRequest(authReq)))
-		sCtx.WithAttachments(allure.NewAttachment("TokenCheck Response", allure.JSON, utils.CreateHttpAttachResponse(authResp)))
+		sCtx.Assert().NotEmpty(testData.authResponse.Body.Token, "Токен авторизации не пустой")
+		sCtx.Assert().NotEmpty(testData.authResponse.Body.RefreshToken, "Refresh токен не пустой")
 	})
 
 	t.WithNewStep("Создание дополнительного кошелька.", func(sCtx provider.StepCtx) {
-		createReq := &clientTypes.Request[models.CreateWalletRequestBody]{
+		req := &clientTypes.Request[models.CreateWalletRequestBody]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", testData.authResponse.Token),
+				"Authorization":   fmt.Sprintf("Bearer %s", testData.authResponse.Body.Token),
 				"Platform-Locale": "en",
 				"Content-Type":    "application/json",
 			},
@@ -137,20 +130,16 @@ func (s *RemoveWalletSuite) TestRemoveWallet(t provider.T) {
 				Currency: "USD",
 			},
 		}
-		createResp := s.publicService.CreateWallet(createReq)
-		testData.createWalletResponse = &createResp.Body
+		testData.createWalletResponse = s.publicService.CreateWallet(sCtx, req)
 
-		sCtx.Assert().Equal(201, createResp.StatusCode, "Статус код ответа равен 201")
-
-		sCtx.WithAttachments(allure.NewAttachment("CreateWallet Request", allure.JSON, utils.CreateHttpAttachRequest(createReq)))
-		sCtx.WithAttachments(allure.NewAttachment("CreateWallet Response", allure.JSON, utils.CreateHttpAttachResponse(createResp)))
+		sCtx.Assert().Equal(http.StatusCreated, testData.createWalletResponse.StatusCode, "Статус код ответа равен 201")
 	})
 
 	t.WithNewStep("Получение сообщения о создании дополнительного кошелька из NATS.", func(sCtx provider.StepCtx) {
 		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.playerRegistrationMessage.Player.ExternalID)
 		s.natsClient.Subscribe(t, subject)
 
-		testData.additionalWalletCreatedEvent = nats.FindMessageByFilter[nats.WalletCreatedPayload](
+		testData.additionalWalletCreatedEvent = nats.FindMessageByFilter(
 			s.natsClient, t, func(wallet nats.WalletCreatedPayload, msgType string) bool {
 				return wallet.WalletType == nats.TypeReal &&
 					wallet.WalletStatus == nats.StatusEnabled &&
@@ -170,21 +159,18 @@ func (s *RemoveWalletSuite) TestRemoveWallet(t provider.T) {
 	})
 
 	t.WithNewStep("Удаление дополнительного кошелька.", func(sCtx provider.StepCtx) {
-		removeReq := &clientTypes.Request[any]{
+		req := &clientTypes.Request[any]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", testData.authResponse.Token),
+				"Authorization":   fmt.Sprintf("Bearer %s", testData.authResponse.Body.Token),
 				"Platform-Locale": "en",
 			},
 			QueryParams: map[string]string{
 				"currency": "USD",
 			},
 		}
-		removeResp := s.publicService.RemoveWallet(removeReq)
+		removeResp := s.publicService.RemoveWallet(sCtx, req)
 
-		sCtx.Assert().Equal(200, removeResp.StatusCode, "Статус код ответа равен 200")
-
-		sCtx.WithAttachments(allure.NewAttachment("RemoveWallet Request", allure.JSON, utils.CreateHttpAttachRequest(removeReq)))
-		sCtx.WithAttachments(allure.NewAttachment("RemoveWallet Response", allure.JSON, utils.CreateHttpAttachResponse(removeResp)))
+		sCtx.Assert().Equal(http.StatusOK, removeResp.StatusCode, "Статус код ответа равен 200")
 	})
 
 	t.WithNewStep("Проверка события отключения кошелька в NATS.", func(sCtx provider.StepCtx) {
@@ -194,7 +180,7 @@ func (s *RemoveWalletSuite) TestRemoveWallet(t provider.T) {
 			testData.additionalWalletCreatedEvent.Payload.WalletUUID)
 		s.natsClient.Subscribe(t, subject)
 
-		testData.walletDisabledEvent = nats.FindMessageByFilter[nats.WalletDisabledPayload](
+		testData.walletDisabledEvent = nats.FindMessageByFilter(
 			s.natsClient, t, func(msg nats.WalletDisabledPayload, msgType string) bool {
 				return msgType == "wallet_disabled"
 			},
@@ -206,16 +192,16 @@ func (s *RemoveWalletSuite) TestRemoveWallet(t provider.T) {
 	})
 
 	t.WithNewAsyncStep("Проверка отсутствия кошелька в списке.", func(sCtx provider.StepCtx) {
-		getWalletsReq := &clientTypes.Request[any]{
+		req := &clientTypes.Request[any]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", testData.authResponse.Token),
+				"Authorization":   fmt.Sprintf("Bearer %s", testData.authResponse.Body.Token),
 				"Platform-Locale": "en",
 			},
 		}
-		getWalletsResp := s.publicService.GetWallets(getWalletsReq)
+		resp := s.publicService.GetWallets(sCtx, req)
 
 		var foundWallet *models.WalletData
-		for _, wallet := range getWalletsResp.Body.Wallets {
+		for _, wallet := range resp.Body.Wallets {
 			if wallet.Currency == "USD" {
 				foundWallet = &wallet
 				break
@@ -223,14 +209,11 @@ func (s *RemoveWalletSuite) TestRemoveWallet(t provider.T) {
 		}
 
 		sCtx.Assert().Nil(foundWallet, "Удаленный кошелек отсутствует в списке")
-
-		sCtx.WithAttachments(allure.NewAttachment("GetWallets Request", allure.JSON, utils.CreateHttpAttachRequest(getWalletsReq)))
-		sCtx.WithAttachments(allure.NewAttachment("GetWallets Response", allure.JSON, utils.CreateHttpAttachResponse(getWalletsResp)))
 	})
 
 	t.WithNewAsyncStep("Проверка отключения кошелька в Redis.", func(sCtx provider.StepCtx) {
 		key := testData.playerRegistrationMessage.Player.ExternalID
-		wallets := s.redisClient.GetWithRetry(t, key)
+		wallets := s.redisClient.GetWithRetry(sCtx, key)
 
 		var disabledWallet redis.WalletData
 		for _, w := range wallets {
@@ -241,20 +224,16 @@ func (s *RemoveWalletSuite) TestRemoveWallet(t provider.T) {
 		}
 
 		sCtx.Assert().Equal(int(nats.StatusDisabled), disabledWallet.Status, "Статус кошелька в Redis – отключен")
-
-		sCtx.WithAttachments(allure.NewAttachment("Redis Value", allure.JSON, utils.CreatePrettyJSON(wallets)))
 	})
 
 	t.WithNewAsyncStep("Проверка отключения кошелька в БД.", func(sCtx provider.StepCtx) {
 		walletRepo := wallet.NewRepository(s.walletDB.DB(), &s.config.MySQL)
-		walletFromDatabase := walletRepo.GetWallet(t, map[string]interface{}{
+		walletFromDatabase := walletRepo.GetWallet(sCtx, map[string]interface{}{
 			"uuid":          testData.additionalWalletCreatedEvent.Payload.WalletUUID,
 			"wallet_status": int(nats.StatusDisabled),
 		})
 
 		sCtx.Assert().NotNil(walletFromDatabase, "Кошелек найден в БД со статусом отключен")
-
-		sCtx.WithAttachments(allure.NewAttachment("Wallet DB Data", allure.JSON, utils.CreatePrettyJSON(walletFromDatabase)))
 	})
 }
 

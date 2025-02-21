@@ -14,12 +14,12 @@ import (
 
 type CapAPI interface {
 	GetToken() string
-	CheckAdmin(req *types.Request[models.AdminCheckRequestBody]) *types.Response[models.AdminCheckResponseBody]
-	CreateCapBrand(req *types.Request[models.CreateCapBrandRequestBody]) *types.Response[models.CreateCapBrandResponseBody]
-	GetCapBrand(req *types.Request[struct{}]) *types.Response[models.GetCapBrandResponseBody]
-	DeleteCapBrand(req *types.Request[struct{}]) *types.Response[struct{}]
-	UpdateBlockers(req *types.Request[models.BlockersRequestBody]) *types.Response[struct{}]
-	GetBlockers(req *types.Request[any]) *types.Response[models.GetBlockersResponseBody]
+	CheckAdmin(sCtx provider.StepCtx, req *types.Request[models.AdminCheckRequestBody]) *types.Response[models.AdminCheckResponseBody]
+	CreateCapBrand(sCtx provider.StepCtx, req *types.Request[models.CreateCapBrandRequestBody]) *types.Response[models.CreateCapBrandResponseBody]
+	GetCapBrand(sCtx provider.StepCtx, req *types.Request[struct{}]) *types.Response[models.GetCapBrandResponseBody]
+	DeleteCapBrand(sCtx provider.StepCtx, req *types.Request[struct{}]) *types.Response[struct{}]
+	UpdateBlockers(sCtx provider.StepCtx, req *types.Request[models.BlockersRequestBody]) *types.Response[struct{}]
+	GetBlockers(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetBlockersResponseBody]
 }
 
 type capClient struct {
@@ -27,9 +27,9 @@ type capClient struct {
 	tokenStorage *TokenStorage
 }
 
-func NewClient(t provider.T, cfg *config.Config, baseClient *types.Client) CapAPI {
+func NewClient(sCtx provider.StepCtx, cfg *config.Config, baseClient *types.Client) CapAPI {
 	client := &capClient{client: baseClient}
-	client.tokenStorage = NewTokenStorage(t, cfg, client)
+	client.tokenStorage = NewTokenStorage(sCtx, cfg, client)
 	return client
 }
 
@@ -37,10 +37,10 @@ func (c *capClient) GetToken() string {
 	return c.tokenStorage.GetToken()
 }
 
-func (c *capClient) CheckAdmin(req *types.Request[models.AdminCheckRequestBody]) *types.Response[models.AdminCheckResponseBody] {
+func (c *capClient) CheckAdmin(sCtx provider.StepCtx, req *types.Request[models.AdminCheckRequestBody]) *types.Response[models.AdminCheckResponseBody] {
 	req.Method = "POST"
 	req.Path = "/_cap/api/token/check"
-	resp, err := httpClient.DoRequest[models.AdminCheckRequestBody, models.AdminCheckResponseBody](c.client, req)
+	resp, err := httpClient.DoRequest[models.AdminCheckRequestBody, models.AdminCheckResponseBody](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("CheckAdmin failed: %v", err)
 		return &types.Response[models.AdminCheckResponseBody]{
@@ -50,13 +50,14 @@ func (c *capClient) CheckAdmin(req *types.Request[models.AdminCheckRequestBody])
 			},
 		}
 	}
+
 	return resp
 }
 
-func (c *capClient) CreateCapBrand(req *types.Request[models.CreateCapBrandRequestBody]) *types.Response[models.CreateCapBrandResponseBody] {
+func (c *capClient) CreateCapBrand(sCtx provider.StepCtx, req *types.Request[models.CreateCapBrandRequestBody]) *types.Response[models.CreateCapBrandResponseBody] {
 	req.Method = "POST"
 	req.Path = "/_cap/api/v1/brands"
-	resp, err := httpClient.DoRequest[models.CreateCapBrandRequestBody, models.CreateCapBrandResponseBody](c.client, req)
+	resp, err := httpClient.DoRequest[models.CreateCapBrandRequestBody, models.CreateCapBrandResponseBody](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("CreateCapBrand failed: %v", err)
 		return &types.Response[models.CreateCapBrandResponseBody]{
@@ -66,13 +67,14 @@ func (c *capClient) CreateCapBrand(req *types.Request[models.CreateCapBrandReque
 			},
 		}
 	}
+
 	return resp
 }
 
-func (c *capClient) GetCapBrand(req *types.Request[struct{}]) *types.Response[models.GetCapBrandResponseBody] {
+func (c *capClient) GetCapBrand(sCtx provider.StepCtx, req *types.Request[struct{}]) *types.Response[models.GetCapBrandResponseBody] {
 	req.Method = "GET"
 	req.Path = "/_cap/api/v1/brands/{id}"
-	resp, err := httpClient.DoRequest[struct{}, models.GetCapBrandResponseBody](c.client, req)
+	resp, err := httpClient.DoRequest[struct{}, models.GetCapBrandResponseBody](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("GetCapBrand failed: %v", err)
 		return &types.Response[models.GetCapBrandResponseBody]{
@@ -82,13 +84,14 @@ func (c *capClient) GetCapBrand(req *types.Request[struct{}]) *types.Response[mo
 			},
 		}
 	}
+
 	return resp
 }
 
-func (c *capClient) DeleteCapBrand(req *types.Request[struct{}]) *types.Response[struct{}] {
+func (c *capClient) DeleteCapBrand(sCtx provider.StepCtx, req *types.Request[struct{}]) *types.Response[struct{}] {
 	req.Method = "DELETE"
 	req.Path = "/_cap/api/v1/brands/{id}"
-	resp, err := httpClient.DoRequest[struct{}, struct{}](c.client, req)
+	resp, err := httpClient.DoRequest[struct{}, struct{}](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("DeleteCapBrand failed: %v", err)
 		return &types.Response[struct{}]{
@@ -98,13 +101,14 @@ func (c *capClient) DeleteCapBrand(req *types.Request[struct{}]) *types.Response
 			},
 		}
 	}
+
 	return resp
 }
 
-func (c *capClient) UpdateBlockers(req *types.Request[models.BlockersRequestBody]) *types.Response[struct{}] {
+func (c *capClient) UpdateBlockers(sCtx provider.StepCtx, req *types.Request[models.BlockersRequestBody]) *types.Response[struct{}] {
 	req.Method = "PATCH"
 	req.Path = "/_cap/api/v1/players/{player_uuid}/blockers"
-	resp, err := httpClient.DoRequest[models.BlockersRequestBody, struct{}](c.client, req)
+	resp, err := httpClient.DoRequest[models.BlockersRequestBody, struct{}](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("UpdateBlockers failed: %v", err)
 		return &types.Response[struct{}]{
@@ -114,13 +118,14 @@ func (c *capClient) UpdateBlockers(req *types.Request[models.BlockersRequestBody
 			},
 		}
 	}
+
 	return resp
 }
 
-func (c *capClient) GetBlockers(req *types.Request[any]) *types.Response[models.GetBlockersResponseBody] {
+func (c *capClient) GetBlockers(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetBlockersResponseBody] {
 	req.Method = "GET"
 	req.Path = "/_cap/api/v1/players/{player_uuid}/blockers"
-	resp, err := httpClient.DoRequest[any, models.GetBlockersResponseBody](c.client, req)
+	resp, err := httpClient.DoRequest[any, models.GetBlockersResponseBody](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("GetBlockers failed: %v", err)
 		return &types.Response[models.GetBlockersResponseBody]{
@@ -130,5 +135,6 @@ func (c *capClient) GetBlockers(req *types.Request[any]) *types.Response[models.
 			},
 		}
 	}
+
 	return resp
 }
