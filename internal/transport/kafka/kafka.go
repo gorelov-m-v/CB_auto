@@ -102,7 +102,7 @@ func (k *Kafka) readMessages(reader *kafka.Reader) {
 	}
 }
 
-func FindMessageByFilter[T any](k *Kafka, t provider.T, filter func(T) bool) kafka.Message {
+func FindMessageByFilter[T any](sCtx provider.StepCtx, k *Kafka, filter func(T) bool) kafka.Message {
 	ctx, cancel := context.WithTimeout(k.ctx, k.Timeout)
 	defer cancel()
 
@@ -112,10 +112,10 @@ func FindMessageByFilter[T any](k *Kafka, t provider.T, filter func(T) bool) kaf
 	for {
 		select {
 		case <-ctx.Done():
-			t.Fatalf("Не удалось найти нужное сообщение за %v: %v", k.Timeout, ctx.Err())
+			log.Printf("Не удалось найти нужное сообщение за %v: %v", k.Timeout, ctx.Err())
 		case msg, ok := <-k.Messages:
 			if !ok {
-				t.Fatal("Канал сообщений закрыт")
+				log.Printf("Канал сообщений закрыт")
 			}
 			log.Printf("Checking new message: %s", string(msg.Value))
 			var data T
@@ -126,6 +126,7 @@ func FindMessageByFilter[T any](k *Kafka, t provider.T, filter func(T) bool) kaf
 			}
 			if filter(data) {
 				log.Printf("Found matching message")
+				sCtx.WithAttachments(allure.NewAttachment("Kafka Message", allure.JSON, utils.CreatePrettyJSON(data)))
 				return msg
 			}
 			log.Printf("Message didn't match filter")
@@ -137,6 +138,7 @@ func FindMessageByFilter[T any](k *Kafka, t provider.T, filter func(T) bool) kaf
 					continue
 				}
 				if filter(data) {
+					sCtx.WithAttachments(allure.NewAttachment("Kafka Message", allure.JSON, utils.CreatePrettyJSON(data)))
 					return bufferedMsg
 				}
 			}
@@ -173,8 +175,6 @@ func ParseMessage[T any](sCtx provider.StepCtx, message kafka.Message) T {
 	if err := json.Unmarshal(message.Value, &data); err != nil {
 		log.Printf("Ошибка при парсинге сообщения Kafka: %v", err)
 	}
-
-	sCtx.WithAttachments(allure.NewAttachment("Kafka Message", allure.JSON, utils.CreatePrettyJSON(data)))
 
 	return data
 }

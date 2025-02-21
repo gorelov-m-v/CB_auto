@@ -14,11 +14,9 @@ import (
 	"CB_auto/internal/transport/kafka"
 	"CB_auto/internal/transport/nats"
 	"CB_auto/internal/transport/redis"
-	"CB_auto/pkg/utils"
 	"CB_auto/test/e2e/constants"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
 )
@@ -43,7 +41,7 @@ func (s *FastRegistrationSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация NATS клиента.", func(sCtx provider.StepCtx) {
-		s.natsClient = nats.NewClient(t, &s.config.Nats)
+		s.natsClient = nats.NewClient(&s.config.Nats)
 	})
 
 	t.WithNewStep("Инициализация Redis клиента.", func(sCtx provider.StepCtx) {
@@ -108,7 +106,7 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 	})
 
 	t.WithNewStep("Получение сообщения о регистрации из топика player.v1.account.", func(sCtx provider.StepCtx) {
-		message := kafka.FindMessageByFilter(s.kafka, t, func(msg kafka.PlayerMessage) bool {
+		message := kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
 			return msg.Message.EventType == "player.signUpFast" &&
 				msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
@@ -116,8 +114,6 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 		testData.playerRegistrationMessage = &playerRegistrationMessage
 
 		sCtx.Assert().NotEmpty(playerRegistrationMessage.Player.ExternalID, "External ID игрока в регистрации не пустой")
-
-		sCtx.WithAttachments(allure.NewAttachment("Kafka Message", allure.JSON, utils.CreatePrettyJSON(playerRegistrationMessage)))
 	})
 
 	t.WithNewStep("Проверка создания кошелька в NATS.", func(sCtx provider.StepCtx) {
@@ -125,9 +121,9 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 			s.config.Nats.StreamPrefix,
 			testData.playerRegistrationMessage.Player.ExternalID,
 		)
-		s.natsClient.Subscribe(t, subject)
+		s.natsClient.SubscribeWithDeliverAll(subject)
 
-		testData.walletCreatedEvent = nats.FindMessageByFilter(s.natsClient, t, func(wallet nats.WalletCreatedPayload, msgType string) bool {
+		testData.walletCreatedEvent = nats.FindMessageByFilter(sCtx, s.natsClient, func(wallet nats.WalletCreatedPayload, msgType string) bool {
 			return wallet.WalletType == nats.TypeReal &&
 				wallet.WalletStatus == nats.StatusEnabled &&
 				wallet.IsBasic
@@ -144,8 +140,6 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 		sCtx.Assert().True(testData.walletCreatedEvent.Payload.IsBasic, "Кошелёк в ивенте `wallet_created` помечен как базовый")
 		sCtx.Assert().NotEmpty(testData.walletCreatedEvent.Payload.CreatedAt, "Дата создания в ивенте `wallet_created` не пустая")
 		sCtx.Assert().NotEmpty(testData.walletCreatedEvent.Payload.UpdatedAt, "Дата обновления в ивенте `wallet_created` не пустая")
-
-		sCtx.WithAttachments(allure.NewAttachment("NATS Wallet Message", allure.JSON, utils.CreatePrettyJSON(testData.walletCreatedEvent.Payload)))
 	})
 
 	t.WithNewAsyncStep("Проверка значения в Redis.", func(sCtx provider.StepCtx) {

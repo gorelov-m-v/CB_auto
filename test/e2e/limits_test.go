@@ -45,7 +45,7 @@ func (s *LimitsSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация NATS клиента", func(sCtx provider.StepCtx) {
-		s.natsClient = nats.NewClient(t, &s.config.Nats)
+		s.natsClient = nats.NewClient(&s.config.Nats)
 	})
 }
 
@@ -99,7 +99,7 @@ func (s *LimitsSuite) TestLimits(t provider.T) {
 	})
 
 	t.WithNewStep("Проверка сообщения в Kafka о регистрации игрока", func(sCtx provider.StepCtx) {
-		message := kafka.FindMessageByFilter(s.kafka, t, func(msg kafka.PlayerMessage) bool {
+		message := kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
 			return msg.Message.EventType == "player.signUpFast" &&
 				msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
@@ -168,7 +168,7 @@ func (s *LimitsSuite) TestLimits(t provider.T) {
 	})
 
 	t.WithNewStep("Проверка сообщения в Kafka о создании лимита на одиночную ставку", func(sCtx provider.StepCtx) {
-		message := kafka.FindMessageByFilter(s.kafka, t, func(msg kafka.LimitMessage) bool {
+		message := kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.LimitMessage) bool {
 			match := msg.EventType == kafka.LimitEventCreated &&
 				msg.LimitType == kafka.LimitTypeSingleBet &&
 				msg.PlayerID == testData.registrationMessage.Player.ExternalID &&
@@ -193,7 +193,7 @@ func (s *LimitsSuite) TestLimits(t provider.T) {
 	})
 
 	t.WithNewStep("Проверка сообщения в Kafka о создании лимита на проигрыш", func(sCtx provider.StepCtx) {
-		message := kafka.FindMessageByFilter(s.kafka, t, func(msg kafka.LimitMessage) bool {
+		message := kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.LimitMessage) bool {
 			match := msg.EventType == kafka.LimitEventCreated &&
 				msg.LimitType == kafka.LimitTypeCasinoLoss &&
 				msg.IntervalType == kafka.IntervalTypeDaily &&
@@ -218,7 +218,7 @@ func (s *LimitsSuite) TestLimits(t provider.T) {
 	})
 
 	t.WithNewStep("Проверка сообщения в Kafka о создании лимита на оборот средств", func(sCtx provider.StepCtx) {
-		message := kafka.FindMessageByFilter(s.kafka, t, func(msg kafka.LimitMessage) bool {
+		message := kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.LimitMessage) bool {
 			match := msg.EventType == kafka.LimitEventCreated &&
 				msg.LimitType == kafka.LimitTypeTurnoverFunds &&
 				msg.IntervalType == kafka.IntervalTypeDaily &&
@@ -312,9 +312,9 @@ func (s *LimitsSuite) TestLimits(t provider.T) {
 
 	t.WithNewStep("Проверка сообщения в NATS о создании лимита на одиночную ставку", func(sCtx provider.StepCtx) {
 		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
-		s.natsClient.SubscribeWithDeliverAll(t, subject)
+		s.natsClient.SubscribeWithDeliverAll(subject)
 
-		singleBetEvent := nats.FindMessageByFilter(s.natsClient, t, func(msg nats.LimitChangedV2, msgType string) bool {
+		singleBetEvent := nats.FindMessageByFilter(sCtx, s.natsClient, func(msg nats.LimitChangedV2, msgType string) bool {
 			return msg.EventType == "created" &&
 				len(msg.Limits) > 0 &&
 				msg.Limits[0].LimitType == nats.LimitTypeSingleBet
@@ -328,12 +328,10 @@ func (s *LimitsSuite) TestLimits(t provider.T) {
 		sCtx.Assert().True(limit.Status, "Статус лимита на ставку установлен")
 		sCtx.Assert().Zero(limit.ExpiresAt, "Время окончания лимита на ставку не установлено для single-bet")
 		sCtx.Assert().True(utils.IsTimeInRange(limit.StartedAt, 10), "Время начала лимита на ставку входит в интервал времени")
-
-		sCtx.WithAttachments(allure.NewAttachment("Single Bet Limit NATS Event", allure.JSON, utils.CreatePrettyJSON(singleBetEvent)))
 	})
 
 	t.WithNewStep("Проверка сообщения в NATS о создании лимита на проигрыш", func(sCtx provider.StepCtx) {
-		casinoLossEvent := nats.FindMessageByFilter(s.natsClient, t, func(msg nats.LimitChangedV2, msgType string) bool {
+		casinoLossEvent := nats.FindMessageByFilter(sCtx, s.natsClient, func(msg nats.LimitChangedV2, msgType string) bool {
 			return msg.EventType == "created" &&
 				len(msg.Limits) > 0 &&
 				msg.Limits[0].LimitType == nats.LimitTypeCasinoLoss
@@ -347,12 +345,10 @@ func (s *LimitsSuite) TestLimits(t provider.T) {
 		sCtx.Assert().True(limit.Status, "Статус лимита на проигрыш установлен")
 		sCtx.Assert().NotNil(limit.ExpiresAt, "Время окончания лимита на проигрыш установлено")
 		sCtx.Assert().True(utils.IsTimeInRange(limit.StartedAt, 10), "Время начала лимита на проигрыш входит в интервал времени")
-
-		sCtx.WithAttachments(allure.NewAttachment("Casino Loss Limit NATS Event", allure.JSON, utils.CreatePrettyJSON(casinoLossEvent)))
 	})
 
 	t.WithNewStep("Проверка сообщения в NATS о создании лимита на оборот средств", func(sCtx provider.StepCtx) {
-		turnoverEvent := nats.FindMessageByFilter(s.natsClient, t, func(msg nats.LimitChangedV2, msgType string) bool {
+		turnoverEvent := nats.FindMessageByFilter(sCtx, s.natsClient, func(msg nats.LimitChangedV2, msgType string) bool {
 			return msg.EventType == "created" &&
 				len(msg.Limits) > 0 &&
 				msg.Limits[0].LimitType == nats.LimitTypeTurnoverFunds
@@ -366,8 +362,6 @@ func (s *LimitsSuite) TestLimits(t provider.T) {
 		sCtx.Assert().True(limit.Status, "Статус лимита на оборот средств установлен")
 		sCtx.Assert().NotZero(limit.ExpiresAt, "Время окончания лимита на оборот средств установлено")
 		sCtx.Assert().True(utils.IsTimeInRange(limit.StartedAt, 10), "Время начала лимита на оборот средств входит в интервал времени")
-
-		sCtx.WithAttachments(allure.NewAttachment("Turnover Limit NATS Event", allure.JSON, utils.CreatePrettyJSON(turnoverEvent)))
 	})
 }
 

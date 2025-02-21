@@ -15,10 +15,8 @@ import (
 	"CB_auto/internal/transport/kafka"
 	"CB_auto/internal/transport/nats"
 	"CB_auto/internal/transport/redis"
-	"CB_auto/pkg/utils"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
 )
@@ -43,7 +41,7 @@ func (s *SwitchWalletSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация NATS клиента.", func(sCtx provider.StepCtx) {
-		s.natsClient = nats.NewClient(t, &s.config.Nats)
+		s.natsClient = nats.NewClient(&s.config.Nats)
 	})
 
 	t.WithNewStep("Инициализация Redis клиента.", func(sCtx provider.StepCtx) {
@@ -97,7 +95,7 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 	})
 
 	t.WithNewStep("Получение сообщения о регистрации из топика player.v1.account.", func(sCtx provider.StepCtx) {
-		message := kafka.FindMessageByFilter(s.kafka, t, func(msg kafka.PlayerMessage) bool {
+		message := kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
 			return msg.Message.EventType == "player.signUpFast" &&
 				msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
@@ -123,17 +121,14 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 
 	t.WithNewStep("Получение сообщения о создании основного кошелька в NATS.", func(sCtx provider.StepCtx) {
 		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.playerRegistrationMessage.Player.ExternalID)
-		s.natsClient.Subscribe(t, subject)
+		s.natsClient.SubscribeWithDeliverAll(subject)
 
 		testData.mainWalletCreatedEvent = nats.FindMessageByFilter(
-			s.natsClient, t, func(wallet nats.WalletCreatedPayload, msgType string) bool {
+			sCtx, s.natsClient, func(wallet nats.WalletCreatedPayload, msgType string) bool {
 				return wallet.WalletType == nats.TypeReal &&
 					wallet.WalletStatus == nats.StatusEnabled &&
 					wallet.IsBasic
-			},
-		)
-
-		sCtx.WithAttachments(allure.NewAttachment("NATS Wallet Message", allure.JSON, utils.CreatePrettyJSON(testData.mainWalletCreatedEvent.Payload)))
+			})
 	})
 
 	t.WithNewStep("Создание дополнительного кошелька.", func(sCtx provider.StepCtx) {
@@ -154,18 +149,15 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 
 	t.WithNewStep("Получение сообщения о создании дополнительного кошелька в NATS.", func(sCtx provider.StepCtx) {
 		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.playerRegistrationMessage.Player.ExternalID)
-		s.natsClient.Subscribe(t, subject)
+		s.natsClient.SubscribeWithDeliverAll(subject)
 
 		testData.additionalWalletCreatedEvent = nats.FindMessageByFilter(
-			s.natsClient, t, func(wallet nats.WalletCreatedPayload, msgType string) bool {
+			sCtx, s.natsClient, func(wallet nats.WalletCreatedPayload, msgType string) bool {
 				return wallet.WalletType == nats.TypeReal &&
 					wallet.WalletStatus == nats.StatusEnabled &&
 					wallet.Currency == "USD" &&
 					!wallet.IsBasic
-			},
-		)
-
-		sCtx.WithAttachments(allure.NewAttachment("NATS Wallet Message", allure.JSON, utils.CreatePrettyJSON(testData.additionalWalletCreatedEvent.Payload)))
+			})
 	})
 
 	t.WithNewStep("Переключение дефолтного кошелька.", func(sCtx provider.StepCtx) {
@@ -189,35 +181,28 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 			s.config.Nats.StreamPrefix,
 			testData.playerRegistrationMessage.Player.ExternalID,
 		)
-		s.natsClient.Subscribe(t, playerSubject)
+		s.natsClient.SubscribeWithDeliverAll(playerSubject)
 
 		testData.setDefaultStartedEvent = nats.FindMessageByFilter(
-			s.natsClient, t, func(msg nats.SetDefaultStartedPayload, msgType string) bool {
+			sCtx, s.natsClient, func(msg nats.SetDefaultStartedPayload, msgType string) bool {
 				return msgType == "set_default_started"
-			},
-		)
+			})
 
 		testData.defaultUnsettedEvent = nats.FindMessageByFilter(
-			s.natsClient, t, func(msg nats.DefaultUnsettedPayload, msgType string) bool {
+			sCtx, s.natsClient, func(msg nats.DefaultUnsettedPayload, msgType string) bool {
 				return msgType == "default_unsetted"
-			},
-		)
+			})
 
 		testData.setDefaultCommittedEvent = nats.FindMessageByFilter(
-			s.natsClient, t, func(msg nats.DefaultSettedPayload, msgType string) bool {
+			sCtx, s.natsClient, func(msg nats.DefaultSettedPayload, msgType string) bool {
 				return msgType == "set_default_committed"
-			},
-		)
+			})
 
 		sCtx.Assert().Less(testData.setDefaultStartedEvent.Seq, testData.defaultUnsettedEvent.Seq, "set_default_started произошло раньше default_unsetted")
 		sCtx.Assert().Less(testData.defaultUnsettedEvent.Seq, testData.setDefaultCommittedEvent.Seq, "default_unsetted произошло раньше set_default_committed")
 		sCtx.Assert().Equal("set_default_started", testData.setDefaultStartedEvent.Type, "Тип события set_default_started")
 		sCtx.Assert().Equal("default_unsetted", testData.defaultUnsettedEvent.Type, "Тип события default_unsetted")
 		sCtx.Assert().Equal("set_default_committed", testData.setDefaultCommittedEvent.Type, "Тип события set_default_committed")
-
-		sCtx.WithAttachments(allure.NewAttachment("SetDefaultStarted Event", allure.JSON, utils.CreatePrettyJSON(testData.setDefaultStartedEvent)))
-		sCtx.WithAttachments(allure.NewAttachment("DefaultUnsetted Event", allure.JSON, utils.CreatePrettyJSON(testData.defaultUnsettedEvent)))
-		sCtx.WithAttachments(allure.NewAttachment("SetDefaultCommitted Event", allure.JSON, utils.CreatePrettyJSON(testData.setDefaultCommittedEvent)))
 	})
 
 	t.WithNewAsyncStep("Смены дефолтного кошелька в БД.", func(sCtx provider.StepCtx) {

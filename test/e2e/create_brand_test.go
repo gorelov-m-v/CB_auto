@@ -116,9 +116,9 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 			},
 		}
 
-		deleteResp := s.capService.DeleteCapBrand(sCtx, req)
+		resp := s.capService.DeleteCapBrand(sCtx, req)
 
-		sCtx.Assert().Equal(http.StatusNoContent, deleteResp.StatusCode, "Статус ответа при удалении бренда в CAP соответствует ожидаемому")
+		sCtx.Assert().Equal(http.StatusNoContent, resp.StatusCode, "Статус ответа при удалении бренда в CAP соответствует ожидаемому")
 	})
 }
 

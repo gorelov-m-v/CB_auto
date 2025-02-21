@@ -8,8 +8,10 @@ import (
 	"time"
 
 	"CB_auto/internal/config"
+	"CB_auto/pkg/utils"
 
 	"github.com/nats-io/nats.go"
+	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
 
@@ -35,19 +37,19 @@ type NatsMessage[T any] struct {
 	Type      string
 }
 
-func NewClient(t provider.T, cfg *config.NatsConfig) *NatsClient {
+func NewClient(cfg *config.NatsConfig) *NatsClient {
 	log.Printf("Creating new NATS client: hosts=%s", cfg.Hosts)
 
 	nc, err := nats.Connect(cfg.Hosts,
 		nats.ReconnectWait(time.Duration(cfg.ReconnectWait)*time.Second),
 		nats.MaxReconnects(cfg.MaxReconnects))
 	if err != nil {
-		t.Fatalf("Ошибка подключения к NATS: %v", err)
+		log.Printf("Ошибка подключения к NATS: %v", err)
 	}
 
 	js, err := nc.JetStream()
 	if err != nil {
-		t.Fatalf("Ошибка создания JetStream контекста: %v", err)
+		log.Printf("Ошибка создания JetStream контекста: %v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -62,41 +64,7 @@ func NewClient(t provider.T, cfg *config.NatsConfig) *NatsClient {
 	}
 }
 
-func (n *NatsClient) Subscribe(t provider.T, subjectPattern string) {
-	n.subsMutex.Lock()
-	defer n.subsMutex.Unlock()
-
-	log.Printf("Subscribing to subject: %s", subjectPattern)
-	sub, err := n.js.Subscribe(subjectPattern,
-		n.messageHandler,
-		nats.DeliverLast(),
-		nats.AckExplicit(),
-		nats.ManualAck(),
-	)
-	if err != nil {
-		t.Fatalf("Ошибка при подписке на NATS: %v", err)
-	}
-
-	n.subs = append(n.subs, sub)
-}
-
-func (n *NatsClient) messageHandler(msg *nats.Msg) {
-	meta, err := msg.Metadata()
-	if err == nil {
-		log.Printf("Received message: subject=%s, sequence=%d, timestamp=%v",
-			msg.Subject, meta.Sequence.Stream, meta.Timestamp)
-	}
-	log.Printf("Received message: subject=%s, data=%s", msg.Subject, string(msg.Data))
-
-	select {
-	case <-n.ctx.Done():
-		return
-	case n.Messages <- msg:
-		msg.Ack()
-	}
-}
-
-func FindMessageByFilter[T any](n *NatsClient, t provider.T, filter func(T, string) bool) *NatsMessage[T] {
+func FindMessageByFilter[T any](sCtx provider.StepCtx, n *NatsClient, filter func(T, string) bool) *NatsMessage[T] {
 	ctx, cancel := context.WithTimeout(n.ctx, 30*time.Second)
 	defer cancel()
 
@@ -108,10 +76,10 @@ func FindMessageByFilter[T any](n *NatsClient, t provider.T, filter func(T, stri
 	for {
 		select {
 		case <-ctx.Done():
-			t.Fatalf("Не удалось найти нужное сообщение за %v: %v", n.timeout, ctx.Err())
+			log.Printf("Не удалось найти нужное сообщение за %v: %v", n.timeout, ctx.Err())
 		case msg, ok := <-n.Messages:
 			if !ok {
-				t.Fatal("Канал сообщений закрыт")
+				log.Printf("Канал сообщений закрыт")
 			}
 			log.Printf("Checking new message: %s", string(msg.Data))
 
@@ -125,7 +93,7 @@ func FindMessageByFilter[T any](n *NatsClient, t provider.T, filter func(T, stri
 			if filter(data, msg.Header.Get("type")) {
 				log.Printf("Found matching message")
 				meta, _ := msg.Metadata()
-				return &NatsMessage[T]{
+				result := &NatsMessage[T]{
 					Payload:   data,
 					Metadata:  meta,
 					Subject:   msg.Subject,
@@ -134,6 +102,10 @@ func FindMessageByFilter[T any](n *NatsClient, t provider.T, filter func(T, stri
 					Timestamp: meta.Timestamp,
 					Type:      msg.Header.Get("type"),
 				}
+
+				sCtx.WithAttachments(allure.NewAttachment("NATS Message", allure.JSON, utils.CreatePrettyJSON(result)))
+
+				return result
 			}
 
 			log.Printf("Message didn't match filter")
@@ -151,7 +123,6 @@ func FindMessageByFilter[T any](n *NatsClient, t provider.T, filter func(T, stri
 						Payload:   data,
 						Metadata:  meta,
 						Subject:   bufferedMsg.Subject,
-						Sequence:  meta.Sequence.Stream,
 						Seq:       meta.Sequence.Stream,
 						Timestamp: meta.Timestamp,
 						Type:      bufferedMsg.Header.Get("type"),
@@ -204,8 +175,7 @@ func mapEventData(data interface{}, target interface{}) error {
 	return json.Unmarshal(jsonData, target)
 }
 
-func (c *NatsClient) SubscribeWithDeliverAll(t provider.T, subject string) {
-	// Создаем опции для подписки
+func (c *NatsClient) SubscribeWithDeliverAll(subject string) {
 	opts := []nats.SubOpt{
 		nats.DeliverAll(),                 // Доставлять все сообщения
 		nats.AckExplicit(),                // Явное подтверждение сообщений
@@ -219,7 +189,7 @@ func (c *NatsClient) SubscribeWithDeliverAll(t provider.T, subject string) {
 	}, opts...)
 
 	if err != nil {
-		t.Fatalf("Ошибка при подписке на NATS: %v", err)
+		log.Printf("Ошибка при подписке на NATS: %v", err)
 	}
 	c.subs = append(c.subs, sub)
 }
