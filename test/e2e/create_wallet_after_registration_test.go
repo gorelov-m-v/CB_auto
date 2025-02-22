@@ -29,6 +29,7 @@ type FastRegistrationSuite struct {
 	redisClient   *redis.RedisClient
 	kafka         *kafka.Kafka
 	walletDB      *repository.Connector
+	walletRepo    *wallet.Repository
 }
 
 func (s *FastRegistrationSuite) BeforeAll(t provider.T) {
@@ -56,6 +57,7 @@ func (s *FastRegistrationSuite) BeforeAll(t provider.T) {
 	t.WithNewStep("Соединение с базой данных wallet.", func(sCtx provider.StepCtx) {
 		connector := repository.OpenConnector(t, &s.config.MySQL, repository.Wallet)
 		s.walletDB = &connector
+		s.walletRepo = wallet.NewRepository(s.walletDB.DB(), &s.config.MySQL)
 	})
 }
 
@@ -157,8 +159,7 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 	})
 
 	t.WithNewAsyncStep("Проверка создания кошелька в БД.", func(sCtx provider.StepCtx) {
-		walletRepo := wallet.NewRepository(s.walletDB.DB(), &s.config.MySQL)
-		walletFromDatabase := walletRepo.GetWallet(sCtx, map[string]interface{}{"uuid": testData.walletCreatedEvent.Payload.WalletUUID})
+		walletFromDatabase := s.walletRepo.GetWallet(sCtx, map[string]interface{}{"uuid": testData.walletCreatedEvent.Payload.WalletUUID})
 
 		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.WalletUUID, walletFromDatabase.UUID, "UUID кошелька в БД совпадает с UUID из ивента `wallet_created`")
 		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.PlayerUUID, walletFromDatabase.PlayerUUID, "UUID игрока в БД совпадает с UUID из ивента `wallet_created`")
