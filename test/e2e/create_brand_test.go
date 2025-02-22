@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	capAPI "CB_auto/internal/client/cap"
 	"CB_auto/internal/client/cap/models"
@@ -64,7 +65,7 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 	}
 
 	t.WithNewStep("Создание бренда в CAP.", func(sCtx provider.StepCtx) {
-		brandName := utils.GenerateAlias()
+		brandName := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
 		names := map[string]string{
 			"en": brandName,
 		}
@@ -79,15 +80,21 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 				Sort:        1,
 				Alias:       brandName,
 				Names:       names,
-				Description: utils.GenerateAlias(),
+				Description: fmt.Sprintf("Test brand description %s", utils.GenerateAlias()),
 			},
 		}
 
 		createResp := s.capService.CreateCapBrand(testData.createRequest)
+		sCtx.Assert().Equal(http.StatusOK, createResp.StatusCode,
+			"Статус ответа при создании бренда должен быть 200 OK")
 		testData.createCapBrandResponse = &createResp.Body
 
 		sCtx.WithAttachments(allure.NewAttachment("CreateBrand Request", allure.JSON, utils.CreateHttpAttachRequest(testData.createRequest)))
 		sCtx.WithAttachments(allure.NewAttachment("CreateBrand Response", allure.JSON, utils.CreateHttpAttachResponse(createResp)))
+	})
+
+	t.WithNewStep("Ожидание создания бренда в БД", func(sCtx provider.StepCtx) {
+		time.Sleep(2 * time.Second)
 	})
 
 	t.WithNewStep("Получение бренда из БД по универсальным фильтрам.", func(sCtx provider.StepCtx) {

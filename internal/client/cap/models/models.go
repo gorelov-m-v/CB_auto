@@ -58,3 +58,18 @@ type GetBlockersResponseBody struct {
 	GamblingEnabled bool `json:"gamblingEnabled"`
 	BettingEnabled  bool `json:"bettingEnabled"`
 }
+
+type UpdateBrandStatusRequestBody struct {
+	Status int `json:"status"`
+}
+
+type UpdateCapBrandRequestBody struct {
+	Sort        int               `json:"sort"`
+	Alias       string            `json:"alias"`
+	Names       map[string]string `json:"names"`
+	Description string            `json:"description"`
+}
+
+type UpdateCapBrandResponseBody struct {
+	ID string `json:"id"`
+}
