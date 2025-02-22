@@ -88,7 +88,7 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 		filters := map[string]interface{}{
 			"uuid": testData.createCapBrandResponse.Body.ID,
 		}
-		brandData := brandRepo.GetBrand(t, filters)
+		brandData := brandRepo.GetBrand(sCtx, filters)
 
 		var dbNames map[string]string
 		if err := json.Unmarshal(brandData.LocalizedNames, &dbNames); err != nil {

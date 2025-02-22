@@ -2,9 +2,8 @@ package test
 
 import (
 	"fmt"
-	"math/rand"
+	"net/http"
 	"testing"
-	"time"
 
 	capAPI "CB_auto/internal/client/cap"
 	"CB_auto/internal/client/cap/models"
@@ -63,11 +62,6 @@ func (s *DeleteBrandSuite) BeforeAll(t provider.T) {
 	})
 }
 
-func generateUniqueName() string {
-	rand.Seed(time.Now().UnixNano())
-	return fmt.Sprintf("test_brand_%d", rand.Int())
-}
-
 func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 	t.Epic("Brands.")
 	t.Feature("Удаление бренда.")
@@ -77,47 +71,39 @@ func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 	brandRepo := brand.NewRepository(s.database.DB(), &s.config.MySQL)
 
 	var testData struct {
-		createResponse *models.CreateCapBrandResponseBody
-		brandAlias     string
-		deletedMessage *BrandDeletedMessage
+		createCapBrandRequest *clientTypes.Request[models.CreateCapBrandRequestBody]
+		createBrandResponse   *clientTypes.Response[models.CreateCapBrandResponseBody]
+		deletedMessage        *BrandDeletedMessage
 	}
 
 	t.WithNewStep("Создание бренда.", func(sCtx provider.StepCtx) {
-		uniqueAlias := generateUniqueName()
-		testData.brandAlias = uniqueAlias
-		createReq := &clientTypes.Request[models.CreateCapBrandRequestBody]{
+		testData.createCapBrandRequest = &clientTypes.Request[models.CreateCapBrandRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
 				"Platform-NodeID": s.config.Node.ProjectID,
 			},
 			Body: &models.CreateCapBrandRequestBody{
 				Sort:  1,
-				Alias: uniqueAlias,
+				Alias: utils.GenerateAlias(),
 				Names: map[string]string{
-					"en": uniqueAlias,
-					"ru": uniqueAlias,
+					"en": utils.GenerateAlias(),
+					"ru": utils.GenerateAlias(),
 				},
 				Description: "Test brand description",
 			},
 		}
-		createResp := s.capService.CreateCapBrand(sCtx, createReq)
-		testData.createResponse = &createResp.Body
+		testData.createBrandResponse = s.capService.CreateCapBrand(sCtx, testData.createCapBrandRequest)
 
-		sCtx.Assert().NotEmpty(createResp.Body.ID, "ID созданного бренда не пустой")
-
-		sCtx.WithAttachments(allure.NewAttachment("Create Request", allure.JSON, utils.CreateHttpAttachRequest(createReq)))
-		sCtx.WithAttachments(allure.NewAttachment("Create Response", allure.JSON, utils.CreateHttpAttachResponse(createResp)))
+		sCtx.Assert().NotEmpty(testData.createBrandResponse.Body.ID, "ID созданного бренда не пустой")
 	})
 
 	t.WithNewAsyncStep("Проверка наличия бренда в БД.", func(sCtx provider.StepCtx) {
-		brandFromDB := brandRepo.GetBrand(t, map[string]interface{}{
-			"uuid": testData.createResponse.ID,
+		brandFromDB := brandRepo.GetBrand(sCtx, map[string]interface{}{
+			"uuid": testData.createBrandResponse.Body.ID,
 		})
 
 		sCtx.Assert().NotNil(brandFromDB, "Бренд найден в БД")
-		sCtx.Assert().Equal(testData.brandAlias, brandFromDB.Alias, "Алиас бренда совпадает")
-
-		sCtx.WithAttachments(allure.NewAttachment("Brand DB Data", allure.JSON, utils.CreatePrettyJSON(brandFromDB)))
+		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Alias, brandFromDB.Alias, "Алиас бренда совпадает")
 	})
 
 	t.WithNewStep("Удаление бренда.", func(sCtx provider.StepCtx) {
@@ -126,27 +112,25 @@ func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 				"Authorization": fmt.Sprintf("Bearer %s", s.capService.GetToken()),
 			},
 			PathParams: map[string]string{
-				"id": testData.createResponse.ID,
+				"id": testData.createBrandResponse.Body.ID,
 			},
 		}
 		deleteResp := s.capService.DeleteCapBrand(sCtx, deleteReq)
 
-		sCtx.Assert().Equal(204, deleteResp.StatusCode, "Статус код ответа равен 204")
+		sCtx.Assert().Equal(http.StatusNoContent, deleteResp.StatusCode, "Статус код ответа равен 204")
 
 		sCtx.WithAttachments(allure.NewAttachment("Delete Request", allure.JSON, utils.CreateHttpAttachRequest(deleteReq)))
 		sCtx.WithAttachments(allure.NewAttachment("Delete Response", allure.JSON, utils.CreateHttpAttachResponse(deleteResp)))
 	})
 
 	t.WithNewAsyncStep("Проверка удаления бренда в БД.", func(sCtx provider.StepCtx) {
-		brandFromDB := brandRepo.GetBrand(t, map[string]interface{}{
-			"uuid":   testData.createResponse.ID,
+		brandFromDB := brandRepo.GetBrand(sCtx, map[string]interface{}{
+			"uuid":   testData.createBrandResponse.Body.ID,
 			"status": BrandStatusDeleted,
 		})
 
 		sCtx.Assert().NotNil(brandFromDB, "Бренд найден в БД")
 		sCtx.Assert().Equal(BrandStatusDeleted, brandFromDB.Status, "Статус бренда - удален")
-
-		sCtx.WithAttachments(allure.NewAttachment("Brand DB Data", allure.JSON, utils.CreatePrettyJSON(brandFromDB)))
 	})
 }
 
