@@ -29,6 +29,7 @@ type SwitchWalletSuite struct {
 	redisClient   *redis.RedisClient
 	kafka         *kafka.Kafka
 	walletDB      *repository.Connector
+	walletRepo    *wallet.Repository
 }
 
 func (s *SwitchWalletSuite) BeforeAll(t provider.T) {
@@ -56,6 +57,7 @@ func (s *SwitchWalletSuite) BeforeAll(t provider.T) {
 	t.WithNewStep("Соединение с базой данных wallet.", func(sCtx provider.StepCtx) {
 		connector := repository.OpenConnector(t, &s.config.MySQL, repository.Wallet)
 		s.walletDB = &connector
+		s.walletRepo = wallet.NewRepository(s.walletDB.DB(), &s.config.MySQL)
 	})
 }
 

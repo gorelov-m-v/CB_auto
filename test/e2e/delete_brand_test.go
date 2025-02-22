@@ -26,16 +26,7 @@ type DeleteBrandSuite struct {
 	database   *repository.Connector
 	capService capAPI.CapAPI
 	kafka      *kafka.Kafka
-}
-
-type BrandDeletedMessage struct {
-	Message struct {
-		EventType string `json:"eventType"`
-	} `json:"message"`
-	Brand struct {
-		UUID      string `json:"uuid"`
-		DeletedAt int64  `json:"deleted_at"`
-	} `json:"brand"`
+	brandRepo  *brand.Repository
 }
 
 const (
@@ -54,6 +45,7 @@ func (s *DeleteBrandSuite) BeforeAll(t provider.T) {
 	t.WithNewStep("Соединение с базой данных.", func(sCtx provider.StepCtx) {
 		connector := repository.OpenConnector(t, &s.config.MySQL, repository.Core)
 		s.database = &connector
+		s.brandRepo = brand.NewRepository(s.database.DB(), &s.config.MySQL)
 	})
 
 	t.WithNewStep("Инициализация Kafka consumer.", func(sCtx provider.StepCtx) {
@@ -68,12 +60,9 @@ func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 	t.Tags("CAP", "Brands", "Platform")
 	t.Title("Проверка удаления бренда.")
 
-	brandRepo := brand.NewRepository(s.database.DB(), &s.config.MySQL)
-
 	var testData struct {
 		createCapBrandRequest *clientTypes.Request[models.CreateCapBrandRequestBody]
 		createBrandResponse   *clientTypes.Response[models.CreateCapBrandResponseBody]
-		deletedMessage        *BrandDeletedMessage
 	}
 
 	t.WithNewStep("Создание бренда.", func(sCtx provider.StepCtx) {
@@ -98,7 +87,7 @@ func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 	})
 
 	t.WithNewAsyncStep("Проверка наличия бренда в БД.", func(sCtx provider.StepCtx) {
-		brandFromDB := brandRepo.GetBrand(sCtx, map[string]interface{}{
+		brandFromDB := s.brandRepo.GetBrand(sCtx, map[string]interface{}{
 			"uuid": testData.createBrandResponse.Body.ID,
 		})
 
@@ -124,7 +113,7 @@ func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 	})
 
 	t.WithNewAsyncStep("Проверка удаления бренда в БД.", func(sCtx provider.StepCtx) {
-		brandFromDB := brandRepo.GetBrand(sCtx, map[string]interface{}{
+		brandFromDB := s.brandRepo.GetBrand(sCtx, map[string]interface{}{
 			"uuid":   testData.createBrandResponse.Body.ID,
 			"status": BrandStatusDeleted,
 		})

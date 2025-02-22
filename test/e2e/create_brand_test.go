@@ -27,6 +27,7 @@ type CreateBrandSuite struct {
 	database   *repository.Connector
 	capService capAPI.CapAPI
 	kafka      *kafka.Kafka
+	brandRepo  *brand.Repository
 }
 
 func (s *CreateBrandSuite) BeforeAll(t provider.T) {
@@ -41,6 +42,7 @@ func (s *CreateBrandSuite) BeforeAll(t provider.T) {
 	t.WithNewStep("Соединение с базой данных.", func(sCtx provider.StepCtx) {
 		connector := repository.OpenConnector(t, &s.config.MySQL, repository.Core)
 		s.database = &connector
+		s.brandRepo = brand.NewRepository(s.database.DB(), &s.config.MySQL)
 	})
 
 	t.WithNewStep("Инициализация Kafka consumer.", func(sCtx provider.StepCtx) {
@@ -54,8 +56,6 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 	t.Feature("Получение бренда по фильтрам.")
 	t.Tags("CAP", "Brands", "Platform")
 	t.Title("Проверка получения бренда из БД по универсальным фильтрам.")
-
-	brandRepo := brand.NewRepository(s.database.DB(), &s.config.MySQL)
 
 	var testData struct {
 		createCapBrandRequest  *clientTypes.Request[models.CreateCapBrandRequestBody]
@@ -88,7 +88,7 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 		filters := map[string]interface{}{
 			"uuid": testData.createCapBrandResponse.Body.ID,
 		}
-		brandData := brandRepo.GetBrand(sCtx, filters)
+		brandData := s.brandRepo.GetBrand(sCtx, filters)
 
 		var dbNames map[string]string
 		if err := json.Unmarshal(brandData.LocalizedNames, &dbNames); err != nil {

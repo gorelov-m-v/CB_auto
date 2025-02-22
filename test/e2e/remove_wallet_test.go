@@ -29,6 +29,7 @@ type RemoveWalletSuite struct {
 	redisClient   *redis.RedisClient
 	kafka         *kafka.Kafka
 	walletDB      *repository.Connector
+	walletRepo    *wallet.Repository
 }
 
 func (s *RemoveWalletSuite) BeforeAll(t provider.T) {
@@ -56,6 +57,7 @@ func (s *RemoveWalletSuite) BeforeAll(t provider.T) {
 	t.WithNewStep("Соединение с базой данных wallet.", func(sCtx provider.StepCtx) {
 		connector := repository.OpenConnector(t, &s.config.MySQL, repository.Wallet)
 		s.walletDB = &connector
+		s.walletRepo = wallet.NewRepository(s.walletDB.DB(), &s.config.MySQL)
 	})
 }
 
@@ -217,8 +219,7 @@ func (s *RemoveWalletSuite) TestRemoveWallet(t provider.T) {
 	})
 
 	t.WithNewAsyncStep("Проверка отключения кошелька в БД.", func(sCtx provider.StepCtx) {
-		walletRepo := wallet.NewRepository(s.walletDB.DB(), &s.config.MySQL)
-		walletFromDatabase := walletRepo.GetWallet(sCtx, map[string]interface{}{
+		walletFromDatabase := s.walletRepo.GetWallet(sCtx, map[string]interface{}{
 			"uuid":          testData.additionalWalletCreatedEvent.Payload.WalletUUID,
 			"wallet_status": int(nats.StatusDisabled),
 		})

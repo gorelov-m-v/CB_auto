@@ -30,6 +30,7 @@ type UpdateBlockersSuite struct {
 	natsClient    *nats.NatsClient
 	kafka         *kafka.Kafka
 	walletDB      *repository.Connector
+	walletRepo    *wallet.Repository
 }
 
 func (s *UpdateBlockersSuite) BeforeAll(t provider.T) {
@@ -54,6 +55,7 @@ func (s *UpdateBlockersSuite) BeforeAll(t provider.T) {
 	t.WithNewStep("Соединение с базой данных wallet.", func(sCtx provider.StepCtx) {
 		connector := repository.OpenConnector(t, &s.config.MySQL, repository.Wallet)
 		s.walletDB = &connector
+		s.walletRepo = wallet.NewRepository(s.walletDB.DB(), &s.config.MySQL)
 	})
 }
 
@@ -149,8 +151,7 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 	})
 
 	t.WithNewAsyncStep("Проверка блокировок в БД.", func(sCtx provider.StepCtx) {
-		walletRepo := wallet.NewRepository(s.walletDB.DB(), &s.config.MySQL)
-		walletFromDatabase := walletRepo.GetWallet(sCtx, map[string]interface{}{
+		walletFromDatabase := s.walletRepo.GetWallet(sCtx, map[string]interface{}{
 			"player_uuid": testData.playerRegistrationMessage.Player.ExternalID,
 		})
 
