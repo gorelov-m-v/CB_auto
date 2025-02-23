@@ -49,8 +49,7 @@ func (s *DeleteBrandSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация Kafka consumer.", func(sCtx provider.StepCtx) {
-		s.kafka = kafka.NewConsumer(t, s.config, kafka.BrandTopic)
-		s.kafka.StartReading(t)
+		s.kafka = kafka.GetInstance(t, s.config, kafka.BrandTopic)
 	})
 }
 
@@ -124,9 +123,7 @@ func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 }
 
 func (s *DeleteBrandSuite) AfterAll(t provider.T) {
-	if s.kafka != nil {
-		s.kafka.Close(t)
-	}
+	kafka.CloseInstance(t)
 	if s.database != nil {
 		if err := s.database.Close(); err != nil {
 			t.Errorf("Ошибка при закрытии соединения с базой данных: %v", err)

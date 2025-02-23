@@ -71,7 +71,7 @@ func FindMessageByFilter[T any](sCtx provider.StepCtx, n *NatsClient, filter fun
 	msgBuffer := make([]*nats.Msg, 0)
 	log.Printf("Starting to look for message with timeout %v", n.timeout)
 
-	maxAttempts := 5
+	maxAttempts := 20
 	attempt := 1
 	for {
 		select {
@@ -132,9 +132,9 @@ func FindMessageByFilter[T any](sCtx provider.StepCtx, n *NatsClient, filter fun
 			if attempt < maxAttempts {
 				log.Printf("No matching message found, attempt %d/%d", attempt, maxAttempts)
 				attempt++
-				time.Sleep(500 * time.Millisecond)
+				time.Sleep(1 * time.Second)
 			} else {
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(1 * time.Second)
 			}
 		}
 	}
@@ -177,11 +177,11 @@ func mapEventData(data interface{}, target interface{}) error {
 
 func (c *NatsClient) SubscribeWithDeliverAll(subject string) {
 	opts := []nats.SubOpt{
-		nats.DeliverAll(),                 // Доставлять все сообщения
-		nats.AckExplicit(),                // Явное подтверждение сообщений
-		nats.ReplayInstant(),              // Мгновенное воспроизведение
-		nats.StartSequence(1),             // Начинаем с первого сообщения
-		nats.BindStream("beta-09_wallet"), // Привязываемся к стриму
+		nats.DeliverAll(),
+		nats.AckExplicit(),
+		nats.ReplayInstant(),
+		nats.StartSequence(1),
+		nats.BindStream("beta-09_wallet"),
 	}
 
 	sub, err := c.js.Subscribe(subject, func(msg *nats.Msg) {
@@ -192,4 +192,82 @@ func (c *NatsClient) SubscribeWithDeliverAll(subject string) {
 		log.Printf("Ошибка при подписке на NATS: %v", err)
 	}
 	c.subs = append(c.subs, sub)
+}
+
+func FindMessageInStream[T any](sCtx provider.StepCtx, n *NatsClient, subject string, filter func(T, string) bool) *NatsMessage[T] {
+	maxAttempts := 10
+	attempt := 1
+
+	log.Printf("Starting to look for message in stream with subject %s", subject)
+
+	for attempt <= maxAttempts {
+		n.SubscribeWithDeliverAll(subject)
+
+		ctx, cancel := context.WithTimeout(n.ctx, 1*time.Second)
+
+		msgBuffer := make([]*nats.Msg, 0)
+
+	searchLoop:
+		for {
+			select {
+			case <-ctx.Done():
+				log.Printf("Timeout reached for attempt %d/%d", attempt, maxAttempts)
+				break searchLoop
+			case msg, ok := <-n.Messages:
+				if !ok {
+					log.Printf("Messages channel closed")
+					break searchLoop
+				}
+
+				var data T
+				if err := json.Unmarshal(msg.Data, &data); err != nil {
+					log.Printf("Failed to unmarshal message: %v", err)
+					msgBuffer = append(msgBuffer, msg)
+					continue
+				}
+
+				if filter(data, msg.Header.Get("type")) {
+					log.Printf("Found matching message on attempt %d", attempt)
+					meta, _ := msg.Metadata()
+					result := &NatsMessage[T]{
+						Payload:   data,
+						Metadata:  meta,
+						Subject:   msg.Subject,
+						Sequence:  meta.Sequence.Stream,
+						Seq:       meta.Sequence.Stream,
+						Timestamp: meta.Timestamp,
+						Type:      msg.Header.Get("type"),
+					}
+
+					sCtx.WithAttachments(allure.NewAttachment("NATS Message", allure.JSON, utils.CreatePrettyJSON(result)))
+					cancel()
+					return result
+				}
+
+				msgBuffer = append(msgBuffer, msg)
+			}
+		}
+
+		cancel()
+
+		n.subsMutex.Lock()
+		for _, sub := range n.subs {
+			if err := sub.Unsubscribe(); err != nil {
+				log.Printf("Error unsubscribing: %v", err)
+			}
+		}
+		n.subs = nil
+		n.subsMutex.Unlock()
+
+		log.Printf("Message not found on attempt %d/%d, retrying...", attempt, maxAttempts)
+		attempt++
+
+		if attempt <= maxAttempts {
+			time.Sleep(1 * time.Second)
+		}
+	}
+
+	log.Printf("Message not found after %d attempts", maxAttempts)
+	sCtx.Errorf("Message not found in stream after %d attempts", maxAttempts)
+	return nil
 }

@@ -46,8 +46,7 @@ func (s *CreateBrandSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация Kafka consumer.", func(sCtx provider.StepCtx) {
-		s.kafka = kafka.NewConsumer(t, s.config, kafka.BrandTopic)
-		s.kafka.StartReading(t)
+		s.kafka = kafka.GetInstance(t, s.config, kafka.BrandTopic)
 	})
 }
 
@@ -124,9 +123,7 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 
 func (s *CreateBrandSuite) AfterAll(t provider.T) {
 	t.WithNewStep("Закрытие соединения с Kafka.", func(sCtx provider.StepCtx) {
-		if s.kafka != nil {
-			s.kafka.Close(t)
-		}
+		kafka.CloseInstance(t)
 	})
 
 	t.WithNewStep("Закрытие соединения с базой данных.", func(sCtx provider.StepCtx) {

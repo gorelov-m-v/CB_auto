@@ -50,8 +50,7 @@ func (s *RemoveWalletSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация Kafka.", func(sCtx provider.StepCtx) {
-		s.kafka = kafka.NewConsumer(t, s.config, kafka.PlayerTopic)
-		s.kafka.StartReading(t)
+		s.kafka = kafka.GetInstance(t, s.config, kafka.PlayerTopic)
 	})
 
 	t.WithNewStep("Соединение с базой данных wallet.", func(sCtx provider.StepCtx) {
@@ -71,7 +70,7 @@ func (s *RemoveWalletSuite) TestRemoveWallet(t provider.T) {
 		registrationResponse         *clientTypes.Response[models.FastRegistrationResponseBody]
 		authResponse                 *clientTypes.Response[models.TokenCheckResponseBody]
 		createWalletResponse         *clientTypes.Response[models.CreateWalletResponseBody]
-		playerRegistrationMessage    *kafka.PlayerMessage
+		registrationMessage          kafka.PlayerMessage
 		additionalWalletCreatedEvent *nats.NatsMessage[nats.WalletCreatedPayload]
 		walletDisabledEvent          *nats.NatsMessage[nats.WalletDisabledPayload]
 	}
@@ -94,11 +93,11 @@ func (s *RemoveWalletSuite) TestRemoveWallet(t provider.T) {
 	})
 
 	t.WithNewStep("Получение сообщения о регистрации игрока из Kafka.", func(sCtx provider.StepCtx) {
-		message := kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
+		testData.registrationMessage = kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
 			return msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
-		playerRegistrationMessage := kafka.ParseMessage[kafka.PlayerMessage](sCtx, message)
-		testData.playerRegistrationMessage = &playerRegistrationMessage
+
+		sCtx.Require().NotEmpty(testData.registrationMessage.Player.ExternalID, "External ID игрока в регистрации не пустой")
 	})
 
 	t.WithNewStep("Получение токена авторизации.", func(sCtx provider.StepCtx) {
@@ -134,7 +133,7 @@ func (s *RemoveWalletSuite) TestRemoveWallet(t provider.T) {
 	})
 
 	t.WithNewStep("Получение сообщения о создании дополнительного кошелька из NATS.", func(sCtx provider.StepCtx) {
-		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.playerRegistrationMessage.Player.ExternalID)
+		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
 		s.natsClient.SubscribeWithDeliverAll(subject)
 
 		testData.additionalWalletCreatedEvent = nats.FindMessageByFilter(
@@ -146,7 +145,7 @@ func (s *RemoveWalletSuite) TestRemoveWallet(t provider.T) {
 			})
 
 		sCtx.Assert().NotEmpty(testData.additionalWalletCreatedEvent.Payload.WalletUUID, "UUID кошелька в ивенте `wallet_created` не пустой")
-		sCtx.Assert().Equal(testData.playerRegistrationMessage.Player.ExternalID, testData.additionalWalletCreatedEvent.Payload.PlayerUUID, "UUID игрока в ивенте `wallet_created` совпадает с ожидаемым")
+		sCtx.Assert().Equal(testData.registrationMessage.Player.ExternalID, testData.additionalWalletCreatedEvent.Payload.PlayerUUID, "UUID игрока в ивенте `wallet_created` совпадает с ожидаемым")
 		sCtx.Assert().Equal("USD", testData.additionalWalletCreatedEvent.Payload.Currency, "Валюта в ивенте `wallet_created` совпадает с ожидаемой")
 		sCtx.Assert().Equal(nats.TypeReal, testData.additionalWalletCreatedEvent.Payload.WalletType, "Тип кошелька в ивенте `wallet_created` – реальный")
 		sCtx.Assert().Equal(nats.StatusEnabled, testData.additionalWalletCreatedEvent.Payload.WalletStatus, "Статус кошелька в ивенте `wallet_created` – включён")
@@ -171,7 +170,7 @@ func (s *RemoveWalletSuite) TestRemoveWallet(t provider.T) {
 	t.WithNewStep("Проверка события отключения кошелька в NATS.", func(sCtx provider.StepCtx) {
 		subject := fmt.Sprintf("%s.wallet.*.%s.%s",
 			s.config.Nats.StreamPrefix,
-			testData.playerRegistrationMessage.Player.ExternalID,
+			testData.registrationMessage.Player.ExternalID,
 			testData.additionalWalletCreatedEvent.Payload.WalletUUID)
 		s.natsClient.SubscribeWithDeliverAll(subject)
 
@@ -204,7 +203,7 @@ func (s *RemoveWalletSuite) TestRemoveWallet(t provider.T) {
 	})
 
 	t.WithNewAsyncStep("Проверка отключения кошелька в Redis.", func(sCtx provider.StepCtx) {
-		key := testData.playerRegistrationMessage.Player.ExternalID
+		key := testData.registrationMessage.Player.ExternalID
 		wallets := s.redisClient.GetWithRetry(sCtx, key)
 
 		var disabledWallet redis.WalletData

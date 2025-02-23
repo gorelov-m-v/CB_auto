@@ -48,8 +48,7 @@ func (s *UpdateBlockersSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация Kafka.", func(sCtx provider.StepCtx) {
-		s.kafka = kafka.NewConsumer(t, s.config, kafka.PlayerTopic)
-		s.kafka.StartReading(t)
+		s.kafka = kafka.GetInstance(t, s.config, kafka.PlayerTopic)
 	})
 
 	t.WithNewStep("Соединение с базой данных wallet.", func(sCtx provider.StepCtx) {
@@ -66,10 +65,10 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 	t.Title("Проверка управления блокировками игрока")
 
 	type TestData struct {
-		registrationResponse      *clientTypes.Response[publicModels.FastRegistrationResponseBody]
-		playerRegistrationMessage *kafka.PlayerMessage
-		walletCreatedEvent        *nats.NatsMessage[nats.WalletCreatedPayload]
-		blockersSettedEvent       *nats.NatsMessage[nats.BlockersSettedPayload]
+		registrationResponse *clientTypes.Response[publicModels.FastRegistrationResponseBody]
+		registrationMessage  kafka.PlayerMessage
+		walletCreatedEvent   *nats.NatsMessage[nats.WalletCreatedPayload]
+		blockersSettedEvent  *nats.NatsMessage[nats.BlockersSettedPayload]
 	}
 	var testData TestData
 
@@ -90,17 +89,17 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 	})
 
 	t.WithNewStep("Получение сообщения о регистрации игрока из Kafka.", func(sCtx provider.StepCtx) {
-		message := kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
+		testData.registrationMessage = kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
 			return msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
-		playerRegistrationMessage := kafka.ParseMessage[kafka.PlayerMessage](sCtx, message)
-		testData.playerRegistrationMessage = &playerRegistrationMessage
+
+		sCtx.Require().NotEmpty(testData.registrationMessage.Player.ExternalID, "External ID игрока в регистрации не пустой")
 	})
 
 	t.WithNewStep("Получение сообщения о создании основного кошелька из NATS.", func(sCtx provider.StepCtx) {
 		subject := fmt.Sprintf("%s.wallet.*.%s.*",
 			s.config.Nats.StreamPrefix,
-			testData.playerRegistrationMessage.Player.ExternalID,
+			testData.registrationMessage.Player.ExternalID,
 		)
 		s.natsClient.SubscribeWithDeliverAll(subject)
 
@@ -122,7 +121,7 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 				"Content-Type":    "application/json",
 			},
 			PathParams: map[string]string{
-				"player_uuid": testData.playerRegistrationMessage.Player.ExternalID,
+				"player_uuid": testData.registrationMessage.Player.ExternalID,
 			},
 			Body: &capModels.BlockersRequestBody{
 				GamblingEnabled: false,
@@ -137,7 +136,7 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 	t.WithNewStep("Проверка события обновления блокировок в NATS.", func(sCtx provider.StepCtx) {
 		subject := fmt.Sprintf("%s.wallet.*.%s.*",
 			s.config.Nats.StreamPrefix,
-			testData.playerRegistrationMessage.Player.ExternalID,
+			testData.registrationMessage.Player.ExternalID,
 		)
 		s.natsClient.SubscribeWithDeliverAll(subject)
 
@@ -152,7 +151,7 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 
 	t.WithNewAsyncStep("Проверка блокировок в БД.", func(sCtx provider.StepCtx) {
 		walletFromDatabase := s.walletRepo.GetWallet(sCtx, map[string]interface{}{
-			"player_uuid": testData.playerRegistrationMessage.Player.ExternalID,
+			"player_uuid": testData.registrationMessage.Player.ExternalID,
 		})
 
 		sCtx.Assert().False(walletFromDatabase.IsGamblingActive, "Гэмблинг отключен в БД")
@@ -166,7 +165,7 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 				"Platform-Locale": "en",
 			},
 			PathParams: map[string]string{
-				"player_uuid": testData.playerRegistrationMessage.Player.ExternalID,
+				"player_uuid": testData.registrationMessage.Player.ExternalID,
 			},
 		}
 		resp := s.capService.GetBlockers(sCtx, req)

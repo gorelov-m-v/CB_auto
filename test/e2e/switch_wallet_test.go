@@ -50,8 +50,7 @@ func (s *SwitchWalletSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация Kafka.", func(sCtx provider.StepCtx) {
-		s.kafka = kafka.NewConsumer(t, s.config, kafka.PlayerTopic)
-		s.kafka.StartReading(t)
+		s.kafka = kafka.GetInstance(t, s.config, kafka.PlayerTopic)
 	})
 
 	t.WithNewStep("Соединение с базой данных wallet.", func(sCtx provider.StepCtx) {
@@ -76,7 +75,7 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 		setDefaultStartedEvent       *nats.NatsMessage[nats.SetDefaultStartedPayload]
 		defaultUnsettedEvent         *nats.NatsMessage[nats.DefaultUnsettedPayload]
 		setDefaultCommittedEvent     *nats.NatsMessage[nats.DefaultSettedPayload]
-		playerRegistrationMessage    *kafka.PlayerMessage
+		registrationMessage          kafka.PlayerMessage
 	}
 	var testData TestData
 
@@ -97,12 +96,12 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 	})
 
 	t.WithNewStep("Получение сообщения о регистрации из топика player.v1.account.", func(sCtx provider.StepCtx) {
-		message := kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
+		testData.registrationMessage = kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
 			return msg.Message.EventType == "player.signUpFast" &&
 				msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
-		playerRegistrationMessage := kafka.ParseMessage[kafka.PlayerMessage](sCtx, message)
-		testData.playerRegistrationMessage = &playerRegistrationMessage
+
+		sCtx.Require().NotEmpty(testData.registrationMessage.Player.ExternalID, "External ID игрока в регистрации не пустой")
 	})
 
 	t.WithNewStep("Получение токена авторизации.", func(sCtx provider.StepCtx) {
@@ -122,7 +121,7 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 	})
 
 	t.WithNewStep("Получение сообщения о создании основного кошелька в NATS.", func(sCtx provider.StepCtx) {
-		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.playerRegistrationMessage.Player.ExternalID)
+		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
 		s.natsClient.SubscribeWithDeliverAll(subject)
 
 		testData.mainWalletCreatedEvent = nats.FindMessageByFilter(
@@ -150,7 +149,7 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 	})
 
 	t.WithNewStep("Получение сообщения о создании дополнительного кошелька в NATS.", func(sCtx provider.StepCtx) {
-		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.playerRegistrationMessage.Player.ExternalID)
+		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
 		s.natsClient.SubscribeWithDeliverAll(subject)
 
 		testData.additionalWalletCreatedEvent = nats.FindMessageByFilter(
@@ -181,7 +180,7 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 	t.WithNewStep("Проверка событий смены дефолтного кошелька в NATS.", func(sCtx provider.StepCtx) {
 		playerSubject := fmt.Sprintf("%s.wallet.*.%s.*",
 			s.config.Nats.StreamPrefix,
-			testData.playerRegistrationMessage.Player.ExternalID,
+			testData.registrationMessage.Player.ExternalID,
 		)
 		s.natsClient.SubscribeWithDeliverAll(playerSubject)
 
