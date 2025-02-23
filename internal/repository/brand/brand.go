@@ -16,11 +16,11 @@ import (
 )
 
 type Brand struct {
-	UUID           uuid.UUID `db:"uuid"`
+	UUID           string    `db:"uuid"`
 	Alias          string    `db:"alias"`
 	LocalizedNames []byte    `db:"localized_names"`
 	Description    string    `db:"description"`
-	NodeUUID       uuid.UUID `db:"node_uuid"`
+	NodeUUID       string    `db:"node_uuid"`
 	Status         int       `db:"status"`
 	Sort           int       `db:"sort"`
 	CreatedAt      time.Time `db:"created_at"`
@@ -112,7 +112,7 @@ func (r *Repository) GetBrand(sCtx provider.StepCtx, filters map[string]interfac
 	if err != nil {
 		log.Printf("Ошибка при парсинге node UUID: %v", err)
 	}
-	brand.NodeUUID = nodeUUID
+	brand.NodeUUID = nodeUUID.String()
 
 	return &brand
 }
