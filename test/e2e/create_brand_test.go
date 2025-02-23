@@ -16,7 +16,6 @@ import (
 	"CB_auto/internal/transport/kafka"
 	"CB_auto/pkg/utils"
 
-	"github.com/google/uuid"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
 )
@@ -98,10 +97,11 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Alias, brandData.Alias, "Alias бренда в БД совпадает с Alias в запросе")
 		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Sort, brandData.Sort, "Sort бренда в БД совпадает с Sort в запросе")
 		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Description, brandData.Description, "Description бренда в БД совпадает с Description в запросе")
-		sCtx.Assert().Equal(uuid.MustParse(s.config.Node.ProjectID), brandData.NodeUUID, "NodeUUID бренда в БД совпадает с NodeUUID в запросе")
-		sCtx.Assert().Equal(models.StatusDisabled, brandData.Status, "Status бренда в БД совпадает с Status в запросе")
-		sCtx.Assert().NotZero(brandData.CreatedAt, "Время создания бренда в БД не равно нулю")
-		sCtx.Assert().Zero(brandData.UpdatedAt, "Время обновления бренда в БД равно нулю")
+		sCtx.Assert().Equal(s.config.Node.ProjectID, brandData.NodeUUID, "NodeUUID бренда в БД совпадает с NodeUUID в запросе")
+		sCtx.Assert().Equal(models.StatusDisabled, brandData.Status, "Status бренда в БД равен StatusDisabled")
+		sCtx.Assert().NotZero(brandData.CreatedAt, "CreatedAt бренда в БД не равен нулю")
+		sCtx.Assert().Zero(brandData.UpdatedAt, "UpdatedAt бренда в БД равен нулю для нового бренда")
+		sCtx.Assert().Equal(testData.createCapBrandResponse.Body.ID, brandData.UUID, "UUID бренда в БД совпадает с UUID в ответе")
 	})
 
 	t.WithNewStep("Удаление бренда.", func(sCtx provider.StepCtx) {
