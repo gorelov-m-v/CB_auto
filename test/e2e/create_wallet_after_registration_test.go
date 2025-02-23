@@ -50,8 +50,7 @@ func (s *FastRegistrationSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация Kafka.", func(sCtx provider.StepCtx) {
-		s.kafka = kafka.NewConsumer(t, s.config, kafka.PlayerTopic)
-		s.kafka.StartReading(t)
+		s.kafka = kafka.GetInstance(t, s.config, kafka.PlayerTopic)
 	})
 
 	t.WithNewStep("Соединение с базой данных wallet.", func(sCtx provider.StepCtx) {
@@ -70,7 +69,7 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 	type TestData struct {
 		authResponse              *clientTypes.Response[models.TokenCheckResponseBody]
 		registrationResponse      *clientTypes.Response[models.FastRegistrationResponseBody]
-		playerRegistrationMessage *kafka.PlayerMessage
+		playerRegistrationMessage kafka.PlayerMessage
 		walletCreatedEvent        *nats.NatsMessage[nats.WalletCreatedPayload]
 	}
 	var testData TestData
@@ -91,6 +90,15 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 		sCtx.Assert().NotEmpty(testData.registrationResponse.Body.Password, "Password в ответе регистрации не пустой")
 	})
 
+	t.WithNewStep("Получение сообщения о регистрации из топика player.v1.account.", func(sCtx provider.StepCtx) {
+		testData.playerRegistrationMessage = kafka.FindMessageByFilter[kafka.PlayerMessage](sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
+			return msg.Message.EventType == "player.signUpFast" &&
+				msg.Player.AccountID == testData.registrationResponse.Body.Username
+		})
+
+		sCtx.Require().NotEmpty(testData.playerRegistrationMessage.Player.ExternalID, "External ID игрока в регистрации не пустой")
+	})
+
 	t.WithNewStep("Получение токена авторизации.", func(sCtx provider.StepCtx) {
 		req := &clientTypes.Request[models.TokenCheckRequestBody]{
 			Headers: map[string]string{
@@ -105,17 +113,6 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 
 		sCtx.Assert().NotEmpty(testData.authResponse.Body.Token, "Токен авторизации не пустой")
 		sCtx.Assert().NotEmpty(testData.authResponse.Body.RefreshToken, "Refresh токен не пустой")
-	})
-
-	t.WithNewStep("Получение сообщения о регистрации из топика player.v1.account.", func(sCtx provider.StepCtx) {
-		message := kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
-			return msg.Message.EventType == "player.signUpFast" &&
-				msg.Player.AccountID == testData.registrationResponse.Body.Username
-		})
-		playerRegistrationMessage := kafka.ParseMessage[kafka.PlayerMessage](sCtx, message)
-		testData.playerRegistrationMessage = &playerRegistrationMessage
-
-		sCtx.Assert().NotEmpty(playerRegistrationMessage.Player.ExternalID, "External ID игрока в регистрации не пустой")
 	})
 
 	t.WithNewStep("Проверка создания кошелька в NATS.", func(sCtx provider.StepCtx) {
@@ -208,6 +205,7 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 }
 
 func (s *FastRegistrationSuite) AfterAll(t provider.T) {
+	kafka.CloseInstance(t)
 	if s.natsClient != nil {
 		s.natsClient.Close()
 	}

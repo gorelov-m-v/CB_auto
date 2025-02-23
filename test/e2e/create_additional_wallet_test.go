@@ -51,8 +51,7 @@ func (s *CreateWalletSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация Kafka.", func(sCtx provider.StepCtx) {
-		s.kafka = kafka.NewConsumer(t, s.config, kafka.PlayerTopic)
-		s.kafka.StartReading(t)
+		s.kafka = kafka.GetInstance(t, s.config, kafka.PlayerTopic)
 	})
 
 	t.WithNewStep("Соединение с базой данных wallet.", func(sCtx provider.StepCtx) {
@@ -69,11 +68,11 @@ func (s *CreateWalletSuite) TestCreateWallet(t provider.T) {
 	t.Title("Проверка создания дополнительного кошелька")
 
 	type TestData struct {
-		registrationResponse      *clientTypes.Response[models.FastRegistrationResponseBody]
-		authResponse              *clientTypes.Response[models.TokenCheckResponseBody]
-		createWalletResponse      *clientTypes.Response[models.CreateWalletResponseBody]
-		walletCreatedEvent        *nats.NatsMessage[nats.WalletCreatedPayload]
-		playerRegistrationMessage *kafka.PlayerMessage
+		registrationResponse *clientTypes.Response[models.FastRegistrationResponseBody]
+		authResponse         *clientTypes.Response[models.TokenCheckResponseBody]
+		createWalletResponse *clientTypes.Response[models.CreateWalletResponseBody]
+		walletCreatedEvent   *nats.NatsMessage[nats.WalletCreatedPayload]
+		registrationMessage  kafka.PlayerMessage
 	}
 	var testData TestData
 
@@ -94,12 +93,12 @@ func (s *CreateWalletSuite) TestCreateWallet(t provider.T) {
 	})
 
 	t.WithNewStep("Получение сообщения о регистрации из топика player.v1.account.", func(sCtx provider.StepCtx) {
-		message := kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
+		testData.registrationMessage = kafka.FindMessageByFilter[kafka.PlayerMessage](sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
 			return msg.Message.EventType == "player.signUpFast" &&
 				msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
-		playerRegistrationMessage := kafka.ParseMessage[kafka.PlayerMessage](sCtx, message)
-		testData.playerRegistrationMessage = &playerRegistrationMessage
+
+		sCtx.Require().NotEmpty(testData.registrationMessage.Player.ID, "ID игрока не пустой")
 	})
 
 	t.WithNewStep("Получение токена авторизации.", func(sCtx provider.StepCtx) {
@@ -136,7 +135,7 @@ func (s *CreateWalletSuite) TestCreateWallet(t provider.T) {
 	})
 
 	t.WithNewStep("Проверка создания кошелька в NATS.", func(sCtx provider.StepCtx) {
-		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.playerRegistrationMessage.Player.ExternalID)
+		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
 		s.natsClient.SubscribeWithDeliverAll(subject)
 
 		testData.walletCreatedEvent = nats.FindMessageByFilter(sCtx, s.natsClient, func(wallet nats.WalletCreatedPayload, msgType string) bool {
@@ -154,7 +153,7 @@ func (s *CreateWalletSuite) TestCreateWallet(t provider.T) {
 	})
 
 	t.WithNewStep("Проверка значения в Redis.", func(sCtx provider.StepCtx) {
-		key := testData.playerRegistrationMessage.Player.ExternalID
+		key := testData.registrationMessage.Player.ExternalID
 		wallets := s.redisClient.GetWithRetry(sCtx, key)
 
 		var foundWallet redis.WalletData
