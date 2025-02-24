@@ -53,15 +53,17 @@ func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
 	t.Feature("turnover-of-funds лимит")
 	t.Title("Проверка создания лимита на оборот средств в Kafka, NATS, Redis, MySQL, Public API")
 
+	// Храним все данные теста в единой структуре.
 	var testData struct {
 		registrationResponse  *clientTypes.Response[models.FastRegistrationResponseBody]
 		authorizationResponse *clientTypes.Response[models.TokenCheckResponseBody]
 		registrationMessage   kafka.PlayerMessage
-		turnoverLimitResponse *clientTypes.Response[models.GetTurnoverLimitsResponseBody]
+		turnoverLimitResponse *clientTypes.Response[models.GetTurnoverLimitsResponseBody] // изменить тип
 		setTurnoverLimitReq   *clientTypes.Request[models.SetTurnoverLimitRequestBody]
 		limitMessage          kafka.LimitMessage
 	}
 
+	// Шаг 1. Регистрация нового игрока.
 	t.WithNewStep("Регистрация нового игрока", func(sCtx provider.StepCtx) {
 		req := &clientTypes.Request[models.FastRegistrationRequestBody]{
 			Body: &models.FastRegistrationRequestBody{
@@ -69,21 +71,20 @@ func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
 				Currency: s.config.Node.DefaultCurrency,
 			},
 		}
-
 		testData.registrationResponse = s.publicClient.FastRegistration(sCtx, req)
-
 		sCtx.Assert().Equal(http.StatusOK, testData.registrationResponse.StatusCode, "Успешная регистрация")
 	})
 
-	t.WithNewStep("Проверка сообщения в Kafka о регистрации игрока", func(sCtx provider.StepCtx) {
+	// Шаг 2. Проверка Kafka-сообщения о регистрации игрока.
+	t.WithNewStep("Проверка Kafka-сообщения о регистрации игрока", func(sCtx provider.StepCtx) {
 		testData.registrationMessage = kafka.FindMessageByFilter[kafka.PlayerMessage](sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
 			return msg.Message.EventType == "player.signUpFast" &&
 				msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
-
 		sCtx.Require().NotEmpty(testData.registrationMessage.Player.ID, "ID игрока не пустой")
 	})
 
+	// Шаг 3. Получение токена авторизации.
 	t.WithNewStep("Получение токена авторизации", func(sCtx provider.StepCtx) {
 		req := &clientTypes.Request[models.TokenCheckRequestBody]{
 			Body: &models.TokenCheckRequestBody{
@@ -91,9 +92,7 @@ func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
 				Password: testData.registrationResponse.Body.Password,
 			},
 		}
-
 		testData.authorizationResponse = s.publicClient.TokenCheck(sCtx, req)
-
 		sCtx.Require().Equal(http.StatusOK, testData.authorizationResponse.StatusCode, "Успешная авторизация")
 	})
 
@@ -109,7 +108,6 @@ func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
 				StartedAt: time.Now().Unix(),
 			},
 		}
-
 		resp := s.publicClient.SetTurnoverLimit(sCtx, testData.setTurnoverLimitReq)
 
 		sCtx.Assert().Equal(http.StatusCreated, resp.StatusCode, "Лимит на оборот средств установлен")
@@ -117,26 +115,22 @@ func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
 
 	t.WithNewStep("Получение сообщения из Kafka о создании лимита на оборот средств", func(sCtx provider.StepCtx) {
 		testData.limitMessage = kafka.FindMessageByFilter[kafka.LimitMessage](sCtx, s.kafka, func(msg kafka.LimitMessage) bool {
-			match := msg.EventType == kafka.LimitEventCreated &&
+			return msg.EventType == kafka.LimitEventCreated &&
 				msg.LimitType == kafka.LimitTypeTurnoverFunds &&
 				msg.PlayerID == testData.registrationMessage.Player.ExternalID &&
 				msg.Amount == testData.setTurnoverLimitReq.Body.Amount &&
 				msg.CurrencyCode == testData.setTurnoverLimitReq.Body.Currency
-			return match
 		})
-
-		sCtx.Require().NotEmpty(testData.limitMessage.ID, "ID лимита на оборот средств не пустой")
+		sCtx.Require().NotEmpty(testData.limitMessage.ID, "ID лимита не пустой")
 	})
 
-	t.WithNewAsyncStep("Получение лимита на оборот средств", func(sCtx provider.StepCtx) {
+	t.WithNewAsyncStep("Получение лимита на оборот средств через Public API", func(sCtx provider.StepCtx) {
 		req := &clientTypes.Request[any]{
 			Headers: map[string]string{
 				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
 			},
 		}
-
 		testData.turnoverLimitResponse = s.publicClient.GetTurnoverLimits(sCtx, req)
-
 		sCtx.Assert().Equal(http.StatusOK, testData.turnoverLimitResponse.StatusCode, "Лимиты получены")
 		sCtx.Assert().NotEmpty(testData.turnoverLimitResponse.Body, "Список лимитов не пустой")
 
@@ -145,9 +139,9 @@ func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
 		sCtx.Assert().Equal(testData.limitMessage.Amount, limit.Amount, "Сумма лимита совпадает")
 		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, limit.Currency, "Валюта лимита совпадает")
 		sCtx.Assert().Equal(testData.limitMessage.IntervalType, limit.Type, "Тип лимита совпадает")
-		sCtx.Assert().True(limit.Status, "Статус лимита активен")
+		sCtx.Assert().True(limit.Status, "Лимит активен")
 		sCtx.Assert().Empty(limit.UpcomingChanges, "Нет предстоящих изменений")
-		sCtx.Assert().Nil(limit.DeactivatedAt, "Лимит не деактивируется")
+		sCtx.Assert().Nil(limit.DeactivatedAt, "Лимит не деактивирован")
 		sCtx.Assert().Equal(testData.limitMessage.StartedAt, limit.StartedAt, "Время начала установлено")
 		sCtx.Assert().Equal(testData.limitMessage.ExpiresAt, limit.ExpiresAt, "Время окончания установлено")
 		sCtx.Assert().Equal("0", limit.Spent, "Потраченная сумма равна 0")
@@ -161,6 +155,7 @@ func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
 				len(msg.Limits) > 0 &&
 				msg.Limits[0].LimitType == nats.LimitTypeTurnoverFunds
 		})
+		sCtx.Require().NotNil(turnoverEvent, "Получено NATS-сообщение о создании лимита")
 
 		limit := turnoverEvent.Payload.Limits[0]
 		eventType := turnoverEvent.Payload.EventType
@@ -169,7 +164,7 @@ func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
 		sCtx.Assert().Equal(testData.limitMessage.Amount, limit.Amount, "Сумма лимита совпадает")
 		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, limit.CurrencyCode, "Валюта лимита совпадает")
 		sCtx.Assert().Equal(testData.limitMessage.LimitType, limit.LimitType, "Тип лимита совпадает")
-		sCtx.Assert().True(limit.Status, "Статус лимита установлен")
+		sCtx.Assert().True(limit.Status, "Лимит активен")
 		sCtx.Assert().Equal(testData.limitMessage.StartedAt, limit.StartedAt, "Время начала установлено")
 		sCtx.Assert().Equal(testData.limitMessage.ExpiresAt, limit.ExpiresAt, "Время окончания установлено")
 		sCtx.Assert().Equal(testData.limitMessage.IntervalType, limit.IntervalType, "Тип интервала совпадает")
