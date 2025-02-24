@@ -16,7 +16,6 @@ import (
 	"CB_auto/internal/config"
 	"CB_auto/internal/transport/kafka"
 	"CB_auto/internal/transport/nats"
-	"CB_auto/pkg/utils"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
@@ -42,7 +41,7 @@ func (s *CasinoLossLimitSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация Kafka клиента", func(sCtx provider.StepCtx) {
-		s.kafka = kafka.GetInstance(t, s.config, kafka.LimitTopic, kafka.PlayerTopic)
+		s.kafka = kafka.GetInstance(t, s.config)
 	})
 
 	t.WithNewStep("Инициализация NATS клиента", func(sCtx provider.StepCtx) {
@@ -70,6 +69,7 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
 				Currency: s.config.Node.DefaultCurrency,
 			},
 		}
+
 		testData.registrationResponse = s.publicClient.FastRegistration(sCtx, req)
 
 		sCtx.Assert().Equal(http.StatusOK, testData.registrationResponse.StatusCode, "Успешная регистрация")
@@ -80,6 +80,7 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
 			return msg.Message.EventType == "player.signUpFast" &&
 				msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
+
 		sCtx.Require().NotEmpty(testData.registrationMessage.Player.ID, "ID игрока не пустой")
 	})
 
@@ -90,6 +91,7 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
 				Password: testData.registrationResponse.Body.Password,
 			},
 		}
+
 		testData.authorizationResponse = s.publicClient.TokenCheck(sCtx, req)
 
 		sCtx.Require().Equal(http.StatusOK, testData.authorizationResponse.StatusCode, "Успешная авторизация")
@@ -110,19 +112,17 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
 
 		resp := s.publicClient.SetCasinoLossLimit(sCtx, testData.setCasinoLossLimitReq)
 
-		sCtx.Require().Equal(http.StatusCreated, resp.StatusCode, "Лимит на проигрыш установлен. Status: %d, Body: %s",
-			resp.StatusCode, utils.CreatePrettyJSON(resp))
+		sCtx.Require().Equal(http.StatusCreated, resp.StatusCode, "Лимит на проигрыш установлен")
 	})
 
 	t.WithNewStep("Получение сообщения из Kafka о создании лимита на проигрыш", func(sCtx provider.StepCtx) {
 		testData.limitMessage = kafka.FindMessageByFilter[kafka.LimitMessage](sCtx, s.kafka, func(msg kafka.LimitMessage) bool {
-			match := msg.EventType == kafka.LimitEventCreated &&
+			return msg.EventType == kafka.LimitEventCreated &&
 				msg.LimitType == kafka.LimitTypeCasinoLoss &&
 				msg.IntervalType == kafka.IntervalTypeDaily &&
 				msg.PlayerID == testData.registrationMessage.Player.ExternalID &&
 				msg.Amount == testData.setCasinoLossLimitReq.Body.Amount &&
 				msg.CurrencyCode == testData.setCasinoLossLimitReq.Body.Currency
-			return match
 		})
 
 		sCtx.Require().NotEmpty(testData.limitMessage.ID, "ID лимита на проигрыш не пустой")
@@ -140,7 +140,6 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
 		sCtx.Assert().NotEmpty(testData.casinoLossLimitResponse.Body, "Список лимитов не пустой")
 
 		limit := testData.casinoLossLimitResponse.Body[0]
-
 		sCtx.Assert().Equal(testData.limitMessage.ID, limit.ID, "ID лимита совпадает")
 		sCtx.Assert().Equal(testData.limitMessage.Amount, limit.Amount, "Сумма лимита совпадает")
 		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, limit.Currency, "Валюта лимита совпадает")
@@ -156,7 +155,6 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
 
 	t.WithNewAsyncStep("Проверка сообщения в NATS о создании лимита на проигрыш", func(sCtx provider.StepCtx) {
 		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
-
 		casinoLossEvent := nats.FindMessageInStream(sCtx, s.natsClient, subject, func(msg nats.LimitChangedV2, msgType string) bool {
 			return msg.EventType == nats.EventTypeCreated &&
 				len(msg.Limits) > 0 &&

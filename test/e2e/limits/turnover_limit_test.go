@@ -41,7 +41,7 @@ func (s *TurnoverLimitSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация Kafka клиента", func(sCtx provider.StepCtx) {
-		s.kafka = kafka.GetInstance(t, s.config, kafka.LimitTopic, kafka.PlayerTopic)
+		s.kafka = kafka.GetInstance(t, s.config)
 	})
 
 	t.WithNewStep("Инициализация NATS клиента", func(sCtx provider.StepCtx) {
@@ -69,6 +69,7 @@ func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
 				Currency: s.config.Node.DefaultCurrency,
 			},
 		}
+
 		testData.registrationResponse = s.publicClient.FastRegistration(sCtx, req)
 
 		sCtx.Assert().Equal(http.StatusOK, testData.registrationResponse.StatusCode, "Успешная регистрация")
@@ -90,6 +91,7 @@ func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
 				Password: testData.registrationResponse.Body.Password,
 			},
 		}
+
 		testData.authorizationResponse = s.publicClient.TokenCheck(sCtx, req)
 
 		sCtx.Require().Equal(http.StatusOK, testData.authorizationResponse.StatusCode, "Успешная авторизация")
@@ -132,13 +134,13 @@ func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
 				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
 			},
 		}
+
 		testData.turnoverLimitResponse = s.publicClient.GetTurnoverLimits(sCtx, req)
 
 		sCtx.Assert().Equal(http.StatusOK, testData.turnoverLimitResponse.StatusCode, "Лимиты получены")
 		sCtx.Assert().NotEmpty(testData.turnoverLimitResponse.Body, "Список лимитов не пустой")
 
 		limit := testData.turnoverLimitResponse.Body[0]
-
 		sCtx.Assert().Equal(testData.limitMessage.ID, limit.ID, "ID лимита совпадает")
 		sCtx.Assert().Equal(testData.limitMessage.Amount, limit.Amount, "Сумма лимита совпадает")
 		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, limit.Currency, "Валюта лимита совпадает")
@@ -154,7 +156,6 @@ func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
 
 	t.WithNewAsyncStep("Проверка сообщения в NATS о создании лимита на оборот средств", func(sCtx provider.StepCtx) {
 		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
-
 		turnoverEvent := nats.FindMessageInStream(sCtx, s.natsClient, subject, func(msg nats.LimitChangedV2, msgType string) bool {
 			return msg.EventType == nats.EventTypeCreated &&
 				len(msg.Limits) > 0 &&
