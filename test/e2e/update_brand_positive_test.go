@@ -74,7 +74,6 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithRussianName(t provider.T) 
 		updateCapBrandResponse *models.UpdateCapBrandResponseBody
 	}
 
-	// Создаем бренд для тестирования
 	t.WithNewStep("Создание тестового бренда", func(sCtx provider.StepCtx) {
 		brandName := fmt.Sprintf("Test Brand %s", utils.GenerateAlias())
 		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
@@ -89,9 +88,6 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithRussianName(t provider.T) 
 		s.attachCreateRequestResponse(sCtx, testData.createRequest, createResp)
 	})
 
-	time.Sleep(1 * time.Second)
-
-	// Обновляем бренд
 	t.WithNewStep("Обновление бренда с русским названием", func(sCtx provider.StepCtx) {
 		brandName := fmt.Sprintf("Тестовый бренд %s", utils.GenerateAlias())
 		alias := fmt.Sprintf("test-brand-ru-%s", utils.GenerateAlias())
@@ -135,9 +131,6 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithEnglishName(t provider.T) 
 		s.attachCreateRequestResponse(sCtx, testData.createRequest, createResp)
 	})
 
-	time.Sleep(1 * time.Second)
-
-	// Обновляем бренд
 	t.WithNewStep("Обновление бренда с английским названием", func(sCtx provider.StepCtx) {
 		brandName := fmt.Sprintf("Updated Test Brand %s", utils.GenerateAlias())
 		alias := fmt.Sprintf("test-brand-en-%s", utils.GenerateAlias())
@@ -166,7 +159,6 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMinMaxNames(t provider.T) 
 		updateCapBrandResponse *models.UpdateCapBrandResponseBody
 	}
 
-	// Создаем бренд для тестирования
 	t.WithNewStep("Создание тестового бренда", func(sCtx provider.StepCtx) {
 		brandName := fmt.Sprintf("Test Brand %s", utils.GenerateAlias())
 		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
@@ -181,14 +173,11 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMinMaxNames(t provider.T) 
 		s.attachCreateRequestResponse(sCtx, testData.createRequest, createResp)
 	})
 
-	time.Sleep(1 * time.Second)
-
-	// Обновляем до минимального значения
 	t.WithNewStep("Обновление бренда с минимальной длиной имени (2 символа)", func(sCtx provider.StepCtx) {
-		// Генерируем уникальное двухбуквенное имя с помощью timestamp
+
 		timestamp := time.Now().UnixNano()
-		suffix := fmt.Sprintf("%x", timestamp)[:2] // Берем первые 2 символа hex представления timestamp
-		minName := fmt.Sprintf("A%s", suffix)      // Префикс + 2 уникальных символа
+		suffix := fmt.Sprintf("%x", timestamp)[:2]
+		minName := fmt.Sprintf("A%s", suffix)
 		minAlias := fmt.Sprintf("min-%s", utils.GenerateAlias())
 
 		testData.updateRequest = s.updateBrandRequest(
@@ -204,13 +193,10 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMinMaxNames(t provider.T) 
 		s.attachRequestResponse(sCtx, testData.updateRequest, updateResp)
 	})
 
-	time.Sleep(1 * time.Second)
-
-	// Обновляем до максимального значения
 	t.WithNewStep("Обновление бренда с максимальной длиной имени (100 символов)", func(sCtx provider.StepCtx) {
 		timestamp := time.Now().UnixNano()
-		// Гарантируем длину 100 символов
-		maxName := fmt.Sprintf("%s%d", strings.Repeat("B", 80), timestamp) // timestamp примерно 19 символов
+
+		maxName := fmt.Sprintf("%s%d", strings.Repeat("B", 80), timestamp)
 		if len(maxName) > 100 {
 			maxName = maxName[:100]
 		}
@@ -240,7 +226,6 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMultiLanguage(t provider.T
 		updateCapBrandResponse *models.UpdateCapBrandResponseBody
 	}
 
-	// Создаем бренд для тестирования
 	t.WithNewStep("Создание тестового бренда", func(sCtx provider.StepCtx) {
 		brandName := fmt.Sprintf("Test Brand %s", utils.GenerateAlias())
 		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
@@ -252,8 +237,6 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMultiLanguage(t provider.T
 		sCtx.Assert().Equal(http.StatusOK, createResp.StatusCode)
 		testData.createCapBrandResponse = &createResp.Body
 	})
-
-	time.Sleep(1 * time.Second)
 
 	t.WithNewStep("Обновление мультиязычного бренда", func(sCtx provider.StepCtx) {
 		suffix := utils.GenerateAlias()
@@ -274,14 +257,12 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMultiLanguage(t provider.T
 	s.cleanupBrand(t, testData.createCapBrandResponse.ID)
 }
 
-// Вспомогательные методы
 func (s *UpdateBrandPositiveSuite) createBrandRequest(name, alias string, names map[string]string) *clientTypes.Request[models.CreateCapBrandRequestBody] {
-	// Проверяем минимальную длину alias
+
 	if len(alias) < 2 {
 		alias = fmt.Sprintf("%s-%s", alias, utils.GenerateAlias())
 	}
 
-	// Проверяем минимальную длину названий
 	for lang, localName := range names {
 		if len(localName) < 2 {
 			names[lang] = fmt.Sprintf("%s-%s", localName, utils.GenerateAlias())
@@ -303,12 +284,11 @@ func (s *UpdateBrandPositiveSuite) createBrandRequest(name, alias string, names 
 }
 
 func (s *UpdateBrandPositiveSuite) updateBrandRequest(id, name, alias string, names map[string]string) *clientTypes.Request[models.UpdateCapBrandRequestBody] {
-	// Проверяем минимальную длину alias
+
 	if len(alias) < 2 {
 		alias = fmt.Sprintf("%s-%s", alias, utils.GenerateAlias())
 	}
 
-	// Проверяем минимальную длину названий
 	for lang, localName := range names {
 		if len(localName) < 2 {
 			names[lang] = fmt.Sprintf("%s-%s", localName, utils.GenerateAlias())

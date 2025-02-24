@@ -131,7 +131,6 @@ func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 		deleteResp := s.capService.DeleteCapBrand(deleteReq)
 		sCtx.Assert().Equal(http.StatusNoContent, deleteResp.StatusCode, "Статус код ответа равен 204")
 
-		// Ждем сообщение в Kafka
 		err := s.kafka.WaitForMessage(t, func(msg []byte) error {
 			var event models.BrandEvent
 			if err := json.Unmarshal(msg, &event); err != nil {
@@ -163,15 +162,12 @@ func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 	})
 }
 
-// Новый тест для проверки повторного удаления бренда
 func (s *DeleteBrandSuite) TestDeleteAlreadyDeletedBrand(t provider.T) {
 	t.Epic("Brands")
 	t.Feature("Удаление бренда")
 	t.Title("Проверка повторного удаления бренда")
 	t.Tags("CAP", "Brands", "Platform", "Negative")
 
-	// Аналогичная структура с дополнительной проверкой повторного удаления
-	// и проверкой, что статус и время обновления не изменились после повторного удаления
 }
 
 func (s *DeleteBrandSuite) AfterAll(t provider.T) {
