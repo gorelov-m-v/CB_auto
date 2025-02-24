@@ -13,43 +13,6 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
-type Kafka struct {
-	reader      *kafka.Reader
-	readers     []*kafka.Reader
-	subscribers map[TopicType][]chan kafka.Message
-	Timeout     time.Duration
-	ctx         context.Context
-	cancel      context.CancelFunc
-	wg          sync.WaitGroup
-	started     bool
-	mu          sync.RWMutex
-}
-
-var (
-	instance *Kafka
-	once     sync.Once
-	mu       sync.Mutex
-)
-
-func GetInstance(t provider.T, cfg *config.Config, topicTypes ...TopicType) *Kafka {
-	once.Do(func() {
-		t.Logf("Creating singleton Kafka consumer")
-		instance = newConsumer(cfg, topicTypes...)
-		instance.startReading()
-	})
-	return instance
-}
-
-func CloseInstance(t provider.T) {
-	mu.Lock()
-	defer mu.Unlock()
-
-	if instance != nil {
-		instance.close(t)
-		instance = nil
-	}
-}
-
 type TopicType string
 
 const (
@@ -58,14 +21,69 @@ const (
 	LimitTopic  TopicType = "beta-09_limits.v2"
 )
 
-func newConsumer(cfg *config.Config, topicTypes ...TopicType) *Kafka {
+var allTopics = []TopicType{BrandTopic, PlayerTopic, LimitTopic}
+
+type Kafka struct {
+	readers          []*kafka.Reader
+	subscribers      map[TopicType][]chan kafka.Message
+	bufferedMessages map[TopicType][]kafka.Message
+	Timeout          time.Duration
+	ctx              context.Context
+	cancel           context.CancelFunc
+	wg               sync.WaitGroup
+	started          bool
+	mu               sync.RWMutex
+}
+
+var (
+	instance   *Kafka
+	once       sync.Once
+	instanceMu sync.Mutex
+	refCount   int
+)
+
+func GetInstance(t provider.T, cfg *config.Config) *Kafka {
+	instanceMu.Lock()
+	defer instanceMu.Unlock()
+
+	once.Do(func() {
+		t.Logf("Creating singleton Kafka consumer with all topics and buffering")
+		instance = newConsumer(cfg)
+		instance.startReading()
+	})
+	refCount++
+	t.Logf("Kafka instance refCount increased to %d", refCount)
+	return instance
+}
+
+func CloseInstance(t provider.T) {
+	instanceMu.Lock()
+	defer instanceMu.Unlock()
+
+	if refCount > 0 {
+		refCount--
+		t.Logf("Kafka instance refCount decreased to %d", refCount)
+	}
+	if refCount == 0 && instance != nil {
+		instance.close(t)
+		instance = nil
+		once = sync.Once{}
+		t.Logf("Kafka singleton closed")
+	}
+}
+
+func newConsumer(cfg *config.Config) *Kafka {
 	var readers []*kafka.Reader
 	subscribers := make(map[TopicType][]chan kafka.Message)
+	bufferedMessages := make(map[TopicType][]kafka.Message)
 
-	for _, topicType := range topicTypes {
+	for _, topic := range allTopics {
+		bufferedMessages[topic] = make([]kafka.Message, 0)
+	}
+
+	for _, topicType := range allTopics {
 		topic := string(topicType)
 		log.Printf("Creating Kafka reader: brokers=%v, topic=%s, groupID=%s", cfg.Kafka.Brokers, topic, cfg.Node.GroupID)
-
 		reader := kafka.NewReader(kafka.ReaderConfig{
 			Brokers:        []string{cfg.Kafka.Brokers},
 			Topic:          topic,
@@ -75,16 +93,16 @@ func newConsumer(cfg *config.Config, topicTypes ...TopicType) *Kafka {
 			ReadBackoffMax: 500 * time.Millisecond,
 		})
 		readers = append(readers, reader)
-		subscribers[topicType] = make([]chan kafka.Message, 0)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Kafka{
-		readers:     readers,
-		subscribers: subscribers,
-		Timeout:     30 * time.Second,
-		ctx:         ctx,
-		cancel:      cancel,
+		readers:          readers,
+		subscribers:      subscribers,
+		bufferedMessages: bufferedMessages,
+		Timeout:          30 * time.Second,
+		ctx:              ctx,
+		cancel:           cancel,
 	}
 }
 
@@ -120,74 +138,55 @@ func (k *Kafka) readMessages(reader *kafka.Reader) {
 			}
 			log.Printf("Received message from topic %s, partition %d, offset %d: %s",
 				msg.Topic, msg.Partition, msg.Offset, string(msg.Value))
-			k.mu.RLock()
-			for _, ch := range k.subscribers[TopicType(msg.Topic)] {
+
+			k.mu.Lock()
+			topic := TopicType(msg.Topic)
+			k.bufferedMessages[topic] = append(k.bufferedMessages[topic], msg)
+			subs := k.subscribers[topic]
+			k.mu.Unlock()
+
+			for _, ch := range subs {
 				select {
 				case ch <- msg:
 				case <-k.ctx.Done():
-					k.mu.RUnlock()
 					return
 				}
 			}
-			k.mu.RUnlock()
 		}
 	}
 }
 
-type KafkaMessage interface {
-	GetTopic() TopicType
-}
-
-func (m PlayerMessage) GetTopic() TopicType {
-	return PlayerTopic
-}
-
-func (m LimitMessage) GetTopic() TopicType {
-	return LimitTopic
-}
-
-func GetTopicForType[T KafkaMessage]() TopicType {
-	var msg T
-	return msg.GetTopic()
-}
-
 func FindMessageByFilter[T KafkaMessage](sCtx provider.StepCtx, k *Kafka, filter func(T) bool) T {
-	var msg T
-	ch := k.SubscribeToTopic(msg.GetTopic())
+	var empty T
+	var tmp T
+	topic := tmp.GetTopic()
+
+	ch := k.SubscribeToTopic(topic)
 	defer k.Unsubscribe(ch)
 
 	ctx, cancel := context.WithTimeout(k.ctx, k.Timeout)
 	defer cancel()
 
-	log.Printf("Starting to look for message in Kafka with timeout %v", k.Timeout)
-
-	var empty T
+	sCtx.Logf("Начало поиска сообщения в топике %s с таймаутом %v", topic, k.Timeout)
 	for {
 		select {
 		case <-ctx.Done():
+			sCtx.Logf("Таймаут при ожидании сообщения в топике %s", topic)
 			return empty
-
 		case msg, ok := <-ch:
 			if !ok {
-				log.Printf("Kafka messages channel closed")
+				sCtx.Logf("Канал подписки для топика %s закрыт", topic)
 				return empty
 			}
-
-			log.Printf("Received raw message: %s", string(msg.Value))
-
+			sCtx.Logf("Получено сообщение: %s", string(msg.Value))
 			var data T
 			if err := json.Unmarshal(msg.Value, &data); err != nil {
-				log.Printf("Failed to unmarshal message into %T: %v\nMessage: %s", data, err, string(msg.Value))
+				sCtx.Logf("Не удалось распарсить сообщение в тип %T: %v", data, err)
 				continue
 			}
-
-			log.Printf("Successfully unmarshaled message. Type: %T, Value: %+v", data, data)
-
 			if filter(data) {
-				log.Printf("Found matching message in Kafka")
+				sCtx.Logf("Найдено подходящее сообщение в топике %s", topic)
 				return data
-			} else {
-				log.Printf("Message did not match filter criteria")
 			}
 		}
 	}
@@ -195,10 +194,15 @@ func FindMessageByFilter[T KafkaMessage](sCtx provider.StepCtx, k *Kafka, filter
 
 func (k *Kafka) SubscribeToTopic(topic TopicType) chan kafka.Message {
 	k.mu.Lock()
-	defer k.mu.Unlock()
-
+	buffered := make([]kafka.Message, len(k.bufferedMessages[topic]))
+	copy(buffered, k.bufferedMessages[topic])
 	ch := make(chan kafka.Message, 100)
 	k.subscribers[topic] = append(k.subscribers[topic], ch)
+	k.mu.Unlock()
+
+	for _, msg := range buffered {
+		ch <- msg
+	}
 	return ch
 }
 
@@ -209,7 +213,7 @@ func (k *Kafka) Unsubscribe(ch chan kafka.Message) {
 	for topic, subs := range k.subscribers {
 		for i, sub := range subs {
 			if sub == ch {
-				k.subscribers[topic] = append(k.subscribers[topic][:i], k.subscribers[topic][i+1:]...)
+				k.subscribers[topic] = append(subs[:i], subs[i+1:]...)
 				close(ch)
 				break
 			}
@@ -245,4 +249,21 @@ func (k *Kafka) close(t provider.T) {
 		t.Errorf("Таймаут при закрытии Kafka reader")
 	case <-done:
 	}
+}
+
+type KafkaMessage interface {
+	GetTopic() TopicType
+}
+
+func (m PlayerMessage) GetTopic() TopicType {
+	return PlayerTopic
+}
+
+func (m LimitMessage) GetTopic() TopicType {
+	return LimitTopic
+}
+
+func GetTopicForType[T KafkaMessage]() TopicType {
+	var msg T
+	return msg.GetTopic()
 }

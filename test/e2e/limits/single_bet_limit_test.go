@@ -42,7 +42,7 @@ func (s *SingleBetLimitSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация Kafka клиента", func(sCtx provider.StepCtx) {
-		s.kafka = kafka.GetInstance(t, s.config, kafka.LimitTopic, kafka.PlayerTopic)
+		s.kafka = kafka.GetInstance(t, s.config)
 	})
 
 	t.WithNewStep("Инициализация NATS клиента", func(sCtx provider.StepCtx) {
@@ -70,9 +70,10 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 				Currency: s.config.Node.DefaultCurrency,
 			},
 		}
+
 		testData.registrationResponse = s.publicClient.FastRegistration(sCtx, req)
 
-		sCtx.Require().Equal(http.StatusOK, testData.registrationResponse.StatusCode, "Успешная регистрация")
+		sCtx.Assert().Equal(http.StatusOK, testData.registrationResponse.StatusCode, "Успешная регистрация")
 	})
 
 	t.WithNewStep("Проверка сообщения в Kafka о регистрации игрока", func(sCtx provider.StepCtx) {
@@ -93,6 +94,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 				Password: testData.registrationResponse.Body.Password,
 			},
 		}
+
 		testData.authorizationResponse = s.publicClient.TokenCheck(sCtx, req)
 
 		sCtx.Require().Equal(http.StatusOK, testData.authorizationResponse.StatusCode, "Успешная авторизация")
@@ -126,7 +128,6 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 				msg.CurrencyCode == s.config.Node.DefaultCurrency
 			return match
 		})
-
 		sCtx.Require().NotEmpty(testData.limitMessage.ID, "ID лимита на ставку не пустой")
 	})
 
@@ -136,6 +137,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
 			},
 		}
+
 		testData.singleBetLimitResponse = s.publicClient.GetSingleBetLimits(sCtx, req)
 
 		sCtx.Assert().Equal(http.StatusOK, testData.singleBetLimitResponse.StatusCode, "Лимиты получены")
@@ -153,7 +155,6 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 
 	t.WithNewAsyncStep("Проверка сообщения в NATS о создании лимита на одиночную ставку", func(sCtx provider.StepCtx) {
 		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
-
 		singleBetEvent := nats.FindMessageInStream(sCtx, s.natsClient, subject, func(msg nats.LimitChangedV2, msgType string) bool {
 			return msg.EventType == nats.EventTypeCreated &&
 				len(msg.Limits) > 0 &&
