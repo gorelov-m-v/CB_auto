@@ -1,11 +1,11 @@
 package test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"testing"
-	"time"
 
 	capAPI "CB_auto/internal/client/cap"
 	"CB_auto/internal/client/cap/models"
@@ -94,30 +94,35 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 	})
 
 	t.WithNewStep("Ожидание создания бренда в БД", func(sCtx provider.StepCtx) {
-		time.Sleep(2 * time.Second)
-	})
+		err := repository.ExecuteWithRetry(context.Background(), &s.config.MySQL, func(ctx context.Context) error {
+			filters := map[string]interface{}{
+				"uuid": testData.createCapBrandResponse.ID,
+			}
+			brandData := brandRepo.GetBrand(t, filters)
 
-	t.WithNewStep("Получение бренда из БД по универсальным фильтрам.", func(sCtx provider.StepCtx) {
-		filters := map[string]interface{}{
-			"uuid": testData.createCapBrandResponse.ID,
-		}
-		brandData := brandRepo.GetBrand(t, filters)
+			if brandData == nil {
+				return fmt.Errorf("бренд не найден в БД")
+			}
 
-		var dbNames map[string]string
-		if err := json.Unmarshal(brandData.LocalizedNames, &dbNames); err != nil {
-			t.Fatalf("Ошибка при парсинге LocalizedNames: %v", err)
-		}
+			var dbNames map[string]string
+			if err := json.Unmarshal(brandData.LocalizedNames, &dbNames); err != nil {
+				return fmt.Errorf("ошибка при парсинге LocalizedNames: %v", err)
+			}
 
-		sCtx.Assert().Equal(testData.createRequest.Body.Names, dbNames, "Names бренда в БД совпадают с Names в запросе")
-		sCtx.Assert().Equal(testData.createRequest.Body.Alias, brandData.Alias, "Alias бренда в БД совпадает с Alias в запросе")
-		sCtx.Assert().Equal(testData.createRequest.Body.Sort, brandData.Sort, "Sort бренда в БД совпадает с Sort в запросе")
-		sCtx.Assert().Equal(testData.createRequest.Body.Description, brandData.Description, "Description бренда в БД совпадает с Description в запросе")
-		sCtx.Assert().Equal(uuid.MustParse(s.config.Node.ProjectID), brandData.NodeUUID, "NodeUUID бренда в БД совпадает с NodeUUID в запросе")
-		sCtx.Assert().Equal(models.StatusDisabled, brandData.Status, "Status бренда в БД совпадает с Status в запросе")
-		sCtx.Assert().NotZero(brandData.CreatedAt, "Время создания бренда в БД не равно нулю")
-		sCtx.Assert().Zero(brandData.UpdatedAt, "Время обновления бренда в БД равно нулю")
+			sCtx.Assert().Equal(testData.createRequest.Body.Names, dbNames, "Names бренда в БД совпадают с Names в запросе")
+			sCtx.Assert().Equal(testData.createRequest.Body.Alias, brandData.Alias, "Alias бренда в БД совпадает с Alias в запросе")
+			sCtx.Assert().Equal(testData.createRequest.Body.Sort, brandData.Sort, "Sort бренда в БД совпадает с Sort в запросе")
+			sCtx.Assert().Equal(testData.createRequest.Body.Description, brandData.Description, "Description бренда в БД совпадает с Description в запросе")
+			sCtx.Assert().Equal(uuid.MustParse(s.config.Node.ProjectID), brandData.NodeUUID, "NodeUUID бренда в БД совпадает с NodeUUID в запросе")
+			sCtx.Assert().Equal(models.StatusDisabled, brandData.Status, "Status бренда в БД совпадает с Status в запросе")
+			sCtx.Assert().NotZero(brandData.CreatedAt, "Время создания бренда в БД не равно нулю")
+			sCtx.Assert().Zero(brandData.UpdatedAt, "Время обновления бренда в БД равно нулю")
 
-		sCtx.WithAttachments(allure.NewAttachment("Бренд из БД", allure.JSON, utils.CreatePrettyJSON(brandData)))
+			sCtx.WithAttachments(allure.NewAttachment("Бренд из БД", allure.JSON, utils.CreatePrettyJSON(brandData)))
+			return nil
+		})
+
+		sCtx.Assert().NoError(err, "Ошибка при проверке бренда в БД")
 	})
 
 	t.WithNewStep("Удаление бренда.", func(sCtx provider.StepCtx) {

@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -179,4 +180,18 @@ func (k *Kafka) GetMessages() <-chan kafka.Message {
 
 func (k *Kafka) GetTimeout() time.Duration {
 	return k.Timeout
+}
+
+func (k *Kafka) WaitForMessage(t provider.T, check func([]byte) error) error {
+	timeout := time.After(k.Timeout)
+	for {
+		select {
+		case msg := <-k.Messages:
+			if err := check(msg.Value); err == nil {
+				return nil
+			}
+		case <-timeout:
+			return fmt.Errorf("timeout waiting for kafka message")
+		}
+	}
 }

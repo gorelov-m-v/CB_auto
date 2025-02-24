@@ -98,6 +98,11 @@ func (r *Repository) GetBrand(t provider.T, filters map[string]interface{}) *Bra
 			&updatedAtUnix,
 		)
 	})
+
+	if err == sql.ErrNoRows {
+		return nil
+	}
+
 	if err != nil {
 		t.Fatalf("Ошибка при получении данных бренда: %v", err)
 	}

@@ -33,7 +33,6 @@ func (s *CreateBrandNegativeSuite) BeforeAll(t provider.T) {
 	})
 }
 
-// Проверка создания бренда без названия
 func (s *CreateBrandNegativeSuite) TestCreateBrandWithoutName(t provider.T) {
 	t.WithNewStep("Попытка создания бренда без названия", func(sCtx provider.StepCtx) {
 		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
@@ -46,7 +45,6 @@ func (s *CreateBrandNegativeSuite) TestCreateBrandWithoutName(t provider.T) {
 	})
 }
 
-// Проверка создания бренда без alias
 func (s *CreateBrandNegativeSuite) TestCreateBrandWithoutAlias(t provider.T) {
 	t.WithNewStep("Попытка создания бренда без alias", func(sCtx provider.StepCtx) {
 		brandName := fmt.Sprintf("Test Brand %s", utils.GenerateAlias())
@@ -61,7 +59,6 @@ func (s *CreateBrandNegativeSuite) TestCreateBrandWithoutAlias(t provider.T) {
 	})
 }
 
-// Проверка создания бренда с заполненным alias но пустым названием
 func (s *CreateBrandNegativeSuite) TestCreateBrandWithAliasButNoName(t provider.T) {
 	t.WithNewStep("Попытка создания бренда с alias но без названия", func(sCtx provider.StepCtx) {
 		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
@@ -74,7 +71,6 @@ func (s *CreateBrandNegativeSuite) TestCreateBrandWithAliasButNoName(t provider.
 	})
 }
 
-// Проверка создания бренда с пустым alias но заполненным названием
 func (s *CreateBrandNegativeSuite) TestCreateBrandWithNameButNoAlias(t provider.T) {
 	t.WithNewStep("Попытка создания бренда с названием но без alias", func(sCtx provider.StepCtx) {
 		brandName := fmt.Sprintf("Test Brand %s", utils.GenerateAlias())
@@ -89,7 +85,6 @@ func (s *CreateBrandNegativeSuite) TestCreateBrandWithNameButNoAlias(t provider.
 	})
 }
 
-// Вспомогательные методы
 func (s *CreateBrandNegativeSuite) createBrandRequest(name, alias string, names map[string]string) *clientTypes.Request[models.CreateCapBrandRequestBody] {
 	return &clientTypes.Request[models.CreateCapBrandRequestBody]{
 		Headers: map[string]string{

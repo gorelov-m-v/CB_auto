@@ -18,11 +18,6 @@ import (
 	"github.com/ozontech/allure-go/pkg/framework/suite"
 )
 
-const (
-	StatusEnabled  = 1
-	StatusDisabled = 0
-)
-
 type BrandStatusSuite struct {
 	suite.Suite
 	config     *config.Config
@@ -47,7 +42,6 @@ func (s *BrandStatusSuite) TestBrandStatusManagement(t provider.T) {
 
 	var brandID string
 
-	// Создание тестового бренда
 	t.WithNewStep("Создание тестового бренда", func(sCtx provider.StepCtx) {
 		brandName := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
 		createRequest := &types.Request[models.CreateCapBrandRequestBody]{
@@ -66,14 +60,13 @@ func (s *BrandStatusSuite) TestBrandStatusManagement(t provider.T) {
 		}
 
 		createResp := s.capService.CreateCapBrand(createRequest)
-		sCtx.Assert().Equal(http.StatusCreated, createResp.StatusCode, "Бренд должен быть успешно создан")
+		sCtx.Assert().Equal(http.StatusOK, createResp.StatusCode, "Бренд должен быть успешно создан")
 		brandID = createResp.Body.ID
 
 		sCtx.WithAttachments(allure.NewAttachment("CreateBrand Request", allure.JSON, utils.CreateHttpAttachRequest(createRequest)))
 		sCtx.WithAttachments(allure.NewAttachment("CreateBrand Response", allure.JSON, utils.CreateHttpAttachResponse(createResp)))
 	})
 
-	// Включение бренда
 	t.WithNewStep("Включение бренда", func(sCtx provider.StepCtx) {
 		updateRequest := &types.Request[models.UpdateBrandStatusRequestBody]{
 			Headers: map[string]string{
@@ -84,19 +77,17 @@ func (s *BrandStatusSuite) TestBrandStatusManagement(t provider.T) {
 				"id": brandID,
 			},
 			Body: &models.UpdateBrandStatusRequestBody{
-				Status: StatusEnabled,
+				Status: models.StatusEnabled,
 			},
 		}
 
 		updateResp := s.capService.UpdateBrandStatus(updateRequest)
-		sCtx.Assert().Equal(http.StatusOK, updateResp.StatusCode, "Статус бренда должен быть успешно обновлен")
+		sCtx.Assert().Equal(http.StatusNoContent, updateResp.StatusCode, "Статус бренда должен быть успешно обновлен")
 
-		// Проверка статуса
 		getBrandResp := s.getBrandStatus(sCtx, brandID)
-		sCtx.Assert().Equal(StatusEnabled, getBrandResp.Body.Status, "Статус бренда должен быть Enabled")
+		sCtx.Assert().Equal(models.StatusEnabled, getBrandResp.Body.Status, "Статус бренда должен быть Enabled")
 	})
 
-	// Отключение бренда
 	t.WithNewStep("Отключение бренда", func(sCtx provider.StepCtx) {
 		updateRequest := &types.Request[models.UpdateBrandStatusRequestBody]{
 			Headers: map[string]string{
@@ -107,19 +98,17 @@ func (s *BrandStatusSuite) TestBrandStatusManagement(t provider.T) {
 				"id": brandID,
 			},
 			Body: &models.UpdateBrandStatusRequestBody{
-				Status: StatusDisabled,
+				Status: models.StatusDisabled,
 			},
 		}
 
 		updateResp := s.capService.UpdateBrandStatus(updateRequest)
-		sCtx.Assert().Equal(http.StatusOK, updateResp.StatusCode, "Статус бренда должен быть успешно обновлен")
+		sCtx.Assert().Equal(http.StatusNoContent, updateResp.StatusCode, "Статус бренда должен быть успешно обновлен")
 
-		// Проверка статуса
 		getBrandResp := s.getBrandStatus(sCtx, brandID)
-		sCtx.Assert().Equal(StatusDisabled, getBrandResp.Body.Status, "Статус бренда должен быть Disabled")
+		sCtx.Assert().Equal(models.StatusDisabled, getBrandResp.Body.Status, "Статус бренда должен быть Disabled")
 	})
 
-	// Очистка - удаление тестового бренда
 	t.WithNewStep("Удаление тестового бренда", func(sCtx provider.StepCtx) {
 		deleteRequest := &types.Request[struct{}]{
 			Headers: map[string]string{
@@ -136,7 +125,6 @@ func (s *BrandStatusSuite) TestBrandStatusManagement(t provider.T) {
 	})
 }
 
-// Вспомогательный метод для получения статуса бренда
 func (s *BrandStatusSuite) getBrandStatus(t provider.StepCtx, brandID string) *types.Response[models.GetCapBrandResponseBody] {
 	getBrandRequest := &types.Request[struct{}]{
 		Headers: map[string]string{
@@ -158,7 +146,7 @@ func (s *BrandStatusSuite) getBrandStatus(t provider.StepCtx, brandID string) *t
 }
 
 func (s *BrandStatusSuite) AfterAll(t provider.T) {
-	// Очистка ресурсов не требуется
+
 }
 
 func TestBrandStatusSuite(t *testing.T) {

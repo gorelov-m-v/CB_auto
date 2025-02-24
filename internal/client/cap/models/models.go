@@ -1,5 +1,11 @@
 package models
 
+const (
+	StatusEnabled  = 1
+	StatusDisabled = 2
+	StatusDeleted  = 3
+)
+
 type AdminCheckRequestBody struct {
 	UserName string `json:"username"`
 	Password string `json:"password"`
@@ -72,4 +78,14 @@ type UpdateCapBrandRequestBody struct {
 
 type UpdateCapBrandResponseBody struct {
 	ID string `json:"id"`
+}
+
+type BrandEvent struct {
+	Message struct {
+		EventType string `json:"eventType"`
+	} `json:"message"`
+	Brand struct {
+		UUID      string `json:"uuid"`
+		DeletedAt int64  `json:"deleted_at,omitempty"`
+	} `json:"brand"`
 }
