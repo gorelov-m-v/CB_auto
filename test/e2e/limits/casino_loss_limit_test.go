@@ -134,6 +134,7 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
 				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
 			},
 		}
+
 		testData.casinoLossLimitResponse = s.publicClient.GetCasinoLossLimits(sCtx, req)
 
 		sCtx.Assert().Equal(http.StatusOK, testData.casinoLossLimitResponse.StatusCode, "Лимиты получены")
@@ -155,22 +156,24 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
 
 	t.WithNewAsyncStep("Проверка сообщения в NATS о создании лимита на проигрыш", func(sCtx provider.StepCtx) {
 		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
-		casinoLossEvent := nats.FindMessageInStream(sCtx, s.natsClient, subject, func(msg nats.LimitChangedV2, msgType string) bool {
-			return msg.EventType == nats.EventTypeCreated &&
-				len(msg.Limits) > 0 &&
-				msg.Limits[0].LimitType == nats.LimitTypeCasinoLoss
+
+		casinoLossEvent := nats.FindMessageInStream[nats.LimitChangedV2](sCtx, s.natsClient, subject, func(data nats.LimitChangedV2, msgType string) bool {
+			return data.EventType == nats.EventTypeCreated &&
+				len(data.Limits) > 0 &&
+				data.Limits[0].LimitType == nats.LimitTypeCasinoLoss
 		})
+
+		sCtx.Require().NotNil(casinoLossEvent, "Должно получиться получить сообщение из NATS")
 
 		limit := casinoLossEvent.Payload.Limits[0]
 		eventType := casinoLossEvent.Payload.EventType
-
 		sCtx.Assert().Equal(testData.limitMessage.ID, limit.ExternalID, "ID лимита совпадает")
 		sCtx.Assert().Equal(testData.limitMessage.Amount, limit.Amount, "Сумма лимита совпадает")
 		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, limit.CurrencyCode, "Валюта лимита совпадает")
 		sCtx.Assert().Equal(testData.limitMessage.LimitType, limit.LimitType, "Тип лимита на проигрыш совпадает")
 		sCtx.Assert().True(limit.Status, "Статус лимита на проигрыш установлен")
-		sCtx.Assert().Equal(testData.limitMessage.ExpiresAt, limit.ExpiresAt, "Время начала установлено")
-		sCtx.Assert().Equal(testData.limitMessage.StartedAt, limit.StartedAt, "Время окончания установлено")
+		sCtx.Assert().Equal(testData.limitMessage.StartedAt, limit.StartedAt, "Время начала установлено")
+		sCtx.Assert().Equal(testData.limitMessage.ExpiresAt, limit.ExpiresAt, "Время окончания установлено")
 		sCtx.Assert().Equal(testData.limitMessage.IntervalType, limit.IntervalType, "Тип интервала совпадает")
 		sCtx.Assert().Equal(nats.LimitTypeCasinoLoss, limit.LimitType, "Тип лимита совпадает")
 		sCtx.Assert().Equal(eventType, casinoLossEvent.Payload.EventType, "Тип события совпадает")
