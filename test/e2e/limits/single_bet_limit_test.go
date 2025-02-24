@@ -15,14 +15,11 @@ import (
 	"CB_auto/internal/config"
 	"CB_auto/internal/transport/kafka"
 	"CB_auto/internal/transport/nats"
-	"CB_auto/pkg/utils"
 
-	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
 )
 
-// SingleBetLimitSuite содержит тесты для проверки создания лимита на одиночную ставку.
 type SingleBetLimitSuite struct {
 	suite.Suite
 	config       *config.Config
@@ -31,7 +28,6 @@ type SingleBetLimitSuite struct {
 	natsClient   *nats.NatsClient
 }
 
-// BeforeAll выполняет инициализацию необходимых клиентов и конфигураций.
 func (s *SingleBetLimitSuite) BeforeAll(t provider.T) {
 	t.Epic("Лимиты")
 
@@ -52,12 +48,10 @@ func (s *SingleBetLimitSuite) BeforeAll(t provider.T) {
 	})
 }
 
-// TestSingleBetLimit проверяет создание single-bet лимита через несколько компонентов.
 func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 	t.Feature("single-bet лимит")
 	t.Title("Проверка создания single-bet лимита в Kafka, NATS, Redis, MySQL, Public API, CAP API")
 
-	// Объединяем все тестовые данные в одну структуру.
 	var testData struct {
 		registrationResponse   *clientTypes.Response[models.FastRegistrationResponseBody]
 		authorizationResponse  *clientTypes.Response[models.TokenCheckResponseBody]
@@ -74,7 +68,9 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 				Currency: s.config.Node.DefaultCurrency,
 			},
 		}
+
 		testData.registrationResponse = s.publicClient.FastRegistration(sCtx, req)
+
 		sCtx.Assert().Equal(http.StatusOK, testData.registrationResponse.StatusCode, "Успешная регистрация")
 	})
 
@@ -83,8 +79,8 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 			return msg.Message.EventType == "player.signUpFast" &&
 				msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
+
 		sCtx.Require().NotEmpty(testData.registrationMessage.Player.ID, "ID игрока не пустой")
-		sCtx.WithAttachments(allure.NewAttachment("Kafka Player Registration Message", allure.JSON, utils.CreatePrettyJSON(testData.registrationMessage)))
 	})
 
 	t.WithNewStep("Получение токена авторизации", func(sCtx provider.StepCtx) {
@@ -94,7 +90,9 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 				Password: testData.registrationResponse.Body.Password,
 			},
 		}
+
 		testData.authorizationResponse = s.publicClient.TokenCheck(sCtx, req)
+
 		sCtx.Require().Equal(http.StatusOK, testData.authorizationResponse.StatusCode, "Успешная авторизация")
 	})
 
@@ -108,7 +106,9 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 				Currency: s.config.Node.DefaultCurrency,
 			},
 		}
+
 		resp := s.publicClient.SetSingleBetLimit(sCtx, testData.setSingleBetLimitReq)
+
 		sCtx.Require().Equal(http.StatusCreated, resp.StatusCode, "Лимит на ставку установлен")
 	})
 
@@ -120,6 +120,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 				msg.Amount == testData.setSingleBetLimitReq.Body.Amount &&
 				msg.CurrencyCode == s.config.Node.DefaultCurrency
 		})
+
 		sCtx.Require().NotEmpty(testData.limitMessage.ID, "ID лимита не пустой")
 	})
 
@@ -129,6 +130,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
 			},
 		}
+
 		testData.singleBetLimitResponse = s.publicClient.GetSingleBetLimits(sCtx, req)
 
 		sCtx.Assert().Equal(http.StatusOK, testData.singleBetLimitResponse.StatusCode, "Лимиты получены")
@@ -146,11 +148,13 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 
 	t.WithNewAsyncStep("Проверка NATS-сообщения о создании лимита", func(sCtx provider.StepCtx) {
 		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
+
 		singleBetEvent := nats.FindMessageInStream(sCtx, s.natsClient, subject, func(msg nats.LimitChangedV2, msgType string) bool {
 			return msg.EventType == nats.EventTypeCreated &&
 				len(msg.Limits) > 0 &&
 				msg.Limits[0].LimitType == nats.LimitTypeSingleBet
 		})
+
 		sCtx.Require().NotNil(singleBetEvent, "Получено NATS-сообщение о создании лимита")
 
 		limit := singleBetEvent.Payload.Limits[0]

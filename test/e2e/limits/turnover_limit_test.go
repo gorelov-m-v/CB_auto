@@ -53,7 +53,6 @@ func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
 	t.Feature("turnover-of-funds лимит")
 	t.Title("Проверка создания лимита на оборот средств в Kafka, NATS, Redis, MySQL, Public API")
 
-	// Храним все данные теста в единой структуре.
 	var testData struct {
 		registrationResponse  *clientTypes.Response[models.FastRegistrationResponseBody]
 		authorizationResponse *clientTypes.Response[models.TokenCheckResponseBody]
@@ -63,7 +62,6 @@ func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
 		limitMessage          kafka.LimitMessage
 	}
 
-	// Шаг 1. Регистрация нового игрока.
 	t.WithNewStep("Регистрация нового игрока", func(sCtx provider.StepCtx) {
 		req := &clientTypes.Request[models.FastRegistrationRequestBody]{
 			Body: &models.FastRegistrationRequestBody{
@@ -71,20 +69,21 @@ func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
 				Currency: s.config.Node.DefaultCurrency,
 			},
 		}
+
 		testData.registrationResponse = s.publicClient.FastRegistration(sCtx, req)
+
 		sCtx.Assert().Equal(http.StatusOK, testData.registrationResponse.StatusCode, "Успешная регистрация")
 	})
 
-	// Шаг 2. Проверка Kafka-сообщения о регистрации игрока.
 	t.WithNewStep("Проверка Kafka-сообщения о регистрации игрока", func(sCtx provider.StepCtx) {
 		testData.registrationMessage = kafka.FindMessageByFilter[kafka.PlayerMessage](sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
 			return msg.Message.EventType == "player.signUpFast" &&
 				msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
+
 		sCtx.Require().NotEmpty(testData.registrationMessage.Player.ID, "ID игрока не пустой")
 	})
 
-	// Шаг 3. Получение токена авторизации.
 	t.WithNewStep("Получение токена авторизации", func(sCtx provider.StepCtx) {
 		req := &clientTypes.Request[models.TokenCheckRequestBody]{
 			Body: &models.TokenCheckRequestBody{
@@ -92,7 +91,9 @@ func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
 				Password: testData.registrationResponse.Body.Password,
 			},
 		}
+
 		testData.authorizationResponse = s.publicClient.TokenCheck(sCtx, req)
+
 		sCtx.Require().Equal(http.StatusOK, testData.authorizationResponse.StatusCode, "Успешная авторизация")
 	})
 
@@ -108,6 +109,7 @@ func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
 				StartedAt: time.Now().Unix(),
 			},
 		}
+
 		resp := s.publicClient.SetTurnoverLimit(sCtx, testData.setTurnoverLimitReq)
 
 		sCtx.Assert().Equal(http.StatusCreated, resp.StatusCode, "Лимит на оборот средств установлен")
@@ -121,6 +123,7 @@ func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
 				msg.Amount == testData.setTurnoverLimitReq.Body.Amount &&
 				msg.CurrencyCode == testData.setTurnoverLimitReq.Body.Currency
 		})
+
 		sCtx.Require().NotEmpty(testData.limitMessage.ID, "ID лимита не пустой")
 	})
 
@@ -130,7 +133,9 @@ func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
 				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
 			},
 		}
+
 		testData.turnoverLimitResponse = s.publicClient.GetTurnoverLimits(sCtx, req)
+
 		sCtx.Assert().Equal(http.StatusOK, testData.turnoverLimitResponse.StatusCode, "Лимиты получены")
 		sCtx.Assert().NotEmpty(testData.turnoverLimitResponse.Body, "Список лимитов не пустой")
 
@@ -150,11 +155,13 @@ func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
 
 	t.WithNewAsyncStep("Проверка сообщения в NATS о создании лимита на оборот средств", func(sCtx provider.StepCtx) {
 		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
+
 		turnoverEvent := nats.FindMessageInStream(sCtx, s.natsClient, subject, func(msg nats.LimitChangedV2, msgType string) bool {
 			return msg.EventType == nats.EventTypeCreated &&
 				len(msg.Limits) > 0 &&
 				msg.Limits[0].LimitType == nats.LimitTypeTurnoverFunds
 		})
+
 		sCtx.Require().NotNil(turnoverEvent, "Получено NATS-сообщение о создании лимита")
 
 		limit := turnoverEvent.Payload.Limits[0]
