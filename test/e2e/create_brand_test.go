@@ -29,6 +29,7 @@ type CreateBrandSuite struct {
 	database   *repository.Connector
 	capService capAPI.CapAPI
 	kafka      *kafka.Kafka
+	brandRepo  *brand.Repository
 }
 
 func (s *CreateBrandSuite) BeforeAll(t provider.T) {
@@ -41,8 +42,10 @@ func (s *CreateBrandSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Соединение с базой данных.", func(sCtx provider.StepCtx) {
+
 		connector := repository.OpenConnector(t, &s.config.MySQL, repository.Core)
 		s.database = &connector
+		brandRepo = brand.NewRepository(s.database.DB(), &s.config.MySQL)
 	})
 
 	t.WithNewStep("Инициализация Kafka consumer.", func(sCtx provider.StepCtx) {
