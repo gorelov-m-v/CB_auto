@@ -1,7 +1,6 @@
 package test
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"testing"
@@ -62,7 +61,7 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 
 	t.WithNewStep("Создание бренда в CAP.", func(sCtx provider.StepCtx) {
 		names := map[string]string{
-			"en": utils.GenerateAlias(),
+			"en": utils.Get(utils.BRAND_TITLE, 20),
 		}
 
 		testData.createCapBrandRequest = &clientTypes.Request[models.CreateCapBrandRequestBody]{
@@ -73,9 +72,9 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 			},
 			Body: &models.CreateCapBrandRequestBody{
 				Sort:        1,
-				Alias:       utils.GenerateAlias(),
+				Alias:       utils.Get(utils.ALIAS, 10),
 				Names:       names,
-				Description: utils.GenerateAlias(),
+				Description: utils.Get(utils.BRAND_TITLE, 50),
 			},
 		}
 
@@ -88,15 +87,10 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 		}
 		brandData := s.brandRepo.GetBrand(sCtx, filters)
 
-		var dbNames map[string]string
-		if err := json.Unmarshal(brandData.LocalizedNames, &dbNames); err != nil {
-			t.Fatalf("Ошибка при парсинге LocalizedNames: %v", err)
-		}
-
-		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Names, dbNames, "Names бренда в БД совпадают с Names в запросе")
+		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Names, brandData.LocalizedNames, "Names бренда в БД совпадают с Names в запросе")
+		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Description, brandData.Description, "Description бренда в БД совпадает с Description в запросе")
 		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Alias, brandData.Alias, "Alias бренда в БД совпадает с Alias в запросе")
 		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Sort, brandData.Sort, "Sort бренда в БД совпадает с Sort в запросе")
-		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Description, brandData.Description, "Description бренда в БД совпадает с Description в запросе")
 		sCtx.Assert().Equal(s.config.Node.ProjectID, brandData.NodeUUID, "NodeUUID бренда в БД совпадает с NodeUUID в запросе")
 		sCtx.Assert().Equal(models.StatusDisabled, brandData.Status, "Status бренда в БД равен StatusDisabled")
 		sCtx.Assert().NotZero(brandData.CreatedAt, "CreatedAt бренда в БД не равен нулю")

@@ -1,30 +1,31 @@
 package brand
 
 import (
+	"CB_auto/internal/config"
+	"CB_auto/internal/repository"
+	"CB_auto/pkg/utils"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
 	"time"
 
-	"CB_auto/internal/config"
-	"CB_auto/internal/repository"
-
-	"github.com/google/uuid"
+	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
 
 type Brand struct {
-	UUID           string    `db:"uuid"`
-	Alias          string    `db:"alias"`
-	LocalizedNames []byte    `db:"localized_names"`
-	Description    string    `db:"description"`
-	NodeUUID       string    `db:"node_uuid"`
-	Status         int       `db:"status"`
-	Sort           int       `db:"sort"`
-	CreatedAt      time.Time `db:"created_at"`
-	UpdatedAt      time.Time `db:"updated_at"`
+	UUID           string            `db:"uuid"`
+	Alias          string            `db:"alias"`
+	LocalizedNames map[string]string `db:"localized_names"`
+	Description    string            `db:"description"`
+	NodeUUID       string            `db:"node_uuid"`
+	Status         int               `db:"status"`
+	Sort           int               `db:"sort"`
+	CreatedAt      time.Time         `db:"created_at"`
+	UpdatedAt      time.Time         `db:"updated_at"`
 }
 
 type Repository struct {
@@ -100,19 +101,22 @@ func (r *Repository) GetBrand(sCtx provider.StepCtx, filters map[string]interfac
 	})
 	if err != nil {
 		log.Printf("Ошибка при получении данных бренда: %v", err)
+		return nil
 	}
 
-	brand.LocalizedNames = localizedNamesRaw
+	// Декодирование JSON с обработкой
+	if err := json.Unmarshal(localizedNamesRaw, &brand.LocalizedNames); err != nil {
+		log.Printf("Ошибка декодирования JSON: %v", err)
+		return nil
+	}
+
 	brand.CreatedAt = time.Unix(createdAtUnix, 0)
 	if updatedAtUnix.Valid {
 		brand.UpdatedAt = time.Unix(updatedAtUnix.Int64, 0)
 	}
 
-	nodeUUID, err := uuid.Parse(nodeUUIDStr)
-	if err != nil {
-		log.Printf("Ошибка при парсинге node UUID: %v", err)
-	}
-	brand.NodeUUID = nodeUUID.String()
+	brand.NodeUUID = nodeUUIDStr
 
+	sCtx.WithAttachments(allure.NewAttachment("Brand DB Data", allure.JSON, utils.CreatePrettyJSON(brand)))
 	return &brand
 }
