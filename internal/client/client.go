@@ -13,7 +13,9 @@ import (
 
 	"CB_auto/internal/client/types"
 	"CB_auto/internal/config"
+	"CB_auto/pkg/utils"
 
+	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
 
@@ -41,15 +43,15 @@ func InitClient(t provider.T, cfg *config.Config, clientType types.ClientType) *
 	}
 }
 
-func DoRequest[T any, V any](c *types.Client, r *types.Request[T]) (*types.Response[V], error) {
-	req, err := makeRequest(c.ServiceURL, r)
+func DoRequest[T any, V any](sCtx provider.StepCtx, c *types.Client, request *types.Request[T]) (*types.Response[V], error) {
+	req, err := makeRequest(c.ServiceURL, request)
 	if err != nil {
 		return nil, fmt.Errorf("makeRequest failed: %v", err)
 	}
 
 	log.Printf("Request URL: %s, Method: %s, Headers: %+v", req.URL.String(), req.Method, req.Header)
-	if r.Body != nil {
-		bodyBytes, _ := json.Marshal(r.Body)
+	if request.Body != nil {
+		bodyBytes, _ := json.Marshal(request.Body)
 		log.Printf("Request Body: %s", string(bodyBytes))
 	}
 
@@ -81,6 +83,9 @@ func DoRequest[T any, V any](c *types.Client, r *types.Request[T]) (*types.Respo
 			return nil, fmt.Errorf("failed to decode response body: %v", err)
 		}
 	}
+
+	sCtx.WithAttachments(allure.NewAttachment("HTTP request", allure.JSON, utils.CreateHttpAttachRequest(request)))
+	sCtx.WithAttachments(allure.NewAttachment("HTTP response", allure.JSON, utils.CreateHttpAttachResponse(response)))
 
 	return response, nil
 }

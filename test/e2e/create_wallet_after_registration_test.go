@@ -14,11 +14,9 @@ import (
 	"CB_auto/internal/transport/kafka"
 	"CB_auto/internal/transport/nats"
 	"CB_auto/internal/transport/redis"
-	"CB_auto/pkg/utils"
 	"CB_auto/test/e2e/constants"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
 )
@@ -31,6 +29,7 @@ type FastRegistrationSuite struct {
 	redisClient   *redis.RedisClient
 	kafka         *kafka.Kafka
 	walletDB      *repository.Connector
+	walletRepo    *wallet.Repository
 }
 
 func (s *FastRegistrationSuite) BeforeAll(t provider.T) {
@@ -39,11 +38,11 @@ func (s *FastRegistrationSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация http-клиента и Public API сервиса.", func(sCtx provider.StepCtx) {
-		s.publicService = factory.InitClient[publicAPI.PublicAPI](t, s.config, clientTypes.Public)
+		s.publicService = factory.InitClient[publicAPI.PublicAPI](sCtx, s.config, clientTypes.Public)
 	})
 
 	t.WithNewStep("Инициализация NATS клиента.", func(sCtx provider.StepCtx) {
-		s.natsClient = nats.NewClient(t, &s.config.Nats)
+		s.natsClient = nats.NewClient(&s.config.Nats)
 	})
 
 	t.WithNewStep("Инициализация Redis клиента.", func(sCtx provider.StepCtx) {
@@ -51,13 +50,13 @@ func (s *FastRegistrationSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация Kafka.", func(sCtx provider.StepCtx) {
-		s.kafka = kafka.NewConsumer(t, s.config, kafka.PlayerTopic)
-		s.kafka.StartReading(t)
+		s.kafka = kafka.GetInstance(t, s.config)
 	})
 
 	t.WithNewStep("Соединение с базой данных wallet.", func(sCtx provider.StepCtx) {
 		connector := repository.OpenConnector(t, &s.config.MySQL, repository.Wallet)
 		s.walletDB = &connector
+		s.walletRepo = wallet.NewRepository(s.walletDB.DB(), &s.config.MySQL)
 	})
 }
 
@@ -68,15 +67,15 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 	t.Title("Проверка создания кошелька при регистрации пользователя")
 
 	type TestData struct {
-		authResponse              *models.TokenCheckResponseBody
-		registrationResponse      *models.FastRegistrationResponseBody
-		playerRegistrationMessage *kafka.PlayerMessage
+		authResponse              *clientTypes.Response[models.TokenCheckResponseBody]
+		registrationResponse      *clientTypes.Response[models.FastRegistrationResponseBody]
+		playerRegistrationMessage kafka.PlayerMessage
 		walletCreatedEvent        *nats.NatsMessage[nats.WalletCreatedPayload]
 	}
 	var testData TestData
 
 	t.WithNewStep("Регистрация пользователя.", func(sCtx provider.StepCtx) {
-		createReq := &clientTypes.Request[models.FastRegistrationRequestBody]{
+		req := &clientTypes.Request[models.FastRegistrationRequestBody]{
 			Headers: map[string]string{
 				"Content-Type": "application/json",
 			},
@@ -85,63 +84,45 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 				Currency: s.config.Node.DefaultCurrency,
 			},
 		}
-		createResp := s.publicService.FastRegistration(createReq)
-		testData.registrationResponse = &createResp.Body
+		testData.registrationResponse = s.publicService.FastRegistration(sCtx, req)
 
-		sCtx.Assert().NotEmpty(createResp.Body.Username, "Username в ответе регистрации не пустой")
-		sCtx.Assert().NotEmpty(createResp.Body.Password, "Password в ответе регистрации не пустой")
+		sCtx.Assert().NotEmpty(testData.registrationResponse.Body.Username, "Username в ответе регистрации не пустой")
+		sCtx.Assert().NotEmpty(testData.registrationResponse.Body.Password, "Password в ответе регистрации не пустой")
+	})
 
-		sCtx.WithAttachments(allure.NewAttachment("FastRegistration Request", allure.JSON, utils.CreateHttpAttachRequest(createReq)))
-		sCtx.WithAttachments(allure.NewAttachment("FastRegistration Response", allure.JSON, utils.CreateHttpAttachResponse(createResp)))
+	t.WithNewStep("Получение сообщения о регистрации из топика player.v1.account.", func(sCtx provider.StepCtx) {
+		testData.playerRegistrationMessage = kafka.FindMessageByFilter[kafka.PlayerMessage](sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
+			return msg.Message.EventType == "player.signUpFast" &&
+				msg.Player.AccountID == testData.registrationResponse.Body.Username
+		})
+
+		sCtx.Require().NotEmpty(testData.playerRegistrationMessage.Player.ExternalID, "External ID игрока в регистрации не пустой")
 	})
 
 	t.WithNewStep("Получение токена авторизации.", func(sCtx provider.StepCtx) {
-		authReq := &clientTypes.Request[models.TokenCheckRequestBody]{
+		req := &clientTypes.Request[models.TokenCheckRequestBody]{
 			Headers: map[string]string{
 				"Content-Type": "application/json",
 			},
 			Body: &models.TokenCheckRequestBody{
-				Username: testData.registrationResponse.Username,
-				Password: testData.registrationResponse.Password,
+				Username: testData.registrationResponse.Body.Username,
+				Password: testData.registrationResponse.Body.Password,
 			},
 		}
-		authResp := s.publicService.TokenCheck(authReq)
-		testData.authResponse = &authResp.Body
+		testData.authResponse = s.publicService.TokenCheck(sCtx, req)
 
-		sCtx.Assert().NotEmpty(authResp.Body.Token, "Токен авторизации не пустой")
-		sCtx.Assert().NotEmpty(authResp.Body.RefreshToken, "Refresh токен не пустой")
-
-		sCtx.WithAttachments(allure.NewAttachment("TokenCheck Request", allure.JSON, utils.CreateHttpAttachRequest(authReq)))
-		sCtx.WithAttachments(allure.NewAttachment("TokenCheck Response", allure.JSON, utils.CreateHttpAttachResponse(authResp)))
-	})
-
-	t.WithNewStep("Получение сообщения о регистрации из топика player.v1.account.", func(sCtx provider.StepCtx) {
-		message := kafka.FindMessageByFilter(s.kafka, t, func(msg kafka.PlayerMessage) bool {
-			return msg.Message.EventType == "player.signUpFast" &&
-				msg.Player.AccountID == testData.registrationResponse.Username
-		})
-		playerRegistrationMessage := kafka.ParseMessage[kafka.PlayerMessage](t, message)
-		testData.playerRegistrationMessage = &playerRegistrationMessage
-
-		sCtx.Assert().NotEmpty(playerRegistrationMessage.Player.ExternalID, "External ID игрока в регистрации не пустой")
-
-		sCtx.WithAttachments(allure.NewAttachment("Kafka Message", allure.JSON, utils.CreatePrettyJSON(playerRegistrationMessage)))
+		sCtx.Assert().NotEmpty(testData.authResponse.Body.Token, "Токен авторизации не пустой")
+		sCtx.Assert().NotEmpty(testData.authResponse.Body.RefreshToken, "Refresh токен не пустой")
 	})
 
 	t.WithNewStep("Проверка создания кошелька в NATS.", func(sCtx provider.StepCtx) {
-		subject := fmt.Sprintf("%s.wallet.*.%s.*",
-			s.config.Nats.StreamPrefix,
-			testData.playerRegistrationMessage.Player.ExternalID,
-		)
-		s.natsClient.Subscribe(t, subject)
+		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.playerRegistrationMessage.Player.ExternalID)
 
-		testData.walletCreatedEvent = nats.FindMessageByFilter[nats.WalletCreatedPayload](
-			s.natsClient, t, func(wallet nats.WalletCreatedPayload, msgType string) bool {
-				return wallet.WalletType == nats.TypeReal &&
-					wallet.WalletStatus == nats.StatusEnabled &&
-					wallet.IsBasic
-			},
-		)
+		testData.walletCreatedEvent = nats.FindMessageInStream(sCtx, s.natsClient, subject, func(wallet nats.WalletCreatedPayload, msgType string) bool {
+			return wallet.WalletType == nats.TypeReal &&
+				wallet.WalletStatus == nats.StatusEnabled &&
+				wallet.IsBasic
+		})
 
 		sCtx.Assert().NotEmpty(testData.walletCreatedEvent.Payload.WalletUUID, "UUID кошелька в ивенте `wallet_created` не пустой")
 		sCtx.Assert().Equal(testData.playerRegistrationMessage.Player.ExternalID, testData.walletCreatedEvent.Payload.PlayerUUID, "UUID игрока в ивенте `wallet_created` совпадает с ожидаемым")
@@ -154,32 +135,26 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 		sCtx.Assert().True(testData.walletCreatedEvent.Payload.IsBasic, "Кошелёк в ивенте `wallet_created` помечен как базовый")
 		sCtx.Assert().NotEmpty(testData.walletCreatedEvent.Payload.CreatedAt, "Дата создания в ивенте `wallet_created` не пустая")
 		sCtx.Assert().NotEmpty(testData.walletCreatedEvent.Payload.UpdatedAt, "Дата обновления в ивенте `wallet_created` не пустая")
-
-		sCtx.WithAttachments(allure.NewAttachment("NATS Wallet Message", allure.JSON, utils.CreatePrettyJSON(testData.walletCreatedEvent.Payload)))
 	})
 
 	t.WithNewAsyncStep("Проверка значения в Redis.", func(sCtx provider.StepCtx) {
 		key := testData.playerRegistrationMessage.Player.ExternalID
-		wallets := s.redisClient.GetWithRetry(t, key)
+		wallets := s.redisClient.GetWithRetry(sCtx, key)
 		var wallet redis.WalletData
 		for _, w := range wallets {
 			wallet = w
 			break
 		}
 
+		fmt.Println(wallet)
+
 		sCtx.Assert().Equal(int(nats.TypeReal), wallet.Type, "Тип кошелька в Redis – реальный")
 		sCtx.Assert().Equal(int(nats.StatusEnabled), wallet.Status, "Статус кошелька в Redis – включён")
 		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.WalletUUID, wallet.WalletUUID, "UUID кошелька в Redis совпадает с UUID из ивента `wallet_created`")
-
-		sCtx.WithAttachments(allure.NewAttachment(
-			"Redis Value", allure.JSON,
-			utils.CreatePrettyJSON(wallets),
-		))
 	})
 
 	t.WithNewAsyncStep("Проверка создания кошелька в БД.", func(sCtx provider.StepCtx) {
-		walletRepo := wallet.NewRepository(s.walletDB.DB(), &s.config.MySQL)
-		walletFromDatabase := walletRepo.GetWallet(t, map[string]interface{}{"uuid": testData.walletCreatedEvent.Payload.WalletUUID})
+		walletFromDatabase := s.walletRepo.GetWallet(sCtx, map[string]interface{}{"uuid": testData.walletCreatedEvent.Payload.WalletUUID})
 
 		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.WalletUUID, walletFromDatabase.UUID, "UUID кошелька в БД совпадает с UUID из ивента `wallet_created`")
 		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.PlayerUUID, walletFromDatabase.PlayerUUID, "UUID игрока в БД совпадает с UUID из ивента `wallet_created`")
@@ -201,24 +176,19 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 		sCtx.Assert().False(walletFromDatabase.IsSumsubVerified, "Кошелёк не верифицирован через Sumsub в БД")
 		sCtx.Assert().Equal(constants.ZeroAmount, walletFromDatabase.AvailableWithdrawal.String(), "Доступная сумма для вывода в БД равна 0")
 		sCtx.Assert().True(walletFromDatabase.IsKycVerified, "Кошелёк прошёл KYC-верификацию в БД")
-
-		sCtx.WithAttachments(allure.NewAttachment(
-			"Wallet DB Data", allure.JSON,
-			utils.CreatePrettyJSON(walletFromDatabase),
-		))
 	})
 
 	t.WithNewAsyncStep("Проверка получения списка кошельков.", func(sCtx provider.StepCtx) {
-		getWalletsReq := &clientTypes.Request[any]{
+		req := &clientTypes.Request[any]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", testData.authResponse.Token),
+				"Authorization":   fmt.Sprintf("Bearer %s", testData.authResponse.Body.Token),
 				"Platform-Locale": "en",
 			},
 		}
-		getWalletsResp := s.publicService.GetWallets(getWalletsReq)
+		resp := s.publicService.GetWallets(sCtx, req)
 
 		var foundWallet *models.WalletData
-		for _, wallet := range getWalletsResp.Body.Wallets {
+		for _, wallet := range resp.Body.Wallets {
 			if wallet.ID == testData.walletCreatedEvent.Payload.WalletUUID {
 				foundWallet = &wallet
 				break
@@ -228,14 +198,12 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 		sCtx.Assert().NotNil(foundWallet, "Кошелёк найден в списке")
 		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.Currency, foundWallet.Currency, "Валюта кошелька совпадает с ожидаемой")
 		sCtx.Assert().Equal(constants.ZeroAmount, foundWallet.Balance, "Баланс кошелька равен 0")
-		sCtx.Assert().True(foundWallet.Default, "Кошелёк помечен как \"по умолчанию\"")
-
-		sCtx.WithAttachments(allure.NewAttachment("GetWallets Request", allure.JSON, utils.CreateHttpAttachRequest(getWalletsReq)))
-		sCtx.WithAttachments(allure.NewAttachment("GetWallets Response", allure.JSON, utils.CreateHttpAttachResponse(getWalletsResp)))
+		sCtx.Assert().True(foundWallet.Default, "Кошелёк помечен как дефолтный")
 	})
 }
 
 func (s *FastRegistrationSuite) AfterAll(t provider.T) {
+	kafka.CloseInstance(t)
 	if s.natsClient != nil {
 		s.natsClient.Close()
 	}

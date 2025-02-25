@@ -1,21 +1,32 @@
 package public
 
 import (
-	httpClient "CB_auto/internal/client"
-	"CB_auto/internal/client/public/models"
-	"CB_auto/internal/client/types"
 	"fmt"
 	"log"
 	"net/http"
+
+	httpClient "CB_auto/internal/client"
+	"CB_auto/internal/client/public/models"
+	"CB_auto/internal/client/types"
+
+	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
 
 type PublicAPI interface {
-	FastRegistration(req *types.Request[models.FastRegistrationRequestBody]) *types.Response[models.FastRegistrationResponseBody]
-	TokenCheck(req *types.Request[models.TokenCheckRequestBody]) *types.Response[models.TokenCheckResponseBody]
-	GetWallets(req *types.Request[any]) *types.Response[models.GetWalletsResponseBody]
-	CreateWallet(req *types.Request[models.CreateWalletRequestBody]) *types.Response[models.CreateWalletResponseBody]
-	SwitchWallet(req *types.Request[models.SwitchWalletRequestBody]) *types.Response[struct{}]
-	RemoveWallet(req *types.Request[any]) *types.Response[struct{}]
+	FastRegistration(sCtx provider.StepCtx, req *types.Request[models.FastRegistrationRequestBody]) *types.Response[models.FastRegistrationResponseBody]
+	TokenCheck(sCtx provider.StepCtx, req *types.Request[models.TokenCheckRequestBody]) *types.Response[models.TokenCheckResponseBody]
+	GetWallets(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetWalletsResponseBody]
+	CreateWallet(sCtx provider.StepCtx, req *types.Request[models.CreateWalletRequestBody]) *types.Response[models.CreateWalletResponseBody]
+	SwitchWallet(sCtx provider.StepCtx, req *types.Request[models.SwitchWalletRequestBody]) *types.Response[struct{}]
+	RemoveWallet(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[struct{}]
+	SetSingleBetLimit(sCtx provider.StepCtx, req *types.Request[models.SetSingleBetLimitRequestBody]) *types.Response[struct{}]
+	SetCasinoLossLimit(sCtx provider.StepCtx, req *types.Request[models.SetCasinoLossLimitRequestBody]) *types.Response[struct{}]
+	GetTurnoverLimits(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetTurnoverLimitsResponseBody]
+	GetSingleBetLimits(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetSingleBetLimitsResponseBody]
+	SetRestriction(sCtx provider.StepCtx, req *types.Request[models.SetRestrictionRequestBody]) *types.Response[models.SetRestrictionResponseBody]
+	GetRestriction(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.SetRestrictionResponseBody]
+	GetCasinoLossLimits(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetCasinoLossLimitsResponseBody]
+	SetTurnoverLimit(sCtx provider.StepCtx, req *types.Request[models.SetTurnoverLimitRequestBody]) *types.Response[struct{}]
 }
 
 type publicClient struct {
@@ -26,10 +37,11 @@ func NewClient(baseClient *types.Client) PublicAPI {
 	return &publicClient{client: baseClient}
 }
 
-func (c *publicClient) FastRegistration(req *types.Request[models.FastRegistrationRequestBody]) *types.Response[models.FastRegistrationResponseBody] {
+func (c *publicClient) FastRegistration(sCtx provider.StepCtx, req *types.Request[models.FastRegistrationRequestBody]) *types.Response[models.FastRegistrationResponseBody] {
 	req.Method = "POST"
 	req.Path = "/_front_api/api/v1/registration/fast"
-	resp, err := httpClient.DoRequest[models.FastRegistrationRequestBody, models.FastRegistrationResponseBody](c.client, req)
+	resp, err := httpClient.DoRequest[models.FastRegistrationRequestBody, models.FastRegistrationResponseBody](sCtx, c.client, req)
+
 	if err != nil {
 		log.Printf("FastRegistration failed: %v", err)
 		return &types.Response[models.FastRegistrationResponseBody]{
@@ -39,13 +51,14 @@ func (c *publicClient) FastRegistration(req *types.Request[models.FastRegistrati
 			},
 		}
 	}
+
 	return resp
 }
 
-func (c *publicClient) TokenCheck(req *types.Request[models.TokenCheckRequestBody]) *types.Response[models.TokenCheckResponseBody] {
+func (c *publicClient) TokenCheck(sCtx provider.StepCtx, req *types.Request[models.TokenCheckRequestBody]) *types.Response[models.TokenCheckResponseBody] {
 	req.Method = "POST"
 	req.Path = "/_front_api/api/token/check"
-	resp, err := httpClient.DoRequest[models.TokenCheckRequestBody, models.TokenCheckResponseBody](c.client, req)
+	resp, err := httpClient.DoRequest[models.TokenCheckRequestBody, models.TokenCheckResponseBody](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("TokenCheck failed: %v", err)
 		return &types.Response[models.TokenCheckResponseBody]{
@@ -55,13 +68,14 @@ func (c *publicClient) TokenCheck(req *types.Request[models.TokenCheckRequestBod
 			},
 		}
 	}
+
 	return resp
 }
 
-func (c *publicClient) GetWallets(req *types.Request[any]) *types.Response[models.GetWalletsResponseBody] {
+func (c *publicClient) GetWallets(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetWalletsResponseBody] {
 	req.Method = "GET"
 	req.Path = "/_front_api/api/v1/wallets"
-	resp, err := httpClient.DoRequest[any, models.GetWalletsResponseBody](c.client, req)
+	resp, err := httpClient.DoRequest[any, models.GetWalletsResponseBody](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("GetWallets failed: %v", err)
 		return &types.Response[models.GetWalletsResponseBody]{
@@ -71,13 +85,14 @@ func (c *publicClient) GetWallets(req *types.Request[any]) *types.Response[model
 			},
 		}
 	}
+
 	return resp
 }
 
-func (c *publicClient) CreateWallet(req *types.Request[models.CreateWalletRequestBody]) *types.Response[models.CreateWalletResponseBody] {
+func (c *publicClient) CreateWallet(sCtx provider.StepCtx, req *types.Request[models.CreateWalletRequestBody]) *types.Response[models.CreateWalletResponseBody] {
 	req.Method = "POST"
 	req.Path = "/_front_api/api/v1/wallets"
-	resp, err := httpClient.DoRequest[models.CreateWalletRequestBody, models.CreateWalletResponseBody](c.client, req)
+	resp, err := httpClient.DoRequest[models.CreateWalletRequestBody, models.CreateWalletResponseBody](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("CreateWallet failed: %v", err)
 		return &types.Response[models.CreateWalletResponseBody]{
@@ -87,13 +102,14 @@ func (c *publicClient) CreateWallet(req *types.Request[models.CreateWalletReques
 			},
 		}
 	}
+
 	return resp
 }
 
-func (c *publicClient) SwitchWallet(req *types.Request[models.SwitchWalletRequestBody]) *types.Response[struct{}] {
+func (c *publicClient) SwitchWallet(sCtx provider.StepCtx, req *types.Request[models.SwitchWalletRequestBody]) *types.Response[struct{}] {
 	req.Method = "PUT"
 	req.Path = "/_front_api/api/v1/wallets/switch"
-	resp, err := httpClient.DoRequest[models.SwitchWalletRequestBody, struct{}](c.client, req)
+	resp, err := httpClient.DoRequest[models.SwitchWalletRequestBody, struct{}](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("SwitchWallet failed: %v", err)
 		return &types.Response[struct{}]{
@@ -103,13 +119,14 @@ func (c *publicClient) SwitchWallet(req *types.Request[models.SwitchWalletReques
 			},
 		}
 	}
+
 	return resp
 }
 
-func (c *publicClient) RemoveWallet(req *types.Request[any]) *types.Response[struct{}] {
+func (c *publicClient) RemoveWallet(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[struct{}] {
 	req.Method = "DELETE"
 	req.Path = "/_front_api/api/v1/wallets/remove"
-	resp, err := httpClient.DoRequest[any, struct{}](c.client, req)
+	resp, err := httpClient.DoRequest[any, struct{}](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("RemoveWallet failed: %v", err)
 		return &types.Response[struct{}]{
@@ -119,5 +136,142 @@ func (c *publicClient) RemoveWallet(req *types.Request[any]) *types.Response[str
 			},
 		}
 	}
+
+	return resp
+}
+
+func (c *publicClient) SetSingleBetLimit(sCtx provider.StepCtx, req *types.Request[models.SetSingleBetLimitRequestBody]) *types.Response[struct{}] {
+	req.Method = "POST"
+	req.Path = "/_front_api/api/v1/player/single-limits/single-bet"
+	resp, err := httpClient.DoRequest[models.SetSingleBetLimitRequestBody, struct{}](sCtx, c.client, req)
+	if err != nil {
+		log.Printf("SetSingleBetLimit failed: %v", err)
+		return &types.Response[struct{}]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("SetSingleBetLimit failed: %v", err),
+			},
+		}
+	}
+
+	return resp
+}
+
+func (c *publicClient) SetCasinoLossLimit(sCtx provider.StepCtx, req *types.Request[models.SetCasinoLossLimitRequestBody]) *types.Response[struct{}] {
+	req.Method = "POST"
+	req.Path = "/_front_api/api/v1/player/recalculated-limits/casino-loss"
+	resp, err := httpClient.DoRequest[models.SetCasinoLossLimitRequestBody, struct{}](sCtx, c.client, req)
+	if err != nil {
+		log.Printf("SetCasinoLossLimit failed: %v", err)
+		return &types.Response[struct{}]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("SetCasinoLossLimit failed: %v", err),
+			},
+		}
+	}
+
+	return resp
+}
+
+func (c *publicClient) GetTurnoverLimits(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetTurnoverLimitsResponseBody] {
+	req.Method = "GET"
+	req.Path = "/_front_api/api/v1/player/recalculated-limits/turnover-of-funds"
+	resp, err := httpClient.DoRequest[any, models.GetTurnoverLimitsResponseBody](sCtx, c.client, req)
+	if err != nil {
+		log.Printf("GetTurnoverLimits failed: %v", err)
+		return &types.Response[models.GetTurnoverLimitsResponseBody]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("GetTurnoverLimits failed: %v", err),
+			},
+		}
+	}
+
+	return resp
+}
+
+func (c *publicClient) GetSingleBetLimits(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetSingleBetLimitsResponseBody] {
+	req.Method = "GET"
+	req.Path = "/_front_api/api/v1/player/single-limits/single-bet"
+	resp, err := httpClient.DoRequest[any, models.GetSingleBetLimitsResponseBody](sCtx, c.client, req)
+	if err != nil {
+		log.Printf("GetSingleBetLimits failed: %v", err)
+		return &types.Response[models.GetSingleBetLimitsResponseBody]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("GetSingleBetLimits failed: %v", err),
+			},
+		}
+	}
+
+	return resp
+}
+
+func (c *publicClient) SetRestriction(sCtx provider.StepCtx, req *types.Request[models.SetRestrictionRequestBody]) *types.Response[models.SetRestrictionResponseBody] {
+	req.Method = "POST"
+	req.Path = "/_front_api/api/v1/player/restrictions"
+	resp, err := httpClient.DoRequest[models.SetRestrictionRequestBody, models.SetRestrictionResponseBody](sCtx, c.client, req)
+	if err != nil {
+		log.Printf("SetRestriction failed: %v", err)
+		return &types.Response[models.SetRestrictionResponseBody]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("SetRestriction failed: %v", err),
+			},
+		}
+	}
+
+	return resp
+}
+
+func (c *publicClient) GetRestriction(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.SetRestrictionResponseBody] {
+	req.Method = "GET"
+	req.Path = "/_front_api/api/v1/player/restrictions"
+	resp, err := httpClient.DoRequest[any, models.SetRestrictionResponseBody](sCtx, c.client, req)
+	if err != nil {
+		log.Printf("GetRestriction failed: %v", err)
+		return &types.Response[models.SetRestrictionResponseBody]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("GetRestriction failed: %v", err),
+			},
+		}
+	}
+
+	return resp
+}
+
+func (c *publicClient) GetCasinoLossLimits(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetCasinoLossLimitsResponseBody] {
+	req.Method = "GET"
+	req.Path = "/_front_api/api/v1/player/recalculated-limits/casino-loss"
+	resp, err := httpClient.DoRequest[any, models.GetCasinoLossLimitsResponseBody](sCtx, c.client, req)
+	if err != nil {
+		log.Printf("GetCasinoLossLimits failed: %v", err)
+		return &types.Response[models.GetCasinoLossLimitsResponseBody]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("GetCasinoLossLimits failed: %v", err),
+			},
+		}
+	}
+
+	return resp
+}
+
+func (c *publicClient) SetTurnoverLimit(sCtx provider.StepCtx, req *types.Request[models.SetTurnoverLimitRequestBody]) *types.Response[struct{}] {
+	req.Method = "POST"
+	req.Path = "/_front_api/api/v1/player/recalculated-limits/turnover-of-funds"
+	resp, err := httpClient.DoRequest[models.SetTurnoverLimitRequestBody, struct{}](sCtx, c.client, req)
+	if err != nil {
+		log.Printf("SetTurnoverLimit failed: %v", err)
+		return &types.Response[struct{}]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("SetTurnoverLimit failed: %v", err),
+			},
+		}
+	}
+
 	return resp
 }

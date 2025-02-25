@@ -2,6 +2,7 @@ package test
 
 import (
 	"fmt"
+	"net/http"
 	"testing"
 
 	"CB_auto/internal/client/factory"
@@ -14,10 +15,8 @@ import (
 	"CB_auto/internal/transport/kafka"
 	"CB_auto/internal/transport/nats"
 	"CB_auto/internal/transport/redis"
-	"CB_auto/pkg/utils"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
 )
@@ -30,6 +29,7 @@ type SwitchWalletSuite struct {
 	redisClient   *redis.RedisClient
 	kafka         *kafka.Kafka
 	walletDB      *repository.Connector
+	walletRepo    *wallet.Repository
 }
 
 func (s *SwitchWalletSuite) BeforeAll(t provider.T) {
@@ -38,11 +38,11 @@ func (s *SwitchWalletSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация http-клиента и Public API сервиса.", func(sCtx provider.StepCtx) {
-		s.publicService = factory.InitClient[publicAPI.PublicAPI](t, s.config, clientTypes.Public)
+		s.publicService = factory.InitClient[publicAPI.PublicAPI](sCtx, s.config, clientTypes.Public)
 	})
 
 	t.WithNewStep("Инициализация NATS клиента.", func(sCtx provider.StepCtx) {
-		s.natsClient = nats.NewClient(t, &s.config.Nats)
+		s.natsClient = nats.NewClient(&s.config.Nats)
 	})
 
 	t.WithNewStep("Инициализация Redis клиента.", func(sCtx provider.StepCtx) {
@@ -50,13 +50,13 @@ func (s *SwitchWalletSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация Kafka.", func(sCtx provider.StepCtx) {
-		s.kafka = kafka.NewConsumer(t, s.config, kafka.PlayerTopic)
-		s.kafka.StartReading(t)
+		s.kafka = kafka.GetInstance(t, s.config)
 	})
 
 	t.WithNewStep("Соединение с базой данных wallet.", func(sCtx provider.StepCtx) {
 		connector := repository.OpenConnector(t, &s.config.MySQL, repository.Wallet)
 		s.walletDB = &connector
+		s.walletRepo = wallet.NewRepository(s.walletDB.DB(), &s.config.MySQL)
 	})
 }
 
@@ -67,20 +67,20 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 	t.Title("Проверка переключения дефолтного кошелька")
 
 	type TestData struct {
-		registrationResponse         *models.FastRegistrationResponseBody
-		authResponse                 *models.TokenCheckResponseBody
-		createWalletResponse         *models.CreateWalletResponseBody
+		registrationResponse         *clientTypes.Response[models.FastRegistrationResponseBody]
+		authResponse                 *clientTypes.Response[models.TokenCheckResponseBody]
+		createWalletResponse         *clientTypes.Response[models.CreateWalletResponseBody]
 		mainWalletCreatedEvent       *nats.NatsMessage[nats.WalletCreatedPayload]
 		additionalWalletCreatedEvent *nats.NatsMessage[nats.WalletCreatedPayload]
 		setDefaultStartedEvent       *nats.NatsMessage[nats.SetDefaultStartedPayload]
 		defaultUnsettedEvent         *nats.NatsMessage[nats.DefaultUnsettedPayload]
 		setDefaultCommittedEvent     *nats.NatsMessage[nats.DefaultSettedPayload]
-		playerRegistrationMessage    *kafka.PlayerMessage
+		registrationMessage          kafka.PlayerMessage
 	}
 	var testData TestData
 
 	t.WithNewStep("Регистрация пользователя.", func(sCtx provider.StepCtx) {
-		createReq := &clientTypes.Request[models.FastRegistrationRequestBody]{
+		req := &clientTypes.Request[models.FastRegistrationRequestBody]{
 			Headers: map[string]string{
 				"Content-Type": "application/json",
 			},
@@ -89,68 +89,52 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 				Currency: s.config.Node.DefaultCurrency,
 			},
 		}
-		createResp := s.publicService.FastRegistration(createReq)
-		testData.registrationResponse = &createResp.Body
+		testData.registrationResponse = s.publicService.FastRegistration(sCtx, req)
 
-		sCtx.Assert().NotEmpty(createResp.Body.Username, "Username в ответе регистрации не пустой")
-		sCtx.Assert().NotEmpty(createResp.Body.Password, "Password в ответе регистрации не пустой")
-
-		sCtx.WithAttachments(allure.NewAttachment("FastRegistration Request", allure.JSON, utils.CreateHttpAttachRequest(createReq)))
-		sCtx.WithAttachments(allure.NewAttachment("FastRegistration Response", allure.JSON, utils.CreateHttpAttachResponse(createResp)))
+		sCtx.Assert().NotEmpty(testData.registrationResponse.Body.Username, "Username в ответе регистрации не пустой")
+		sCtx.Assert().NotEmpty(testData.registrationResponse.Body.Password, "Password в ответе регистрации не пустой")
 	})
 
 	t.WithNewStep("Получение сообщения о регистрации из топика player.v1.account.", func(sCtx provider.StepCtx) {
-		accountID := testData.registrationResponse.Username
-
-		message := kafka.FindMessageByFilter[kafka.PlayerMessage](s.kafka, t, func(msg kafka.PlayerMessage) bool {
+		testData.registrationMessage = kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
 			return msg.Message.EventType == "player.signUpFast" &&
-				msg.Player.AccountID == accountID
+				msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
-		playerRegistrationMessage := kafka.ParseMessage[kafka.PlayerMessage](t, message)
-		testData.playerRegistrationMessage = &playerRegistrationMessage
 
-		sCtx.WithAttachments(allure.NewAttachment("Kafka Player Message", allure.JSON, utils.CreatePrettyJSON(testData.playerRegistrationMessage)))
+		sCtx.Require().NotEmpty(testData.registrationMessage.Player.ExternalID, "External ID игрока в регистрации не пустой")
 	})
 
 	t.WithNewStep("Получение токена авторизации.", func(sCtx provider.StepCtx) {
-		authReq := &clientTypes.Request[models.TokenCheckRequestBody]{
+		req := &clientTypes.Request[models.TokenCheckRequestBody]{
 			Headers: map[string]string{
 				"Content-Type": "application/json",
 			},
 			Body: &models.TokenCheckRequestBody{
-				Username: testData.registrationResponse.Username,
-				Password: testData.registrationResponse.Password,
+				Username: testData.registrationResponse.Body.Username,
+				Password: testData.registrationResponse.Body.Password,
 			},
 		}
-		authResp := s.publicService.TokenCheck(authReq)
-		testData.authResponse = &authResp.Body
+		testData.authResponse = s.publicService.TokenCheck(sCtx, req)
 
-		sCtx.Assert().NotEmpty(authResp.Body.Token, "Токен авторизации не пустой")
-		sCtx.Assert().NotEmpty(authResp.Body.RefreshToken, "Refresh токен не пустой")
-
-		sCtx.WithAttachments(allure.NewAttachment("TokenCheck Request", allure.JSON, utils.CreateHttpAttachRequest(authReq)))
-		sCtx.WithAttachments(allure.NewAttachment("TokenCheck Response", allure.JSON, utils.CreateHttpAttachResponse(authResp)))
+		sCtx.Assert().NotEmpty(testData.authResponse.Body.Token, "Токен авторизации не пустой")
+		sCtx.Assert().NotEmpty(testData.authResponse.Body.RefreshToken, "Refresh токен не пустой")
 	})
 
 	t.WithNewStep("Получение сообщения о создании основного кошелька в NATS.", func(sCtx provider.StepCtx) {
-		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.playerRegistrationMessage.Player.ExternalID)
-		s.natsClient.Subscribe(t, subject)
+		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
 
-		testData.mainWalletCreatedEvent = nats.FindMessageByFilter[nats.WalletCreatedPayload](
-			s.natsClient, t, func(wallet nats.WalletCreatedPayload, msgType string) bool {
+		testData.mainWalletCreatedEvent = nats.FindMessageInStream(
+			sCtx, s.natsClient, subject, func(wallet nats.WalletCreatedPayload, msgType string) bool {
 				return wallet.WalletType == nats.TypeReal &&
 					wallet.WalletStatus == nats.StatusEnabled &&
 					wallet.IsBasic
-			},
-		)
-
-		sCtx.WithAttachments(allure.NewAttachment("NATS Wallet Message", allure.JSON, utils.CreatePrettyJSON(testData.mainWalletCreatedEvent.Payload)))
+			})
 	})
 
 	t.WithNewStep("Создание дополнительного кошелька.", func(sCtx provider.StepCtx) {
-		createReq := &clientTypes.Request[models.CreateWalletRequestBody]{
+		req := &clientTypes.Request[models.CreateWalletRequestBody]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", testData.authResponse.Token),
+				"Authorization":   fmt.Sprintf("Bearer %s", testData.authResponse.Body.Token),
 				"Platform-Locale": "en",
 				"Content-Type":    "application/json",
 			},
@@ -158,35 +142,27 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 				Currency: "USD",
 			},
 		}
-		createResp := s.publicService.CreateWallet(createReq)
-		testData.createWalletResponse = &createResp.Body
+		testData.createWalletResponse = s.publicService.CreateWallet(sCtx, req)
 
-		sCtx.Assert().Equal(201, createResp.StatusCode, "Статус код ответа равен 201")
-
-		sCtx.WithAttachments(allure.NewAttachment("CreateWallet Request", allure.JSON, utils.CreateHttpAttachRequest(createReq)))
-		sCtx.WithAttachments(allure.NewAttachment("CreateWallet Response", allure.JSON, utils.CreateHttpAttachResponse(createResp)))
+		sCtx.Assert().Equal(http.StatusCreated, testData.createWalletResponse.StatusCode, "Статус код ответа равен 201")
 	})
 
 	t.WithNewStep("Получение сообщения о создании дополнительного кошелька в NATS.", func(sCtx provider.StepCtx) {
-		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.playerRegistrationMessage.Player.ExternalID)
-		s.natsClient.Subscribe(t, subject)
+		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
 
-		testData.additionalWalletCreatedEvent = nats.FindMessageByFilter[nats.WalletCreatedPayload](
-			s.natsClient, t, func(wallet nats.WalletCreatedPayload, msgType string) bool {
+		testData.additionalWalletCreatedEvent = nats.FindMessageInStream(
+			sCtx, s.natsClient, subject, func(wallet nats.WalletCreatedPayload, msgType string) bool {
 				return wallet.WalletType == nats.TypeReal &&
 					wallet.WalletStatus == nats.StatusEnabled &&
 					wallet.Currency == "USD" &&
 					!wallet.IsBasic
-			},
-		)
-
-		sCtx.WithAttachments(allure.NewAttachment("NATS Wallet Message", allure.JSON, utils.CreatePrettyJSON(testData.additionalWalletCreatedEvent.Payload)))
+			})
 	})
 
 	t.WithNewStep("Переключение дефолтного кошелька.", func(sCtx provider.StepCtx) {
-		switchReq := &clientTypes.Request[models.SwitchWalletRequestBody]{
+		req := &clientTypes.Request[models.SwitchWalletRequestBody]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", testData.authResponse.Token),
+				"Authorization":   fmt.Sprintf("Bearer %s", testData.authResponse.Body.Token),
 				"Platform-Locale": "en",
 				"Content-Type":    "application/json",
 			},
@@ -194,61 +170,44 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 				Currency: "USD",
 			},
 		}
-		switchResp := s.publicService.SwitchWallet(switchReq)
+		resp := s.publicService.SwitchWallet(sCtx, req)
 
-		sCtx.Assert().Equal(204, switchResp.StatusCode, "Статус код ответа равен 204")
-
-		sCtx.WithAttachments(allure.NewAttachment("SwitchWallet Request", allure.JSON, utils.CreateHttpAttachRequest(switchReq)))
-		sCtx.WithAttachments(allure.NewAttachment("SwitchWallet Response", allure.JSON, utils.CreateHttpAttachResponse(switchResp)))
+		sCtx.Assert().Equal(http.StatusNoContent, resp.StatusCode, "Статус код ответа равен 204")
 	})
 
 	t.WithNewStep("Проверка событий смены дефолтного кошелька в NATS.", func(sCtx provider.StepCtx) {
-		playerSubject := fmt.Sprintf("%s.wallet.*.%s.*",
-			s.config.Nats.StreamPrefix,
-			testData.playerRegistrationMessage.Player.ExternalID,
-		)
-		s.natsClient.Subscribe(t, playerSubject)
+		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
 
-		testData.setDefaultStartedEvent = nats.FindMessageByFilter[nats.SetDefaultStartedPayload](
-			s.natsClient, t, func(msg nats.SetDefaultStartedPayload, msgType string) bool {
+		testData.setDefaultStartedEvent = nats.FindMessageInStream(
+			sCtx, s.natsClient, subject, func(msg nats.SetDefaultStartedPayload, msgType string) bool {
 				return msgType == "set_default_started"
-			},
-		)
+			})
 
-		testData.defaultUnsettedEvent = nats.FindMessageByFilter[nats.DefaultUnsettedPayload](
-			s.natsClient, t, func(msg nats.DefaultUnsettedPayload, msgType string) bool {
+		testData.defaultUnsettedEvent = nats.FindMessageInStream(
+			sCtx, s.natsClient, subject, func(msg nats.DefaultUnsettedPayload, msgType string) bool {
 				return msgType == "default_unsetted"
-			},
-		)
+			})
 
-		testData.setDefaultCommittedEvent = nats.FindMessageByFilter[nats.DefaultSettedPayload](
-			s.natsClient, t, func(msg nats.DefaultSettedPayload, msgType string) bool {
+		testData.setDefaultCommittedEvent = nats.FindMessageInStream(
+			sCtx, s.natsClient, subject, func(msg nats.DefaultSettedPayload, msgType string) bool {
 				return msgType == "set_default_committed"
-			},
-		)
+			})
 
 		sCtx.Assert().Less(testData.setDefaultStartedEvent.Seq, testData.defaultUnsettedEvent.Seq, "set_default_started произошло раньше default_unsetted")
 		sCtx.Assert().Less(testData.defaultUnsettedEvent.Seq, testData.setDefaultCommittedEvent.Seq, "default_unsetted произошло раньше set_default_committed")
 		sCtx.Assert().Equal("set_default_started", testData.setDefaultStartedEvent.Type, "Тип события set_default_started")
 		sCtx.Assert().Equal("default_unsetted", testData.defaultUnsettedEvent.Type, "Тип события default_unsetted")
 		sCtx.Assert().Equal("set_default_committed", testData.setDefaultCommittedEvent.Type, "Тип события set_default_committed")
-
-		sCtx.WithAttachments(allure.NewAttachment("SetDefaultStarted Event", allure.JSON, utils.CreatePrettyJSON(testData.setDefaultStartedEvent)))
-		sCtx.WithAttachments(allure.NewAttachment("DefaultUnsetted Event", allure.JSON, utils.CreatePrettyJSON(testData.defaultUnsettedEvent)))
-		sCtx.WithAttachments(allure.NewAttachment("SetDefaultCommitted Event", allure.JSON, utils.CreatePrettyJSON(testData.setDefaultCommittedEvent)))
 	})
 
 	t.WithNewAsyncStep("Смены дефолтного кошелька в БД.", func(sCtx provider.StepCtx) {
 		walletRepo := wallet.NewRepository(s.walletDB.DB(), &s.config.MySQL)
 
-		oldDefaultWallet := walletRepo.GetWallet(t, map[string]interface{}{"uuid": testData.mainWalletCreatedEvent.Payload.WalletUUID})
-		newDefaultWallet := walletRepo.GetWallet(t, map[string]interface{}{"uuid": testData.additionalWalletCreatedEvent.Payload.WalletUUID})
+		oldDefaultWallet := walletRepo.GetWallet(sCtx, map[string]interface{}{"uuid": testData.mainWalletCreatedEvent.Payload.WalletUUID})
+		newDefaultWallet := walletRepo.GetWallet(sCtx, map[string]interface{}{"uuid": testData.additionalWalletCreatedEvent.Payload.WalletUUID})
 
 		sCtx.Assert().True(newDefaultWallet.IsDefault, "Новый кошелёк помечен как дефолтный в БД")
 		sCtx.Assert().False(oldDefaultWallet.IsDefault, "Старый кошелёк больше не помечен как дефолтный в БД")
-
-		sCtx.WithAttachments(allure.NewAttachment("Old Wallet DB Data", allure.JSON, utils.CreatePrettyJSON(oldDefaultWallet)))
-		sCtx.WithAttachments(allure.NewAttachment("New Wallet DB Data", allure.JSON, utils.CreatePrettyJSON(newDefaultWallet)))
 	})
 }
 

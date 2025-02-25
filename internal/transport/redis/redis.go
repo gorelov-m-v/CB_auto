@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"CB_auto/internal/config"
+	"CB_auto/pkg/utils"
 
+	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	redis "github.com/redis/go-redis/v9"
 )
@@ -58,7 +60,7 @@ func (r *RedisClient) Get(key string) (string, error) {
 	return val, nil
 }
 
-func (r *RedisClient) GetWithRetry(t provider.T, key string) WalletsMap {
+func (r *RedisClient) GetWithRetry(sCtx provider.StepCtx, key string) WalletsMap {
 	var lastErr error
 	delay := r.retryDelay
 	var result WalletsMap
@@ -67,8 +69,11 @@ func (r *RedisClient) GetWithRetry(t provider.T, key string) WalletsMap {
 		value, err := r.Get(key)
 		if err == nil && value != "" {
 			if err := json.Unmarshal([]byte(value), &result); err != nil {
-				t.Fatalf("Failed to unmarshal Redis value: %v", err)
+				log.Printf("Failed to unmarshal Redis value: %v", err)
 			}
+
+			sCtx.WithAttachments(allure.NewAttachment("Redis Value", allure.JSON, utils.CreatePrettyJSON(result)))
+
 			return result
 		}
 		lastErr = err
@@ -76,7 +81,7 @@ func (r *RedisClient) GetWithRetry(t provider.T, key string) WalletsMap {
 		time.Sleep(delay)
 		delay *= 2
 	}
-	t.Fatalf("Не удалось получить значение из Redis после %d попыток: %v", r.retryAttempts, lastErr)
+	log.Printf("Не удалось получить значение из Redis после %d попыток: %v", r.retryAttempts, lastErr)
 	return nil
 }
 

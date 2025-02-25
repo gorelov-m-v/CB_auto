@@ -35,3 +35,35 @@ type PlayerMessage struct {
 	} `json:"player"`
 	Context json.RawMessage `json:"context"`
 }
+
+type LimitMessage struct {
+	IntervalType string `json:"intervalType"`
+	LimitType    string `json:"limitType"`
+	Amount       string `json:"amount"`
+	Spent        string `json:"spent"`
+	Rest         string `json:"rest"`
+	CurrencyCode string `json:"currencyCode"`
+	ID           string `json:"id"`
+	PlayerID     string `json:"playerId"`
+	Status       bool   `json:"status"`
+	StartedAt    int64  `json:"startedAt"`
+	ExpiresAt    int64  `json:"expiresAt"`
+	EventType    string `json:"eventType"`
+}
+
+const (
+	// Event Types
+	LimitEventCreated = "created"
+	LimitEventUpdated = "updated"
+	LimitEventDeleted = "deleted"
+
+	// Limit Types
+	LimitTypeSingleBet     = "single-bet"
+	LimitTypeCasinoLoss    = "casino-loss"
+	LimitTypeTurnoverFunds = "turnover-of-funds"
+
+	// Interval Types
+	IntervalTypeDaily   = "daily"
+	IntervalTypeWeekly  = "weekly"
+	IntervalTypeMonthly = "monthly"
+)

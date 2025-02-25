@@ -4,6 +4,7 @@ import (
 	clientTypes "CB_auto/internal/client/types"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -75,10 +76,12 @@ func CreatePrettyJSON[T any](v T) []byte {
 
 func IsTimeInRange(timestamp int64, rangeInSeconds int64) bool {
 	currentTime := time.Now().Unix()
+	log.Printf("Comparing times: current=%d, timestamp=%d, range=%d", currentTime, timestamp, rangeInSeconds)
 	diff := currentTime - timestamp
 	if diff < 0 {
 		diff = -diff
 	}
+	log.Printf("Time difference: %d seconds", diff)
 	return diff <= rangeInSeconds
 }
 

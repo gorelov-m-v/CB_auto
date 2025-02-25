@@ -2,6 +2,7 @@ package test
 
 import (
 	"fmt"
+	"net/http"
 	"testing"
 
 	capAPI "CB_auto/internal/client/cap"
@@ -15,10 +16,8 @@ import (
 	"CB_auto/internal/repository/wallet"
 	"CB_auto/internal/transport/kafka"
 	"CB_auto/internal/transport/nats"
-	"CB_auto/pkg/utils"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
 )
@@ -31,6 +30,7 @@ type UpdateBlockersSuite struct {
 	natsClient    *nats.NatsClient
 	kafka         *kafka.Kafka
 	walletDB      *repository.Connector
+	walletRepo    *wallet.Repository
 }
 
 func (s *UpdateBlockersSuite) BeforeAll(t provider.T) {
@@ -39,22 +39,22 @@ func (s *UpdateBlockersSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация http-клиентов и сервисов.", func(sCtx provider.StepCtx) {
-		s.publicService = factory.InitClient[publicAPI.PublicAPI](t, s.config, clientTypes.Public)
-		s.capService = factory.InitClient[capAPI.CapAPI](t, s.config, clientTypes.Cap)
+		s.publicService = factory.InitClient[publicAPI.PublicAPI](sCtx, s.config, clientTypes.Public)
+		s.capService = factory.InitClient[capAPI.CapAPI](sCtx, s.config, clientTypes.Cap)
 	})
 
 	t.WithNewStep("Инициализация NATS клиента.", func(sCtx provider.StepCtx) {
-		s.natsClient = nats.NewClient(t, &s.config.Nats)
+		s.natsClient = nats.NewClient(&s.config.Nats)
 	})
 
 	t.WithNewStep("Инициализация Kafka.", func(sCtx provider.StepCtx) {
-		s.kafka = kafka.NewConsumer(t, s.config, kafka.PlayerTopic)
-		s.kafka.StartReading(t)
+		s.kafka = kafka.GetInstance(t, s.config)
 	})
 
 	t.WithNewStep("Соединение с базой данных wallet.", func(sCtx provider.StepCtx) {
 		connector := repository.OpenConnector(t, &s.config.MySQL, repository.Wallet)
 		s.walletDB = &connector
+		s.walletRepo = wallet.NewRepository(s.walletDB.DB(), &s.config.MySQL)
 	})
 }
 
@@ -65,15 +65,15 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 	t.Title("Проверка управления блокировками игрока")
 
 	type TestData struct {
-		registrationResponse      *publicModels.FastRegistrationResponseBody
-		playerRegistrationMessage *kafka.PlayerMessage
-		walletCreatedEvent        *nats.NatsMessage[nats.WalletCreatedPayload]
-		blockersSettedEvent       *nats.NatsMessage[nats.BlockersSettedPayload]
+		registrationResponse *clientTypes.Response[publicModels.FastRegistrationResponseBody]
+		registrationMessage  kafka.PlayerMessage
+		walletCreatedEvent   *nats.NatsMessage[nats.WalletCreatedPayload]
+		blockersSettedEvent  *nats.NatsMessage[nats.BlockersSettedPayload]
 	}
 	var testData TestData
 
 	t.WithNewStep("Регистрация пользователя.", func(sCtx provider.StepCtx) {
-		createReq := &clientTypes.Request[publicModels.FastRegistrationRequestBody]{
+		req := &clientTypes.Request[publicModels.FastRegistrationRequestBody]{
 			Headers: map[string]string{
 				"Content-Type": "application/json",
 			},
@@ -82,117 +82,89 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 				Currency: s.config.Node.DefaultCurrency,
 			},
 		}
-		createResp := s.publicService.FastRegistration(createReq)
-		testData.registrationResponse = &createResp.Body
+		testData.registrationResponse = s.publicService.FastRegistration(sCtx, req)
 
-		sCtx.Assert().NotEmpty(createResp.Body.Username, "Username в ответе регистрации не пустой")
-		sCtx.Assert().NotEmpty(createResp.Body.Password, "Password в ответе регистрации не пустой")
-
-		sCtx.WithAttachments(allure.NewAttachment("FastRegistration Request", allure.JSON, utils.CreateHttpAttachRequest(createReq)))
-		sCtx.WithAttachments(allure.NewAttachment("FastRegistration Response", allure.JSON, utils.CreateHttpAttachResponse(createResp)))
+		sCtx.Assert().NotEmpty(testData.registrationResponse.Body.Username, "Username в ответе регистрации не пустой")
+		sCtx.Assert().NotEmpty(testData.registrationResponse.Body.Password, "Password в ответе регистрации не пустой")
 	})
 
 	t.WithNewStep("Получение сообщения о регистрации игрока из Kafka.", func(sCtx provider.StepCtx) {
-		message := kafka.FindMessageByFilter(s.kafka, t, func(msg kafka.PlayerMessage) bool {
-			return msg.Player.AccountID == testData.registrationResponse.Username
+		testData.registrationMessage = kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
+			return msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
-		playerRegistrationMessage := kafka.ParseMessage[kafka.PlayerMessage](t, message)
-		testData.playerRegistrationMessage = &playerRegistrationMessage
 
-		sCtx.WithAttachments(allure.NewAttachment("Kafka Player Message", allure.JSON, utils.CreatePrettyJSON(testData.playerRegistrationMessage)))
+		sCtx.Require().NotEmpty(testData.registrationMessage.Player.ExternalID, "External ID игрока в регистрации не пустой")
 	})
 
 	t.WithNewStep("Получение сообщения о создании основного кошелька из NATS.", func(sCtx provider.StepCtx) {
-		subject := fmt.Sprintf("%s.wallet.*.%s.*",
-			s.config.Nats.StreamPrefix,
-			testData.playerRegistrationMessage.Player.ExternalID,
-		)
-		s.natsClient.Subscribe(t, subject)
+		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
 
-		testData.walletCreatedEvent = nats.FindMessageByFilter[nats.WalletCreatedPayload](
-			s.natsClient, t, func(wallet nats.WalletCreatedPayload, msgType string) bool {
+		testData.walletCreatedEvent = nats.FindMessageInStream(
+			sCtx, s.natsClient, subject, func(wallet nats.WalletCreatedPayload, msgType string) bool {
 				return wallet.WalletType == nats.TypeReal &&
 					wallet.WalletStatus == nats.StatusEnabled &&
 					wallet.IsBasic
-			},
-		)
+			})
 
 		sCtx.Assert().NotEmpty(testData.walletCreatedEvent.Payload.WalletUUID, "UUID кошелька в ивенте `wallet_created` не пустой")
-		sCtx.WithAttachments(allure.NewAttachment("NATS Wallet Message", allure.JSON, utils.CreatePrettyJSON(testData.walletCreatedEvent)))
 	})
 
 	t.WithNewStep("Обновление блокировок игрока.", func(sCtx provider.StepCtx) {
-		updateReq := &clientTypes.Request[capModels.BlockersRequestBody]{
+		req := &clientTypes.Request[capModels.BlockersRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
 				"Platform-Locale": "en",
 				"Content-Type":    "application/json",
 			},
 			PathParams: map[string]string{
-				"player_uuid": testData.playerRegistrationMessage.Player.ExternalID,
+				"player_uuid": testData.registrationMessage.Player.ExternalID,
 			},
 			Body: &capModels.BlockersRequestBody{
 				GamblingEnabled: false,
 				BettingEnabled:  true,
 			},
 		}
-		updateResp := s.capService.UpdateBlockers(updateReq)
+		resp := s.capService.UpdateBlockers(sCtx, req)
 
-		sCtx.Assert().Equal(204, updateResp.StatusCode, "Статус код ответа равен 204")
-
-		sCtx.WithAttachments(allure.NewAttachment("UpdateBlockers Request", allure.JSON, utils.CreateHttpAttachRequest(updateReq)))
-		sCtx.WithAttachments(allure.NewAttachment("UpdateBlockers Response", allure.JSON, utils.CreateHttpAttachResponse(updateResp)))
+		sCtx.Assert().Equal(http.StatusNoContent, resp.StatusCode, "Статус код ответа равен 204")
 	})
 
 	t.WithNewStep("Проверка события обновления блокировок в NATS.", func(sCtx provider.StepCtx) {
-		subject := fmt.Sprintf("%s.wallet.*.%s.*",
-			s.config.Nats.StreamPrefix,
-			testData.playerRegistrationMessage.Player.ExternalID,
-		)
-		s.natsClient.Subscribe(t, subject)
+		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
 
-		testData.blockersSettedEvent = nats.FindMessageByFilter[nats.BlockersSettedPayload](
-			s.natsClient, t, func(msg nats.BlockersSettedPayload, msgType string) bool {
+		testData.blockersSettedEvent = nats.FindMessageInStream(
+			sCtx, s.natsClient, subject, func(msg nats.BlockersSettedPayload, msgType string) bool {
 				return msgType == "setting_prevent_gamble_setted"
-			},
-		)
+			})
 
 		sCtx.Assert().False(testData.blockersSettedEvent.Payload.IsGamblingActive, "Гэмблинг отключен")
 		sCtx.Assert().True(testData.blockersSettedEvent.Payload.IsBettingActive, "Беттинг включен")
-
-		sCtx.WithAttachments(allure.NewAttachment("BlockersSetted Event", allure.JSON, utils.CreatePrettyJSON(testData.blockersSettedEvent)))
 	})
 
 	t.WithNewAsyncStep("Проверка блокировок в БД.", func(sCtx provider.StepCtx) {
-		walletRepo := wallet.NewRepository(s.walletDB.DB(), &s.config.MySQL)
-		walletFromDatabase := walletRepo.GetWallet(t, map[string]interface{}{
-			"player_uuid": testData.playerRegistrationMessage.Player.ExternalID,
+		walletFromDatabase := s.walletRepo.GetWallet(sCtx, map[string]interface{}{
+			"player_uuid": testData.registrationMessage.Player.ExternalID,
 		})
 
 		sCtx.Assert().False(walletFromDatabase.IsGamblingActive, "Гэмблинг отключен в БД")
 		sCtx.Assert().True(walletFromDatabase.IsBettingActive, "Беттинг включен в БД")
-
-		sCtx.WithAttachments(allure.NewAttachment("Wallet DB Data", allure.JSON, utils.CreatePrettyJSON(walletFromDatabase)))
 	})
 
 	t.WithNewAsyncStep("Проверка получения блокировок через API.", func(sCtx provider.StepCtx) {
-		getBlockersReq := &clientTypes.Request[any]{
+		req := &clientTypes.Request[any]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
 				"Platform-Locale": "en",
 			},
 			PathParams: map[string]string{
-				"player_uuid": testData.playerRegistrationMessage.Player.ExternalID,
+				"player_uuid": testData.registrationMessage.Player.ExternalID,
 			},
 		}
-		getBlockersResp := s.capService.GetBlockers(getBlockersReq)
+		resp := s.capService.GetBlockers(sCtx, req)
 
-		sCtx.Assert().Equal(200, getBlockersResp.StatusCode, "Статус код ответа равен 200")
-		sCtx.Assert().False(getBlockersResp.Body.GamblingEnabled, "Гэмблинг отключен в ответе API")
-		sCtx.Assert().True(getBlockersResp.Body.BettingEnabled, "Беттинг включен в ответе API")
-
-		sCtx.WithAttachments(allure.NewAttachment("GetBlockers Request", allure.JSON, utils.CreateHttpAttachRequest(getBlockersReq)))
-		sCtx.WithAttachments(allure.NewAttachment("GetBlockers Response", allure.JSON, utils.CreateHttpAttachResponse(getBlockersResp)))
+		sCtx.Assert().Equal(http.StatusOK, resp.StatusCode, "Статус код ответа равен 200")
+		sCtx.Assert().False(resp.Body.GamblingEnabled, "Гэмблинг отключен в ответе API")
+		sCtx.Assert().True(resp.Body.BettingEnabled, "Беттинг включен в ответе API")
 	})
 }
 

@@ -8,11 +8,14 @@ import (
 	"time"
 
 	"CB_auto/internal/config"
+	"CB_auto/pkg/utils"
 
 	"github.com/nats-io/nats.go"
+	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
 
+// NatsClient управляет подключением к NATS и получает сообщения в канал Messages.
 type NatsClient struct {
 	conn      *nats.Conn
 	js        nats.JetStreamContext
@@ -25,6 +28,7 @@ type NatsClient struct {
 	subs      []*nats.Subscription
 }
 
+// NatsMessage оборачивает полученные данные с метаданными.
 type NatsMessage[T any] struct {
 	Payload   T
 	Metadata  *nats.MsgMetadata
@@ -35,19 +39,20 @@ type NatsMessage[T any] struct {
 	Type      string
 }
 
-func NewClient(t provider.T, cfg *config.NatsConfig) *NatsClient {
+// NewClient создаёт нового NATS клиента согласно конфигурации.
+func NewClient(cfg *config.NatsConfig) *NatsClient {
 	log.Printf("Creating new NATS client: hosts=%s", cfg.Hosts)
 
 	nc, err := nats.Connect(cfg.Hosts,
 		nats.ReconnectWait(time.Duration(cfg.ReconnectWait)*time.Second),
 		nats.MaxReconnects(cfg.MaxReconnects))
 	if err != nil {
-		t.Fatalf("Ошибка подключения к NATS: %v", err)
+		log.Printf("Ошибка подключения к NATS: %v", err)
 	}
 
 	js, err := nc.JetStream()
 	if err != nil {
-		t.Fatalf("Ошибка создания JetStream контекста: %v", err)
+		log.Printf("Ошибка создания JetStream контекста: %v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -62,69 +67,58 @@ func NewClient(t provider.T, cfg *config.NatsConfig) *NatsClient {
 	}
 }
 
-func (n *NatsClient) Subscribe(t provider.T, subjectPattern string) {
-	n.subsMutex.Lock()
-	defer n.subsMutex.Unlock()
-
-	log.Printf("Subscribing to subject: %s", subjectPattern)
-	sub, err := n.js.Subscribe(subjectPattern,
-		n.messageHandler,
-		nats.DeliverLast(),
+// SubscribeWithDeliverAll подписывается на указанный subject с опциями DeliverAll и другими.
+func (c *NatsClient) subscribeWithDeliverAll(subject string) {
+	opts := []nats.SubOpt{
+		nats.DeliverAll(),
 		nats.AckExplicit(),
-		nats.ManualAck(),
-	)
+		nats.ReplayInstant(),
+		nats.StartSequence(1),
+		nats.BindStream("beta-09_wallet"),
+	}
+
+	sub, err := c.js.Subscribe(subject, func(msg *nats.Msg) {
+		c.Messages <- msg
+	}, opts...)
 	if err != nil {
-		t.Fatalf("Ошибка при подписке на NATS: %v", err)
-	}
-
-	n.subs = append(n.subs, sub)
-}
-
-func (n *NatsClient) messageHandler(msg *nats.Msg) {
-	meta, err := msg.Metadata()
-	if err == nil {
-		log.Printf("Received message: subject=%s, sequence=%d, timestamp=%v",
-			msg.Subject, meta.Sequence.Stream, meta.Timestamp)
-	}
-	log.Printf("Received message: subject=%s, data=%s", msg.Subject, string(msg.Data))
-
-	select {
-	case <-n.ctx.Done():
+		log.Printf("Ошибка при подписке на NATS: %v", err)
 		return
-	case n.Messages <- msg:
-		msg.Ack()
 	}
+	c.subsMutex.Lock()
+	c.subs = append(c.subs, sub)
+	c.subsMutex.Unlock()
 }
 
-func FindMessageByFilter[T any](n *NatsClient, t provider.T, filter func(T, string) bool) *NatsMessage[T] {
+// FindMessageInStream подписывается на заданный subject и ждёт появления нужного сообщения,
+// используя внутренний таймаут (c.timeout). Если сообщение, удовлетворяющее filter, приходит – возвращается оно.
+// Если таймаут истекает, функция возвращает nil.
+func FindMessageInStream[T any](sCtx provider.StepCtx, n *NatsClient, subject string, filter func(data T, msgType string) bool) *NatsMessage[T] {
+	// Подписываемся на заданный subject.
+	n.subscribeWithDeliverAll(subject)
+
+	// Создаем контекст с таймаутом, равным внутреннему значению n.timeout.
 	ctx, cancel := context.WithTimeout(n.ctx, n.timeout)
 	defer cancel()
 
-	msgBuffer := make([]*nats.Msg, 0)
-	log.Printf("Starting to look for message with timeout %v", n.timeout)
-
-	maxAttempts := 5
-	attempt := 1
 	for {
 		select {
 		case <-ctx.Done():
-			t.Fatalf("Не удалось найти нужное сообщение за %v: %v", n.timeout, ctx.Err())
+			sCtx.Errorf("Timeout waiting for message on subject %s", subject)
+			return nil
 		case msg, ok := <-n.Messages:
 			if !ok {
-				t.Fatal("Канал сообщений закрыт")
+				sCtx.Errorf("Messages channel closed")
+				return nil
 			}
-			log.Printf("Checking new message: %s", string(msg.Data))
-
+			log.Printf("Received NATS message on subject %s: %s", msg.Subject, string(msg.Data))
 			var data T
 			if err := json.Unmarshal(msg.Data, &data); err != nil {
-				log.Printf("Failed to unmarshal message data: %v", err)
-				msgBuffer = append(msgBuffer, msg)
+				sCtx.Logf("Error unmarshaling message: %v", err)
 				continue
 			}
-
 			if filter(data, msg.Header.Get("type")) {
-				log.Printf("Found matching message")
 				meta, _ := msg.Metadata()
+				sCtx.WithAttachments(allure.NewAttachment("NATS Message", allure.JSON, utils.CreatePrettyJSON(data)))
 				return &NatsMessage[T]{
 					Payload:   data,
 					Metadata:  meta,
@@ -135,48 +129,11 @@ func FindMessageByFilter[T any](n *NatsClient, t provider.T, filter func(T, stri
 					Type:      msg.Header.Get("type"),
 				}
 			}
-
-			log.Printf("Message didn't match filter")
-			msgBuffer = append(msgBuffer, msg)
-		default:
-			for _, bufferedMsg := range msgBuffer {
-				var data T
-				if err := mapEventData(bufferedMsg.Data, &data); err != nil {
-					continue
-				}
-				if filter(data, bufferedMsg.Header.Get("type")) {
-					log.Printf("Found matching message in buffer")
-					meta, _ := bufferedMsg.Metadata()
-					return &NatsMessage[T]{
-						Payload:   data,
-						Metadata:  meta,
-						Subject:   bufferedMsg.Subject,
-						Sequence:  meta.Sequence.Stream,
-						Seq:       meta.Sequence.Stream,
-						Timestamp: meta.Timestamp,
-						Type:      bufferedMsg.Header.Get("type"),
-					}
-				}
-			}
-			if attempt < maxAttempts {
-				log.Printf("No matching message found, attempt %d/%d", attempt, maxAttempts)
-				attempt++
-				time.Sleep(500 * time.Millisecond)
-			} else {
-				time.Sleep(100 * time.Millisecond)
-			}
 		}
 	}
 }
 
-func ParseMessage[T any](t provider.T, message *nats.Msg) T {
-	var data T
-	if err := json.Unmarshal(message.Data, &data); err != nil {
-		t.Fatalf("Ошибка при парсинге сообщения NATS: %v", err)
-	}
-	return data
-}
-
+// Close корректно завершает работу NATS клиента.
 func (n *NatsClient) Close() {
 	n.cancel()
 
@@ -194,12 +151,4 @@ func (n *NatsClient) Close() {
 		log.Printf("Ошибка при закрытии NATS connection: %v", err)
 	}
 	n.conn.Close()
-}
-
-func mapEventData(data interface{}, target interface{}) error {
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(jsonData, target)
 }
