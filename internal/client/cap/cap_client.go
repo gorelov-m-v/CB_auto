@@ -20,6 +20,7 @@ type CapAPI interface {
 	DeleteCapBrand(sCtx provider.StepCtx, req *types.Request[struct{}]) *types.Response[struct{}]
 	UpdateBlockers(sCtx provider.StepCtx, req *types.Request[models.BlockersRequestBody]) *types.Response[struct{}]
 	GetBlockers(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetBlockersResponseBody]
+	GetPlayerLimits(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetPlayerLimitsResponseBody]
 }
 
 type capClient struct {
@@ -132,6 +133,29 @@ func (c *capClient) GetBlockers(sCtx provider.StepCtx, req *types.Request[any]) 
 			StatusCode: http.StatusInternalServerError,
 			Error: &types.ErrorResponse{
 				Body: fmt.Sprintf("GetBlockers failed: %v", err),
+			},
+		}
+	}
+
+	return resp
+}
+
+func (c *capClient) GetPlayerLimits(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetPlayerLimitsResponseBody] {
+	req.Method = "GET"
+	req.Path = "/_cap/api/v1/player/{playerID}/limits"
+	req.QueryParams = map[string]string{
+		"sort":    "status",
+		"page":    "1",
+		"perPage": "10",
+	}
+
+	resp, err := httpClient.DoRequest[any, models.GetPlayerLimitsResponseBody](sCtx, c.client, req)
+	if err != nil {
+		log.Printf("GetPlayerLimits failed: %v", err)
+		return &types.Response[models.GetPlayerLimitsResponseBody]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("GetPlayerLimits failed: %v", err),
 			},
 		}
 	}

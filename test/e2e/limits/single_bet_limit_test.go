@@ -8,9 +8,11 @@ import (
 	"net/http"
 	"testing"
 
+	capAPI "CB_auto/internal/client/cap"
+	capModels "CB_auto/internal/client/cap/models"
 	"CB_auto/internal/client/factory"
 	publicAPI "CB_auto/internal/client/public"
-	"CB_auto/internal/client/public/models"
+	publicModels "CB_auto/internal/client/public/models"
 	clientTypes "CB_auto/internal/client/types"
 	"CB_auto/internal/config"
 	"CB_auto/internal/transport/kafka"
@@ -26,6 +28,7 @@ type SingleBetLimitSuite struct {
 	publicClient publicAPI.PublicAPI
 	kafka        *kafka.Kafka
 	natsClient   *nats.NatsClient
+	capClient    capAPI.CapAPI
 }
 
 func (s *SingleBetLimitSuite) BeforeAll(t provider.T) {
@@ -46,6 +49,10 @@ func (s *SingleBetLimitSuite) BeforeAll(t provider.T) {
 	t.WithNewStep("Инициализация NATS клиента", func(sCtx provider.StepCtx) {
 		s.natsClient = nats.NewClient(&s.config.Nats)
 	})
+
+	t.WithNewStep("Инициализация CAP API клиента", func(sCtx provider.StepCtx) {
+		s.capClient = factory.InitClient[capAPI.CapAPI](sCtx, s.config, clientTypes.Cap)
+	})
 }
 
 func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
@@ -53,17 +60,17 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 	t.Title("Проверка создания single-bet лимита в Kafka, NATS, Redis, MySQL, Public API, CAP API")
 
 	var testData struct {
-		registrationResponse   *clientTypes.Response[models.FastRegistrationResponseBody]
-		authorizationResponse  *clientTypes.Response[models.TokenCheckResponseBody]
+		registrationResponse   *clientTypes.Response[publicModels.FastRegistrationResponseBody]
+		authorizationResponse  *clientTypes.Response[publicModels.TokenCheckResponseBody]
 		registrationMessage    kafka.PlayerMessage
-		singleBetLimitResponse *clientTypes.Response[models.GetSingleBetLimitsResponseBody] // изменить тип
-		setSingleBetLimitReq   *clientTypes.Request[models.SetSingleBetLimitRequestBody]
+		singleBetLimitResponse *clientTypes.Response[publicModels.GetSingleBetLimitsResponseBody] // изменить тип
+		setSingleBetLimitReq   *clientTypes.Request[publicModels.SetSingleBetLimitRequestBody]
 		limitMessage           kafka.LimitMessage
 	}
 
 	t.WithNewStep("Регистрация нового игрока", func(sCtx provider.StepCtx) {
-		req := &clientTypes.Request[models.FastRegistrationRequestBody]{
-			Body: &models.FastRegistrationRequestBody{
+		req := &clientTypes.Request[publicModels.FastRegistrationRequestBody]{
+			Body: &publicModels.FastRegistrationRequestBody{
 				Country:  s.config.Node.DefaultCountry,
 				Currency: s.config.Node.DefaultCurrency,
 			},
@@ -84,8 +91,8 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 	})
 
 	t.WithNewStep("Получение токена авторизации", func(sCtx provider.StepCtx) {
-		req := &clientTypes.Request[models.TokenCheckRequestBody]{
-			Body: &models.TokenCheckRequestBody{
+		req := &clientTypes.Request[publicModels.TokenCheckRequestBody]{
+			Body: &publicModels.TokenCheckRequestBody{
 				Username: testData.registrationResponse.Body.Username,
 				Password: testData.registrationResponse.Body.Password,
 			},
@@ -97,11 +104,11 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 	})
 
 	t.WithNewStep("Установка лимита на одиночную ставку", func(sCtx provider.StepCtx) {
-		testData.setSingleBetLimitReq = &clientTypes.Request[models.SetSingleBetLimitRequestBody]{
+		testData.setSingleBetLimitReq = &clientTypes.Request[publicModels.SetSingleBetLimitRequestBody]{
 			Headers: map[string]string{
 				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
 			},
-			Body: &models.SetSingleBetLimitRequestBody{
+			Body: &publicModels.SetSingleBetLimitRequestBody{
 				Amount:   "100",
 				Currency: s.config.Node.DefaultCurrency,
 			},
@@ -167,6 +174,34 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 		sCtx.Assert().Zero(limit.ExpiresAt, "Время окончания не установлено")
 		sCtx.Assert().Equal(nats.LimitTypeSingleBet, limit.LimitType, "Тип лимита совпадает")
 		sCtx.Assert().Equal(singleBetEvent.Payload.EventType, testData.limitMessage.EventType, "Тип события совпадает")
+	})
+
+	t.WithNewAsyncStep("Получение списка лимитов через CAP API", func(sCtx provider.StepCtx) {
+		req := &clientTypes.Request[any]{
+			Headers: map[string]string{
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capClient.GetToken()),
+				"Platform-NodeId": s.config.Node.ProjectID,
+				"Platform-Locale": "en",
+			},
+			PathParams: map[string]string{
+				"playerID": testData.registrationMessage.Player.ExternalID,
+			},
+		}
+
+		playerLimitsResponse := s.capClient.GetPlayerLimits(sCtx, req)
+
+		sCtx.Assert().Equal(http.StatusOK, playerLimitsResponse.StatusCode, "Список лимитов получен")
+		sCtx.Assert().Equal(1, playerLimitsResponse.Body.Total, "Количество лимитов корректно")
+
+		singleBetLimit := playerLimitsResponse.Body.Data[0]
+		sCtx.Assert().Equal(capModels.LimitTypeSingleBet, singleBetLimit.Type)
+		sCtx.Assert().True(singleBetLimit.Status)
+		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, singleBetLimit.Currency)
+		sCtx.Assert().Equal(testData.limitMessage.Amount, singleBetLimit.Rest)
+		sCtx.Assert().Equal(testData.limitMessage.Amount, singleBetLimit.Amount)
+		sCtx.Assert().InDelta(testData.limitMessage.StartedAt, singleBetLimit.StartedAt, 10)
+		sCtx.Assert().InDelta(testData.limitMessage.ExpiresAt, singleBetLimit.ExpiresAt, 10)
+		sCtx.Assert().Zero(singleBetLimit.DeactivatedAt)
 	})
 }
 
