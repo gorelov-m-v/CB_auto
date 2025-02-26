@@ -34,14 +34,26 @@ func (s *CreateBrandNegativeSuite) BeforeAll(t provider.T) {
 }
 
 func (s *CreateBrandNegativeSuite) TestCreateBrandWithoutName(t provider.T) {
-	t.WithNewStep("Попытка создания бренда без названия", func(sCtx provider.StepCtx) {
+	t.WithNewStep("Подготовка запроса для создания бренда без названия", func(sCtx provider.StepCtx) {
 		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
-		req := s.createBrandRequest("", alias, map[string]string{})
+		req := &clientTypes.Request[models.CreateCapBrandRequestBody]{
+			Headers: map[string]string{
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Platform-Nodeid": s.config.Node.ProjectID,
+			},
+			Body: &models.CreateCapBrandRequestBody{
+				Sort:        1,
+				Alias:       alias,
+				Names:       map[string]string{},
+				Description: "Description for empty brand",
+			},
+		}
 
 		resp := s.capService.CreateCapBrand(sCtx, req)
 		sCtx.Assert().Equal(http.StatusBadRequest, resp.StatusCode)
 
-		s.attachRequestResponse(sCtx, req, resp)
+		sCtx.WithAttachments(allure.NewAttachment("CreateBrand Request", allure.JSON, utils.CreateHttpAttachRequest(req)))
+		sCtx.WithAttachments(allure.NewAttachment("CreateBrand Response", allure.JSON, utils.CreateHttpAttachResponse(resp)))
 	})
 }
 
