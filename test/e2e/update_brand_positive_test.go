@@ -36,25 +36,12 @@ func (s *UpdateBrandPositiveSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация http-клиента и CAP API сервиса.", func(sCtx provider.StepCtx) {
-		s.capService = factory.InitClient[capAPI.CapAPI](t, s.config, clientTypes.Cap)
+		s.capService = factory.InitClient[capAPI.CapAPI](sCtx, s.config, clientTypes.Cap)
 	})
 
 	t.WithNewStep("Соединение с базой данных.", func(sCtx provider.StepCtx) {
 		connector := repository.OpenConnector(t, &s.config.MySQL, repository.Core)
 		s.database = &connector
-	})
-
-	t.WithNewStep("Инициализация Kafka consumer.", func(sCtx provider.StepCtx) {
-		s.kafka = kafka.NewConsumer(t, s.config, kafka.BrandTopic)
-		s.kafka.StartReading(t)
-	})
-}
-
-func (s *UpdateBrandPositiveSuite) AfterAll(t provider.T) {
-	t.WithNewStep("Закрытие соединения с Kafka.", func(sCtx provider.StepCtx) {
-		if s.kafka != nil {
-			s.kafka.Close(t)
-		}
 	})
 
 	t.WithNewStep("Закрытие соединения с базой данных.", func(sCtx provider.StepCtx) {
@@ -81,7 +68,7 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithRussianName(t provider.T) 
 			"en": brandName,
 		})
 
-		createResp := s.capService.CreateCapBrand(testData.createRequest)
+		createResp := s.capService.CreateCapBrand(sCtx, testData.createRequest)
 		sCtx.Assert().Equal(http.StatusOK, createResp.StatusCode)
 		testData.createCapBrandResponse = &createResp.Body
 
@@ -98,7 +85,7 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithRussianName(t provider.T) 
 			map[string]string{"ru": brandName},
 		)
 
-		updateResp := s.capService.UpdateCapBrand(testData.updateRequest)
+		updateResp := s.capService.UpdateCapBrand(sCtx, testData.updateRequest)
 		sCtx.Assert().Equal(http.StatusOK, updateResp.StatusCode)
 		testData.updateCapBrandResponse = &updateResp.Body
 
@@ -124,7 +111,7 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithEnglishName(t provider.T) 
 			"en": brandName,
 		})
 
-		createResp := s.capService.CreateCapBrand(testData.createRequest)
+		createResp := s.capService.CreateCapBrand(sCtx, testData.createRequest)
 		sCtx.Assert().Equal(http.StatusOK, createResp.StatusCode)
 		testData.createCapBrandResponse = &createResp.Body
 
@@ -141,7 +128,7 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithEnglishName(t provider.T) 
 			map[string]string{"en": brandName},
 		)
 
-		updateResp := s.capService.UpdateCapBrand(testData.updateRequest)
+		updateResp := s.capService.UpdateCapBrand(sCtx, testData.updateRequest)
 		sCtx.Assert().Equal(http.StatusOK, updateResp.StatusCode)
 		testData.updateCapBrandResponse = &updateResp.Body
 
@@ -166,7 +153,7 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMinMaxNames(t provider.T) 
 			"en": brandName,
 		})
 
-		createResp := s.capService.CreateCapBrand(testData.createRequest)
+		createResp := s.capService.CreateCapBrand(sCtx, testData.createRequest)
 		sCtx.Assert().Equal(http.StatusOK, createResp.StatusCode)
 		testData.createCapBrandResponse = &createResp.Body
 
@@ -187,7 +174,7 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMinMaxNames(t provider.T) 
 			map[string]string{"en": minName},
 		)
 
-		updateResp := s.capService.UpdateCapBrand(testData.updateRequest)
+		updateResp := s.capService.UpdateCapBrand(sCtx, testData.updateRequest)
 		sCtx.Assert().Equal(http.StatusOK, updateResp.StatusCode)
 
 		s.attachRequestResponse(sCtx, testData.updateRequest, updateResp)
@@ -209,7 +196,7 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMinMaxNames(t provider.T) 
 			map[string]string{"en": maxName},
 		)
 
-		updateResp := s.capService.UpdateCapBrand(testData.updateRequest)
+		updateResp := s.capService.UpdateCapBrand(sCtx, testData.updateRequest)
 		sCtx.Assert().Equal(http.StatusOK, updateResp.StatusCode)
 
 		s.attachRequestResponse(sCtx, testData.updateRequest, updateResp)
@@ -233,7 +220,7 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMultiLanguage(t provider.T
 			"en": brandName,
 		})
 
-		createResp := s.capService.CreateCapBrand(testData.createRequest)
+		createResp := s.capService.CreateCapBrand(sCtx, testData.createRequest)
 		sCtx.Assert().Equal(http.StatusOK, createResp.StatusCode)
 		testData.createCapBrandResponse = &createResp.Body
 	})
@@ -247,7 +234,7 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMultiLanguage(t provider.T
 			"es": fmt.Sprintf("Marca de prueba actualizada %s", suffix),
 		})
 
-		updateResp := s.capService.UpdateCapBrand(testData.updateRequest)
+		updateResp := s.capService.UpdateCapBrand(sCtx, testData.updateRequest)
 		sCtx.Assert().Equal(http.StatusOK, updateResp.StatusCode)
 		testData.updateCapBrandResponse = &updateResp.Body
 
@@ -334,7 +321,7 @@ func (s *UpdateBrandPositiveSuite) cleanupBrand(t provider.T, brandID string) {
 			},
 		}
 
-		deleteResp := s.capService.DeleteCapBrand(deleteReq)
+		deleteResp := s.capService.DeleteCapBrand(sCtx, deleteReq)
 		sCtx.Assert().Equal(http.StatusNoContent, deleteResp.StatusCode)
 	})
 }

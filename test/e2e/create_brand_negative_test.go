@@ -29,7 +29,7 @@ func (s *CreateBrandNegativeSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация http-клиента и CAP API сервиса.", func(sCtx provider.StepCtx) {
-		s.capService = factory.InitClient[capAPI.CapAPI](t, s.config, clientTypes.Cap)
+		s.capService = factory.InitClient[capAPI.CapAPI](sCtx, s.config, clientTypes.Cap)
 	})
 }
 
@@ -38,7 +38,7 @@ func (s *CreateBrandNegativeSuite) TestCreateBrandWithoutName(t provider.T) {
 		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
 		req := s.createBrandRequest("", alias, map[string]string{})
 
-		resp := s.capService.CreateCapBrand(req)
+		resp := s.capService.CreateCapBrand(sCtx, req)
 		sCtx.Assert().Equal(http.StatusBadRequest, resp.StatusCode)
 
 		s.attachRequestResponse(sCtx, req, resp)
@@ -52,7 +52,7 @@ func (s *CreateBrandNegativeSuite) TestCreateBrandWithoutAlias(t provider.T) {
 			"en": brandName,
 		})
 
-		resp := s.capService.CreateCapBrand(req)
+		resp := s.capService.CreateCapBrand(sCtx, req)
 		sCtx.Assert().Equal(http.StatusBadRequest, resp.StatusCode)
 
 		s.attachRequestResponse(sCtx, req, resp)
@@ -64,7 +64,7 @@ func (s *CreateBrandNegativeSuite) TestCreateBrandWithAliasButNoName(t provider.
 		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
 		req := s.createBrandRequest("", alias, map[string]string{})
 
-		resp := s.capService.CreateCapBrand(req)
+		resp := s.capService.CreateCapBrand(sCtx, req)
 		sCtx.Assert().Equal(http.StatusBadRequest, resp.StatusCode)
 
 		s.attachRequestResponse(sCtx, req, resp)
@@ -78,7 +78,7 @@ func (s *CreateBrandNegativeSuite) TestCreateBrandWithNameButNoAlias(t provider.
 			"en": brandName,
 		})
 
-		resp := s.capService.CreateCapBrand(req)
+		resp := s.capService.CreateCapBrand(sCtx, req)
 		sCtx.Assert().Equal(http.StatusBadRequest, resp.StatusCode)
 
 		s.attachRequestResponse(sCtx, req, resp)

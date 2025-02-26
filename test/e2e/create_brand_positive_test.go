@@ -2,7 +2,6 @@ package test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -19,7 +18,6 @@ import (
 	"CB_auto/internal/repository/brand"
 	"CB_auto/pkg/utils"
 
-	"github.com/google/uuid"
 	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
@@ -39,7 +37,7 @@ func (s *CreateBrandPositiveSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация http-клиента и CAP API сервиса.", func(sCtx provider.StepCtx) {
-		s.capService = factory.InitClient[capAPI.CapAPI](t, s.config, clientTypes.Cap)
+		s.capService = factory.InitClient[capAPI.CapAPI](sCtx, s.config, clientTypes.Cap)
 	})
 
 	t.WithNewStep("Соединение с базой данных.", func(sCtx provider.StepCtx) {
@@ -62,39 +60,28 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithRussianName(t provider.T) 
 			"ru": brandName,
 		})
 
-		createResp := s.capService.CreateCapBrand(testData.createRequest)
+		createResp := s.capService.CreateCapBrand(sCtx, testData.createRequest)
 		sCtx.Assert().Equal(http.StatusOK, createResp.StatusCode)
 		testData.createCapBrandResponse = &createResp.Body
 
 		s.attachRequestResponse(sCtx, testData.createRequest, createResp)
 
-		err := repository.ExecuteWithRetry(context.Background(), &s.config.MySQL, func(ctx context.Context) error {
-			brandData := s.brandRepo.GetBrand(t, map[string]interface{}{
+		t.WithNewStep("Проверка создания бренда в БД", func(sCtx provider.StepCtx) {
+
+			brandData := s.brandRepo.GetBrand(sCtx, map[string]interface{}{
 				"uuid": testData.createCapBrandResponse.ID,
 			})
 
-			if brandData == nil {
-				return fmt.Errorf("бренд не найден в БД")
-			}
-
-			var dbNames map[string]string
-			if err := json.Unmarshal(brandData.LocalizedNames, &dbNames); err != nil {
-				return fmt.Errorf("ошибка при парсинге LocalizedNames: %v", err)
-			}
-
-			sCtx.Assert().Equal(testData.createRequest.Body.Names, dbNames, "Names бренда в БД совпадают с Names в запросе")
+			sCtx.Assert().NotNil(brandData, "Бренд найден в БД")
 			sCtx.Assert().Equal(testData.createRequest.Body.Alias, brandData.Alias, "Alias бренда в БД совпадает с Alias в запросе")
 			sCtx.Assert().Equal(testData.createRequest.Body.Sort, brandData.Sort, "Sort бренда в БД совпадает с Sort в запросе")
 			sCtx.Assert().Equal(testData.createRequest.Body.Description, brandData.Description, "Description бренда в БД совпадает с Description в запросе")
-			sCtx.Assert().Equal(uuid.MustParse(s.config.Node.ProjectID), brandData.NodeUUID, "NodeUUID бренда в БД совпадает с NodeUUID в запросе")
 			sCtx.Assert().Equal(models.StatusDisabled, brandData.Status, "Status бренда в БД совпадает с Status в запросе")
 			sCtx.Assert().NotZero(brandData.CreatedAt, "Время создания бренда в БД не равно нулю")
 			sCtx.Assert().Zero(brandData.UpdatedAt, "Время обновления бренда в БД равно нулю")
 
 			sCtx.WithAttachments(allure.NewAttachment("Бренд из БД", allure.JSON, utils.CreatePrettyJSON(brandData)))
-			return nil
 		})
-		sCtx.Assert().NoError(err, "Ошибка при проверке бренда в БД")
 
 		s.cleanupBrand(t, testData.createCapBrandResponse.ID)
 	})
@@ -113,14 +100,14 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithEnglishName(t provider.T) 
 			"en": brandName,
 		})
 
-		createResp := s.capService.CreateCapBrand(testData.createRequest)
+		createResp := s.capService.CreateCapBrand(sCtx, testData.createRequest)
 		sCtx.Assert().Equal(http.StatusOK, createResp.StatusCode)
 		testData.createCapBrandResponse = &createResp.Body
 
 		s.attachRequestResponse(sCtx, testData.createRequest, createResp)
 
 		err := repository.ExecuteWithRetry(context.Background(), &s.config.MySQL, func(ctx context.Context) error {
-			brandData := s.brandRepo.GetBrand(t, map[string]interface{}{
+			brandData := s.brandRepo.GetBrand(sCtx, map[string]interface{}{
 				"uuid": testData.createCapBrandResponse.ID,
 			})
 			if brandData == nil {
@@ -148,16 +135,15 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithMinMaxNames(t provider.T) 
 			"en": brandName,
 		})
 
-		createResp := s.capService.CreateCapBrand(testData.createRequest)
+		createResp := s.capService.CreateCapBrand(sCtx, testData.createRequest)
 		sCtx.Assert().Equal(http.StatusOK, createResp.StatusCode)
 		testData.createCapBrandResponse = &createResp.Body
 
 		s.attachRequestResponse(sCtx, testData.createRequest, createResp)
 
 		var brandFromDB *brand.Brand
-		var err error
 		for i := 0; i < 3; i++ {
-			brandFromDB = s.brandRepo.GetBrand(t, map[string]interface{}{
+			brandFromDB = s.brandRepo.GetBrand(sCtx, map[string]interface{}{
 				"uuid": testData.createCapBrandResponse.ID,
 			})
 			if brandFromDB != nil {
@@ -166,9 +152,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithMinMaxNames(t provider.T) 
 		}
 		sCtx.Assert().NotNil(brandFromDB, "Бренд не найден в БД")
 
-		var names map[string]string
-		err = json.Unmarshal(brandFromDB.LocalizedNames, &names)
-		sCtx.Assert().NoError(err, "Ошибка при парсинге LocalizedNames")
+		names := brandFromDB.LocalizedNames
 		sCtx.Assert().GreaterOrEqual(len(names["en"]), 2, "Длина имени бренда должна быть не менее 2 символов")
 
 		s.cleanupBrand(t, testData.createCapBrandResponse.ID)
@@ -185,16 +169,15 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithMinMaxNames(t provider.T) 
 			"en": brandName,
 		})
 
-		createResp := s.capService.CreateCapBrand(testData.createRequest)
+		createResp := s.capService.CreateCapBrand(sCtx, testData.createRequest)
 		sCtx.Assert().Equal(http.StatusOK, createResp.StatusCode)
 		testData.createCapBrandResponse = &createResp.Body
 
 		s.attachRequestResponse(sCtx, testData.createRequest, createResp)
 
 		var brandFromDB *brand.Brand
-		var err error
 		for i := 0; i < 3; i++ {
-			brandFromDB = s.brandRepo.GetBrand(t, map[string]interface{}{
+			brandFromDB = s.brandRepo.GetBrand(sCtx, map[string]interface{}{
 				"uuid": testData.createCapBrandResponse.ID,
 			})
 			if brandFromDB != nil {
@@ -203,9 +186,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithMinMaxNames(t provider.T) 
 		}
 		sCtx.Assert().NotNil(brandFromDB, "Бренд не найден в БД")
 
-		var names map[string]string
-		err = json.Unmarshal(brandFromDB.LocalizedNames, &names)
-		sCtx.Assert().NoError(err, "Ошибка при парсинге LocalizedNames")
+		names := brandFromDB.LocalizedNames
 		sCtx.Assert().LessOrEqual(len(names["en"]), 100, "Длина имени бренда не должна превышать 100 символов")
 
 		s.cleanupBrand(t, testData.createCapBrandResponse.ID)
@@ -233,14 +214,14 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithDifferentAliases(t provide
 				"en": brandName,
 			})
 
-			createResp := s.capService.CreateCapBrand(testData.createRequest)
+			createResp := s.capService.CreateCapBrand(sCtx, testData.createRequest)
 			sCtx.Assert().Equal(http.StatusOK, createResp.StatusCode)
 			testData.createCapBrandResponse = &createResp.Body
 
 			s.attachRequestResponse(sCtx, testData.createRequest, createResp)
 
 			err := repository.ExecuteWithRetry(context.Background(), &s.config.MySQL, func(ctx context.Context) error {
-				brandData := s.brandRepo.GetBrand(t, map[string]interface{}{
+				brandData := s.brandRepo.GetBrand(sCtx, map[string]interface{}{
 					"uuid": testData.createCapBrandResponse.ID,
 				})
 
@@ -248,16 +229,11 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithDifferentAliases(t provide
 					return fmt.Errorf("бренд не найден в БД")
 				}
 
-				var dbNames map[string]string
-				if err := json.Unmarshal(brandData.LocalizedNames, &dbNames); err != nil {
-					return fmt.Errorf("ошибка при парсинге LocalizedNames: %v", err)
-				}
-
-				sCtx.Assert().Equal(testData.createRequest.Body.Names, dbNames, "Names бренда в БД совпадают с Names в запросе")
+				sCtx.Assert().Equal(testData.createRequest.Body.Names, brandData.LocalizedNames, "Names бренда в БД совпадают с Names в запросе")
 				sCtx.Assert().Equal(testData.createRequest.Body.Alias, brandData.Alias, "Alias бренда в БД совпадает с Alias в запросе")
 				sCtx.Assert().Equal(testData.createRequest.Body.Sort, brandData.Sort, "Sort бренда в БД совпадает с Sort в запросе")
 				sCtx.Assert().Equal(testData.createRequest.Body.Description, brandData.Description, "Description бренда в БД совпадает с Description в запросе")
-				sCtx.Assert().Equal(uuid.MustParse(s.config.Node.ProjectID), brandData.NodeUUID, "NodeUUID бренда в БД совпадает с NodeUUID в запросе")
+				sCtx.Assert().Equal(s.config.Node.ProjectID, brandData.NodeUUID, "NodeUUID бренда в БД совпадает с NodeUUID в запросе")
 				sCtx.Assert().Equal(models.StatusDisabled, brandData.Status, "Status бренда в БД совпадает с Status в запросе")
 				sCtx.Assert().NotZero(brandData.CreatedAt, "Время создания бренда в БД не равно нулю")
 				sCtx.Assert().Zero(brandData.UpdatedAt, "Время обновления бренда в БД равно нулю")
@@ -286,14 +262,14 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithMultiLanguage(t provider.T
 			"es": fmt.Sprintf("Marca de prueba %s", suffix),
 		})
 
-		createResp := s.capService.CreateCapBrand(testData.createRequest)
+		createResp := s.capService.CreateCapBrand(sCtx, testData.createRequest)
 		sCtx.Assert().Equal(http.StatusOK, createResp.StatusCode)
 		testData.createCapBrandResponse = &createResp.Body
 
 		s.attachRequestResponse(sCtx, testData.createRequest, createResp)
 
 		err := repository.ExecuteWithRetry(context.Background(), &s.config.MySQL, func(ctx context.Context) error {
-			brandData := s.brandRepo.GetBrand(t, map[string]interface{}{
+			brandData := s.brandRepo.GetBrand(sCtx, map[string]interface{}{
 				"uuid": testData.createCapBrandResponse.ID,
 			})
 
@@ -301,16 +277,11 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithMultiLanguage(t provider.T
 				return fmt.Errorf("бренд не найден в БД")
 			}
 
-			var dbNames map[string]string
-			if err := json.Unmarshal(brandData.LocalizedNames, &dbNames); err != nil {
-				return fmt.Errorf("ошибка при парсинге LocalizedNames: %v", err)
-			}
-
-			sCtx.Assert().Equal(testData.createRequest.Body.Names, dbNames, "Names бренда в БД совпадают с Names в запросе")
+			sCtx.Assert().Equal(testData.createRequest.Body.Names, brandData.LocalizedNames, "Names бренда в БД совпадают с Names в запросе")
 			sCtx.Assert().Equal(testData.createRequest.Body.Alias, brandData.Alias, "Alias бренда в БД совпадает с Alias в запросе")
 			sCtx.Assert().Equal(testData.createRequest.Body.Sort, brandData.Sort, "Sort бренда в БД совпадает с Sort в запросе")
 			sCtx.Assert().Equal(testData.createRequest.Body.Description, brandData.Description, "Description бренда в БД совпадает с Description в запросе")
-			sCtx.Assert().Equal(uuid.MustParse(s.config.Node.ProjectID), brandData.NodeUUID, "NodeUUID бренда в БД совпадает с NodeUUID в запросе")
+			sCtx.Assert().Equal(s.config.Node.ProjectID, brandData.NodeUUID, "NodeUUID бренда в БД совпадает с NodeUUID в запросе")
 			sCtx.Assert().Equal(models.StatusDisabled, brandData.Status, "Status бренда в БД совпадает с Status в запросе")
 			sCtx.Assert().NotZero(brandData.CreatedAt, "Время создания бренда в БД не равно нулю")
 			sCtx.Assert().Zero(brandData.UpdatedAt, "Время обновления бренда в БД равно нулю")
@@ -337,14 +308,14 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithSpecialCharacters(t provid
 			"en": brandName,
 		})
 
-		createResp := s.capService.CreateCapBrand(testData.createRequest)
+		createResp := s.capService.CreateCapBrand(sCtx, testData.createRequest)
 		sCtx.Assert().Equal(http.StatusOK, createResp.StatusCode)
 		testData.createCapBrandResponse = &createResp.Body
 
 		s.attachRequestResponse(sCtx, testData.createRequest, createResp)
 
 		err := repository.ExecuteWithRetry(context.Background(), &s.config.MySQL, func(ctx context.Context) error {
-			brandData := s.brandRepo.GetBrand(t, map[string]interface{}{
+			brandData := s.brandRepo.GetBrand(sCtx, map[string]interface{}{
 				"uuid": testData.createCapBrandResponse.ID,
 			})
 
@@ -352,16 +323,11 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithSpecialCharacters(t provid
 				return fmt.Errorf("бренд не найден в БД")
 			}
 
-			var dbNames map[string]string
-			if err := json.Unmarshal(brandData.LocalizedNames, &dbNames); err != nil {
-				return fmt.Errorf("ошибка при парсинге LocalizedNames: %v", err)
-			}
-
-			sCtx.Assert().Equal(testData.createRequest.Body.Names, dbNames, "Names бренда в БД совпадают с Names в запросе")
+			sCtx.Assert().Equal(testData.createRequest.Body.Names, brandData.LocalizedNames, "Names бренда в БД совпадают с Names в запросе")
 			sCtx.Assert().Equal(testData.createRequest.Body.Alias, brandData.Alias, "Alias бренда в БД совпадает с Alias в запросе")
 			sCtx.Assert().Equal(testData.createRequest.Body.Sort, brandData.Sort, "Sort бренда в БД совпадает с Sort в запросе")
 			sCtx.Assert().Equal(testData.createRequest.Body.Description, brandData.Description, "Description бренда в БД совпадает с Description в запросе")
-			sCtx.Assert().Equal(uuid.MustParse(s.config.Node.ProjectID), brandData.NodeUUID, "NodeUUID бренда в БД совпадает с NodeUUID в запросе")
+			sCtx.Assert().Equal(s.config.Node.ProjectID, brandData.NodeUUID, "NodeUUID бренда в БД совпадает с NodeUUID в запросе")
 			sCtx.Assert().Equal(models.StatusDisabled, brandData.Status, "Status бренда в БД совпадает с Status в запросе")
 			sCtx.Assert().NotZero(brandData.CreatedAt, "Время создания бренда в БД не равно нулю")
 			sCtx.Assert().Zero(brandData.UpdatedAt, "Время обновления бренда в БД равно нулю")
@@ -407,7 +373,7 @@ func (s *CreateBrandPositiveSuite) cleanupBrand(t provider.T, brandID string) {
 			},
 		}
 
-		deleteResp := s.capService.DeleteCapBrand(deleteReq)
+		deleteResp := s.capService.DeleteCapBrand(sCtx, deleteReq)
 		sCtx.Assert().Equal(http.StatusNoContent, deleteResp.StatusCode)
 	})
 }

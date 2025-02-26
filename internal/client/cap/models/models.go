@@ -65,7 +65,6 @@ type GetBlockersResponseBody struct {
 	BettingEnabled  bool `json:"bettingEnabled"`
 }
 
-<<<<<<< HEAD
 type UpdateBrandStatusRequestBody struct {
 	Status int `json:"status"`
 }
@@ -89,7 +88,8 @@ type BrandEvent struct {
 		UUID      string `json:"uuid"`
 		DeletedAt int64  `json:"deleted_at,omitempty"`
 	} `json:"brand"`
-=======
+}
+
 const (
 	LimitTypeSingleBet  = "Single bet"
 	LimitTypeTurnover   = "Turnover of funds"
@@ -112,5 +112,4 @@ type PlayerLimit struct {
 	DeactivatedAt int64  `json:"deactivatedAt,omitempty"`
 	StartedAt     int64  `json:"startedAt"`
 	ExpiresAt     int64  `json:"expiresAt,omitempty"`
->>>>>>> master
 }

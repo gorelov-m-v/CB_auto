@@ -38,14 +38,9 @@ func (s *CreateBrandSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Соединение с базой данных.", func(sCtx provider.StepCtx) {
-
 		connector := repository.OpenConnector(t, &s.config.MySQL, repository.Core)
 		s.database = &connector
-<<<<<<< HEAD
-		brandRepo = brand.NewRepository(s.database.DB(), &s.config.MySQL)
-=======
 		s.brandRepo = brand.NewRepository(s.database.DB(), &s.config.MySQL)
->>>>>>> origin/master
 	})
 
 	t.WithNewStep("Инициализация Kafka consumer.", func(sCtx provider.StepCtx) {
@@ -65,10 +60,6 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 	}
 
 	t.WithNewStep("Создание бренда в CAP.", func(sCtx provider.StepCtx) {
-<<<<<<< HEAD
-		brandName := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
-=======
->>>>>>> origin/master
 		names := map[string]string{
 			"en": utils.Get(utils.BRAND_TITLE, 20),
 		}
@@ -96,10 +87,6 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 		}
 		brandData := s.brandRepo.GetBrand(sCtx, filters)
 
-			if brandData == nil {
-				return fmt.Errorf("бренд не найден в БД")
-			}
-
 		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Names, brandData.LocalizedNames, "Names бренда в БД совпадают с Names в запросе")
 		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Description, brandData.Description, "Description бренда в БД совпадает с Description в запросе")
 		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Alias, brandData.Alias, "Alias бренда в БД совпадает с Alias в запросе")
@@ -109,7 +96,6 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 		sCtx.Assert().NotZero(brandData.CreatedAt, "CreatedAt бренда в БД не равен нулю")
 		sCtx.Assert().Zero(brandData.UpdatedAt, "UpdatedAt бренда в БД равен нулю для нового бренда")
 		sCtx.Assert().Equal(testData.createCapBrandResponse.Body.ID, brandData.UUID, "UUID бренда в БД совпадает с UUID в ответе")
->>>>>>> origin/master
 	})
 
 	t.WithNewStep("Удаление бренда.", func(sCtx provider.StepCtx) {

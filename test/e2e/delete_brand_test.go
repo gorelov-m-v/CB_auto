@@ -1,8 +1,6 @@
 package test
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"testing"
@@ -17,7 +15,6 @@ import (
 	"CB_auto/internal/transport/kafka"
 	"CB_auto/pkg/utils"
 
-	"github.com/google/uuid"
 	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
@@ -52,29 +49,14 @@ func (s *DeleteBrandSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация Kafka consumer.", func(sCtx provider.StepCtx) {
-<<<<<<< HEAD
-		s.kafka = kafka.NewConsumer(t, s.config, kafka.BrandTopic)
-=======
 		s.kafka = kafka.GetInstance(t, s.config)
->>>>>>> origin/master
 	})
 }
 
 func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
-	t.Epic("Brands")
-	t.Feature("Удаление бренда")
-	t.Title("Проверка удаления бренда")
+	t.Epic("Brands.")
+	t.Feature("Удаление бренда.")
 	t.Tags("CAP", "Brands", "Platform")
-<<<<<<< HEAD
-
-	var testData struct {
-		createRequest          *clientTypes.Request[models.CreateCapBrandRequestBody]
-		createCapBrandResponse *models.CreateCapBrandResponseBody
-	}
-
-	t.WithNewStep("Создание тестового бренда", func(sCtx provider.StepCtx) {
-		testData.createRequest = &clientTypes.Request[models.CreateCapBrandRequestBody]{
-=======
 	t.Title("Проверка удаления бренда.")
 
 	var testData struct {
@@ -84,7 +66,6 @@ func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 
 	t.WithNewStep("Создание бренда.", func(sCtx provider.StepCtx) {
 		testData.createCapBrandRequest = &clientTypes.Request[models.CreateCapBrandRequestBody]{
->>>>>>> origin/master
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
 				"Platform-NodeID": s.config.Node.ProjectID,
@@ -99,40 +80,6 @@ func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 				Description: utils.Get(utils.BRAND_TITLE, 50),
 			},
 		}
-<<<<<<< HEAD
-		createResp := s.capService.CreateCapBrand(testData.createRequest)
-		testData.createCapBrandResponse = &createResp.Body
-		sCtx.Assert().NotEmpty(testData.createCapBrandResponse.ID, "ID созданного бренда не пустой")
-	})
-
-	t.WithNewStep("Проверка создания бренда в БД", func(sCtx provider.StepCtx) {
-		err := repository.ExecuteWithRetry(context.Background(), &s.config.MySQL, func(ctx context.Context) error {
-			brandData := s.brandRepo.GetBrand(t, map[string]interface{}{
-				"uuid": testData.createCapBrandResponse.ID,
-			})
-
-			if brandData == nil {
-				return fmt.Errorf("бренд не найден в БД")
-			}
-
-			var dbNames map[string]string
-			if err := json.Unmarshal(brandData.LocalizedNames, &dbNames); err != nil {
-				return fmt.Errorf("ошибка при парсинге LocalizedNames: %v", err)
-			}
-
-			sCtx.Assert().Equal(testData.createRequest.Body.Names, dbNames, "Names бренда в БД совпадают с Names в запросе")
-			sCtx.Assert().Equal(testData.createRequest.Body.Alias, brandData.Alias, "Alias бренда в БД совпадает с Alias в запросе")
-			sCtx.Assert().Equal(testData.createRequest.Body.Sort, brandData.Sort, "Sort бренда в БД совпадает с Sort в запросе")
-			sCtx.Assert().Equal(testData.createRequest.Body.Description, brandData.Description, "Description бренда в БД совпадает с Description в запросе")
-			sCtx.Assert().Equal(uuid.MustParse(s.config.Node.ProjectID), brandData.NodeUUID, "NodeUUID бренда в БД совпадает с NodeUUID в запросе")
-			sCtx.Assert().Equal(models.StatusDisabled, brandData.Status, "Status бренда в БД совпадает с Status в запросе")
-			sCtx.Assert().NotZero(brandData.CreatedAt, "Время создания бренда в БД не равно нулю")
-
-			sCtx.WithAttachments(allure.NewAttachment("Бренд из БД", allure.JSON, utils.CreatePrettyJSON(brandData)))
-			return nil
-		})
-		sCtx.Assert().NoError(err, "Ошибка при проверке бренда в БД")
-=======
 		testData.createBrandResponse = s.capService.CreateCapBrand(sCtx, testData.createCapBrandRequest)
 
 		sCtx.Assert().NotEmpty(testData.createBrandResponse.Body.ID, "ID созданного бренда не пустой")
@@ -145,36 +92,14 @@ func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 
 		sCtx.Assert().NotNil(brandFromDB, "Бренд найден в БД")
 		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Alias, brandFromDB.Alias, "Алиас бренда совпадает")
->>>>>>> origin/master
 	})
 
-	t.WithNewStep("Удаление бренда", func(sCtx provider.StepCtx) {
-		s.kafka.StartReading(t)
-
+	t.WithNewStep("Удаление бренда.", func(sCtx provider.StepCtx) {
 		deleteReq := &clientTypes.Request[struct{}]{
 			Headers: map[string]string{
 				"Authorization": fmt.Sprintf("Bearer %s", s.capService.GetToken()),
 			},
 			PathParams: map[string]string{
-<<<<<<< HEAD
-				"id": testData.createCapBrandResponse.ID,
-			},
-		}
-		deleteResp := s.capService.DeleteCapBrand(deleteReq)
-		sCtx.Assert().Equal(http.StatusNoContent, deleteResp.StatusCode, "Статус код ответа равен 204")
-
-		err := s.kafka.WaitForMessage(t, func(msg []byte) error {
-			var event models.BrandEvent
-			if err := json.Unmarshal(msg, &event); err != nil {
-				return err
-			}
-			if event.Brand.UUID != testData.createCapBrandResponse.ID {
-				return fmt.Errorf("неверный ID бренда в сообщении")
-			}
-			return nil
-		})
-		sCtx.Assert().NoError(err, "Получено сообщение о удалении бренда")
-=======
 				"id": testData.createBrandResponse.Body.ID,
 			},
 		}
@@ -194,33 +119,7 @@ func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 
 		sCtx.Assert().NotNil(brandFromDB, "Бренд найден в БД")
 		sCtx.Assert().Equal(BrandStatusDeleted, brandFromDB.Status, "Статус бренда - удален")
->>>>>>> origin/master
 	})
-
-	t.WithNewStep("Проверка удаления бренда в БД", func(sCtx provider.StepCtx) {
-		err := repository.ExecuteWithRetry(context.Background(), &s.config.MySQL, func(ctx context.Context) error {
-			brandData := s.brandRepo.GetBrand(t, map[string]interface{}{
-				"uuid": testData.createCapBrandResponse.ID,
-			})
-
-			if brandData == nil {
-				return fmt.Errorf("бренд не найден в БД")
-			}
-
-			sCtx.Assert().Equal(BrandStatusDeleted, brandData.Status, "Статус бренда - удален")
-			sCtx.WithAttachments(allure.NewAttachment("Удаленный бренд из БД", allure.JSON, utils.CreatePrettyJSON(brandData)))
-			return nil
-		})
-		sCtx.Assert().NoError(err, "Ошибка при проверке удаления бренда в БД")
-	})
-}
-
-func (s *DeleteBrandSuite) TestDeleteAlreadyDeletedBrand(t provider.T) {
-	t.Epic("Brands")
-	t.Feature("Удаление бренда")
-	t.Title("Проверка повторного удаления бренда")
-	t.Tags("CAP", "Brands", "Platform", "Negative")
-
 }
 
 func (s *DeleteBrandSuite) AfterAll(t provider.T) {
