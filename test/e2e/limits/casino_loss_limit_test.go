@@ -9,9 +9,11 @@ import (
 	"testing"
 	"time"
 
+	capAPI "CB_auto/internal/client/cap"
+	capModels "CB_auto/internal/client/cap/models"
 	"CB_auto/internal/client/factory"
 	publicAPI "CB_auto/internal/client/public"
-	"CB_auto/internal/client/public/models"
+	publicModels "CB_auto/internal/client/public/models"
 	clientTypes "CB_auto/internal/client/types"
 	"CB_auto/internal/config"
 	"CB_auto/internal/transport/kafka"
@@ -25,6 +27,7 @@ type CasinoLossLimitSuite struct {
 	suite.Suite
 	config       *config.Config
 	publicClient publicAPI.PublicAPI
+	capClient    capAPI.CapAPI
 	kafka        *kafka.Kafka
 	natsClient   *nats.NatsClient
 }
@@ -38,6 +41,10 @@ func (s *CasinoLossLimitSuite) BeforeAll(t provider.T) {
 
 	t.WithNewStep("Инициализация Public API клиента", func(sCtx provider.StepCtx) {
 		s.publicClient = factory.InitClient[publicAPI.PublicAPI](sCtx, s.config, clientTypes.Public)
+	})
+
+	t.WithNewStep("Инициализация CAP API клиента", func(sCtx provider.StepCtx) {
+		s.capClient = factory.InitClient[capAPI.CapAPI](sCtx, s.config, clientTypes.Cap)
 	})
 
 	t.WithNewStep("Инициализация Kafka клиента", func(sCtx provider.StepCtx) {
@@ -54,17 +61,17 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
 	t.Title("Проверка создания casino-loss лимита в Kafka, NATS, Redis, MySQL, Public API, CAP API")
 
 	var testData struct {
-		registrationResponse    *clientTypes.Response[models.FastRegistrationResponseBody]
-		authorizationResponse   *clientTypes.Response[models.TokenCheckResponseBody]
+		registrationResponse    *clientTypes.Response[publicModels.FastRegistrationResponseBody]
+		authorizationResponse   *clientTypes.Response[publicModels.TokenCheckResponseBody]
 		registrationMessage     kafka.PlayerMessage
 		limitMessage            kafka.LimitMessage
-		casinoLossLimitResponse *clientTypes.Response[models.GetCasinoLossLimitsResponseBody]
-		setCasinoLossLimitReq   *clientTypes.Request[models.SetCasinoLossLimitRequestBody]
+		casinoLossLimitResponse *clientTypes.Response[publicModels.GetCasinoLossLimitsResponseBody]
+		setCasinoLossLimitReq   *clientTypes.Request[publicModels.SetCasinoLossLimitRequestBody]
 	}
 
 	t.WithNewStep("Регистрация нового игрока", func(sCtx provider.StepCtx) {
-		req := &clientTypes.Request[models.FastRegistrationRequestBody]{
-			Body: &models.FastRegistrationRequestBody{
+		req := &clientTypes.Request[publicModels.FastRegistrationRequestBody]{
+			Body: &publicModels.FastRegistrationRequestBody{
 				Country:  s.config.Node.DefaultCountry,
 				Currency: s.config.Node.DefaultCurrency,
 			},
@@ -85,8 +92,8 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
 	})
 
 	t.WithNewStep("Получение токена авторизации", func(sCtx provider.StepCtx) {
-		req := &clientTypes.Request[models.TokenCheckRequestBody]{
-			Body: &models.TokenCheckRequestBody{
+		req := &clientTypes.Request[publicModels.TokenCheckRequestBody]{
+			Body: &publicModels.TokenCheckRequestBody{
 				Username: testData.registrationResponse.Body.Username,
 				Password: testData.registrationResponse.Body.Password,
 			},
@@ -98,11 +105,11 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
 	})
 
 	t.WithNewStep("Установка лимита на проигрыш", func(sCtx provider.StepCtx) {
-		testData.setCasinoLossLimitReq = &clientTypes.Request[models.SetCasinoLossLimitRequestBody]{
+		testData.setCasinoLossLimitReq = &clientTypes.Request[publicModels.SetCasinoLossLimitRequestBody]{
 			Headers: map[string]string{
 				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
 			},
-			Body: &models.SetCasinoLossLimitRequestBody{
+			Body: &publicModels.SetCasinoLossLimitRequestBody{
 				Amount:    "100",
 				Currency:  s.config.Node.DefaultCurrency,
 				Type:      "daily",
@@ -128,7 +135,7 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
 		sCtx.Require().NotEmpty(testData.limitMessage.ID, "ID лимита на проигрыш не пустой")
 	})
 
-	t.WithNewAsyncStep("Получение лимита на проигрыш", func(sCtx provider.StepCtx) {
+	t.WithNewAsyncStep("Получение лимита на проигрыш нa Public", func(sCtx provider.StepCtx) {
 		req := &clientTypes.Request[any]{
 			Headers: map[string]string{
 				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
@@ -152,6 +159,35 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
 		sCtx.Assert().Equal(testData.limitMessage.ExpiresAt, limit.ExpiresAt, "Время окончания установлено")
 		sCtx.Assert().Equal("0", limit.Spent, "Потраченная сумма равна 0")
 		sCtx.Assert().Equal(limit.Amount, limit.Rest, "Остаток равен сумме лимита")
+	})
+
+	t.WithNewAsyncStep("Получение списка лимитов через CAP API", func(sCtx provider.StepCtx) {
+		req := &clientTypes.Request[any]{
+			Headers: map[string]string{
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capClient.GetToken()),
+				"Platform-NodeId": s.config.Node.ProjectID,
+				"Platform-Locale": "en",
+			},
+			PathParams: map[string]string{
+				"playerID": testData.registrationMessage.Player.ExternalID,
+			},
+		}
+
+		playerLimitsResponse := s.capClient.GetPlayerLimits(sCtx, req)
+
+		sCtx.Assert().Equal(http.StatusOK, playerLimitsResponse.StatusCode, "Список лимитов получен")
+		sCtx.Assert().Equal(1, playerLimitsResponse.Body.Total, "Количество лимитов корректно")
+
+		singleBetLimit := playerLimitsResponse.Body.Data[0]
+		sCtx.Assert().Equal(capModels.LimitTypeCasinoLoss, singleBetLimit.Type)
+		sCtx.Assert().True(singleBetLimit.Status)
+		sCtx.Assert().Equal("Daily", singleBetLimit.Period)
+		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, singleBetLimit.Currency)
+		sCtx.Assert().Equal(testData.limitMessage.Amount, singleBetLimit.Rest)
+		sCtx.Assert().Equal(testData.limitMessage.Amount, singleBetLimit.Amount)
+		sCtx.Assert().InDelta(testData.limitMessage.StartedAt, singleBetLimit.StartedAt, 10)
+		sCtx.Assert().InDelta(testData.limitMessage.ExpiresAt, singleBetLimit.ExpiresAt, 10)
+		sCtx.Assert().Zero(singleBetLimit.DeactivatedAt)
 	})
 
 	t.WithNewAsyncStep("Проверка сообщения в NATS о создании лимита на проигрыш", func(sCtx provider.StepCtx) {
