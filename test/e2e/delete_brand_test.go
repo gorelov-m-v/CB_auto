@@ -91,12 +91,12 @@ func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 			},
 			Body: &models.CreateCapBrandRequestBody{
 				Sort:  1,
-				Alias: utils.GenerateAlias(),
+				Alias: utils.Get(utils.ALIAS, 10),
 				Names: map[string]string{
-					"en": utils.GenerateAlias(),
-					"ru": utils.GenerateAlias(),
+					"en": utils.Get(utils.BRAND_TITLE, 20),
+					"ru": utils.Get(utils.BRAND_TITLE, 20),
 				},
-				Description: "Test brand description",
+				Description: utils.Get(utils.BRAND_TITLE, 50),
 			},
 		}
 <<<<<<< HEAD

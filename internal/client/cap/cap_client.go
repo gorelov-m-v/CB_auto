@@ -31,7 +31,7 @@ type CapAPI interface {
 	DeleteCapBrand(sCtx provider.StepCtx, req *types.Request[struct{}]) *types.Response[struct{}]
 	UpdateBlockers(sCtx provider.StepCtx, req *types.Request[models.BlockersRequestBody]) *types.Response[struct{}]
 	GetBlockers(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetBlockersResponseBody]
->>>>>>> origin/master
+	GetPlayerLimits(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetPlayerLimitsResponseBody]
 }
 
 type capClient struct {
@@ -151,50 +151,25 @@ func (c *capClient) GetBlockers(sCtx provider.StepCtx, req *types.Request[any]) 
 	return resp
 }
 
-func (c *capClient) UpdateBrandStatus(req *types.Request[models.UpdateBrandStatusRequestBody]) *types.Response[struct{}] {
-	req.Method = "PATCH"
-	req.Path = "/_cap/api/v1/brands/{id}/status"
-	resp, err := httpClient.DoRequest[models.UpdateBrandStatusRequestBody, struct{}](c.client, req)
-	if err != nil {
-		log.Printf("UpdateBrandStatus failed: %v", err)
-		return &types.Response[struct{}]{
-			StatusCode: http.StatusInternalServerError,
-			Error: &types.ErrorResponse{
-				Body: fmt.Sprintf("UpdateBrandStatus failed: %v", err),
-			},
-		}
+func (c *capClient) GetPlayerLimits(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetPlayerLimitsResponseBody] {
+	req.Method = "GET"
+	req.Path = "/_cap/api/v1/player/{playerID}/limits"
+	req.QueryParams = map[string]string{
+		"sort":    "status",
+		"page":    "1",
+		"perPage": "10",
 	}
-	return resp
-}
 
-func (c *capClient) UpdateCapBrand(req *types.Request[models.UpdateCapBrandRequestBody]) *types.Response[models.UpdateCapBrandResponseBody] {
-	req.Method = "PATCH"
-	req.Path = "/_cap/api/v1/brands/{id}"
-	resp, err := httpClient.DoRequest[models.UpdateCapBrandRequestBody, models.UpdateCapBrandResponseBody](c.client, req)
+	resp, err := httpClient.DoRequest[any, models.GetPlayerLimitsResponseBody](sCtx, c.client, req)
 	if err != nil {
-		log.Printf("UpdateCapBrand failed: %v", err)
-		return &types.Response[models.UpdateCapBrandResponseBody]{
+		log.Printf("GetPlayerLimits failed: %v", err)
+		return &types.Response[models.GetPlayerLimitsResponseBody]{
 			StatusCode: http.StatusInternalServerError,
 			Error: &types.ErrorResponse{
-				Body: fmt.Sprintf("UpdateCapBrand failed: %v", err),
+				Body: fmt.Sprintf("GetPlayerLimits failed: %v", err),
 			},
 		}
 	}
-	return resp
-}
 
-func (c *capClient) UpdateCapBrandError(req *types.Request[models.UpdateCapBrandRequestBody]) *types.Response[models.ErrorResponse] {
-	req.Method = "PATCH"
-	req.Path = "/_cap/api/v1/brands/{id}"
-	resp, err := httpClient.DoRequest[models.UpdateCapBrandRequestBody, models.ErrorResponse](c.client, req)
-	if err != nil {
-		log.Printf("UpdateCapBrand failed: %v", err)
-		return &types.Response[models.ErrorResponse]{
-			StatusCode: http.StatusInternalServerError,
-			Error: &types.ErrorResponse{
-				Body: fmt.Sprintf("UpdateCapBrand failed: %v", err),
-			},
-		}
-	}
 	return resp
 }

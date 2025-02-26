@@ -65,6 +65,7 @@ type GetBlockersResponseBody struct {
 	BettingEnabled  bool `json:"bettingEnabled"`
 }
 
+<<<<<<< HEAD
 type UpdateBrandStatusRequestBody struct {
 	Status int `json:"status"`
 }
@@ -88,4 +89,28 @@ type BrandEvent struct {
 		UUID      string `json:"uuid"`
 		DeletedAt int64  `json:"deleted_at,omitempty"`
 	} `json:"brand"`
+=======
+const (
+	LimitTypeSingleBet  = "Single bet"
+	LimitTypeTurnover   = "Turnover of funds"
+	LimitTypeCasinoLoss = "Casino loss"
+)
+
+type GetPlayerLimitsResponseBody struct {
+	Data  []PlayerLimit `json:"data"`
+	Total int           `json:"total"`
+}
+
+type PlayerLimit struct {
+	Type          string `json:"type"`
+	Status        bool   `json:"status"`
+	Period        string `json:"period"`
+	Currency      string `json:"currency"`
+	Amount        string `json:"amount"`
+	Rest          string `json:"rest,omitempty"`
+	CreatedAt     int64  `json:"createdAt"`
+	DeactivatedAt int64  `json:"deactivatedAt,omitempty"`
+	StartedAt     int64  `json:"startedAt"`
+	ExpiresAt     int64  `json:"expiresAt,omitempty"`
+>>>>>>> master
 }

@@ -1,8 +1,6 @@
 package test
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"testing"
@@ -72,7 +70,7 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 =======
 >>>>>>> origin/master
 		names := map[string]string{
-			"en": utils.GenerateAlias(),
+			"en": utils.Get(utils.BRAND_TITLE, 20),
 		}
 
 		testData.createCapBrandRequest = &clientTypes.Request[models.CreateCapBrandRequestBody]{
@@ -83,29 +81,12 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 			},
 			Body: &models.CreateCapBrandRequestBody{
 				Sort:        1,
-				Alias:       utils.GenerateAlias(),
+				Alias:       utils.Get(utils.ALIAS, 10),
 				Names:       names,
-				Description: fmt.Sprintf("Test brand description %s", utils.GenerateAlias()),
+				Description: utils.Get(utils.BRAND_TITLE, 50),
 			},
 		}
 
-<<<<<<< HEAD
-		createResp := s.capService.CreateCapBrand(testData.createRequest)
-		sCtx.Assert().Equal(http.StatusOK, createResp.StatusCode,
-			"Статус ответа при создании бренда должен быть 200 OK")
-		testData.createCapBrandResponse = &createResp.Body
-
-		sCtx.WithAttachments(allure.NewAttachment("CreateBrand Request", allure.JSON, utils.CreateHttpAttachRequest(testData.createRequest)))
-		sCtx.WithAttachments(allure.NewAttachment("CreateBrand Response", allure.JSON, utils.CreateHttpAttachResponse(createResp)))
-	})
-
-	t.WithNewStep("Ожидание создания бренда в БД", func(sCtx provider.StepCtx) {
-		err := repository.ExecuteWithRetry(context.Background(), &s.config.MySQL, func(ctx context.Context) error {
-			filters := map[string]interface{}{
-				"uuid": testData.createCapBrandResponse.ID,
-			}
-			brandData := brandRepo.GetBrand(t, filters)
-=======
 		testData.createCapBrandResponse = s.capService.CreateCapBrand(sCtx, testData.createCapBrandRequest)
 	})
 
@@ -114,37 +95,15 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 			"uuid": testData.createCapBrandResponse.Body.ID,
 		}
 		brandData := s.brandRepo.GetBrand(sCtx, filters)
->>>>>>> origin/master
 
 			if brandData == nil {
 				return fmt.Errorf("бренд не найден в БД")
 			}
 
-<<<<<<< HEAD
-			var dbNames map[string]string
-			if err := json.Unmarshal(brandData.LocalizedNames, &dbNames); err != nil {
-				return fmt.Errorf("ошибка при парсинге LocalizedNames: %v", err)
-			}
-
-			sCtx.Assert().Equal(testData.createRequest.Body.Names, dbNames, "Names бренда в БД совпадают с Names в запросе")
-			sCtx.Assert().Equal(testData.createRequest.Body.Alias, brandData.Alias, "Alias бренда в БД совпадает с Alias в запросе")
-			sCtx.Assert().Equal(testData.createRequest.Body.Sort, brandData.Sort, "Sort бренда в БД совпадает с Sort в запросе")
-			sCtx.Assert().Equal(testData.createRequest.Body.Description, brandData.Description, "Description бренда в БД совпадает с Description в запросе")
-			sCtx.Assert().Equal(uuid.MustParse(s.config.Node.ProjectID), brandData.NodeUUID, "NodeUUID бренда в БД совпадает с NodeUUID в запросе")
-			sCtx.Assert().Equal(models.StatusDisabled, brandData.Status, "Status бренда в БД совпадает с Status в запросе")
-			sCtx.Assert().NotZero(brandData.CreatedAt, "Время создания бренда в БД не равно нулю")
-			sCtx.Assert().Zero(brandData.UpdatedAt, "Время обновления бренда в БД равно нулю")
-
-			sCtx.WithAttachments(allure.NewAttachment("Бренд из БД", allure.JSON, utils.CreatePrettyJSON(brandData)))
-			return nil
-		})
-
-		sCtx.Assert().NoError(err, "Ошибка при проверке бренда в БД")
-=======
-		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Names, dbNames, "Names бренда в БД совпадают с Names в запросе")
+		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Names, brandData.LocalizedNames, "Names бренда в БД совпадают с Names в запросе")
+		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Description, brandData.Description, "Description бренда в БД совпадает с Description в запросе")
 		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Alias, brandData.Alias, "Alias бренда в БД совпадает с Alias в запросе")
 		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Sort, brandData.Sort, "Sort бренда в БД совпадает с Sort в запросе")
-		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Description, brandData.Description, "Description бренда в БД совпадает с Description в запросе")
 		sCtx.Assert().Equal(s.config.Node.ProjectID, brandData.NodeUUID, "NodeUUID бренда в БД совпадает с NodeUUID в запросе")
 		sCtx.Assert().Equal(models.StatusDisabled, brandData.Status, "Status бренда в БД равен StatusDisabled")
 		sCtx.Assert().NotZero(brandData.CreatedAt, "CreatedAt бренда в БД не равен нулю")
