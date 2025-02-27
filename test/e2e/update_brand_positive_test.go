@@ -17,7 +17,6 @@ import (
 	"CB_auto/internal/transport/kafka"
 	"CB_auto/pkg/utils"
 
-	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
 )
@@ -300,13 +299,11 @@ func (s *UpdateBrandPositiveSuite) updateBrandRequest(id, name, alias string, na
 }
 
 func (s *UpdateBrandPositiveSuite) attachRequestResponse(t provider.StepCtx, req *clientTypes.Request[models.UpdateCapBrandRequestBody], resp *types.Response[models.UpdateCapBrandResponseBody]) {
-	t.WithAttachments(allure.NewAttachment("UpdateBrand Request", allure.JSON, utils.CreateHttpAttachRequest(req)))
-	t.WithAttachments(allure.NewAttachment("UpdateBrand Response", allure.JSON, utils.CreateHttpAttachResponse(resp)))
+
 }
 
 func (s *UpdateBrandPositiveSuite) attachCreateRequestResponse(t provider.StepCtx, req *clientTypes.Request[models.CreateCapBrandRequestBody], resp *types.Response[models.CreateCapBrandResponseBody]) {
-	t.WithAttachments(allure.NewAttachment("CreateBrand Request", allure.JSON, utils.CreateHttpAttachRequest(req)))
-	t.WithAttachments(allure.NewAttachment("CreateBrand Response", allure.JSON, utils.CreateHttpAttachResponse(resp)))
+
 }
 
 func (s *UpdateBrandPositiveSuite) cleanupBrand(t provider.T, brandID string) {

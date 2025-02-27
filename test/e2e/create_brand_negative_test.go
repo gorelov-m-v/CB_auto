@@ -12,7 +12,6 @@ import (
 	"CB_auto/internal/config"
 	"CB_auto/pkg/utils"
 
-	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
 )
@@ -52,8 +51,6 @@ func (s *CreateBrandNegativeSuite) TestCreateBrandWithoutName(t provider.T) {
 		resp := s.capService.CreateCapBrand(sCtx, req)
 		sCtx.Assert().Equal(http.StatusBadRequest, resp.StatusCode)
 
-		sCtx.WithAttachments(allure.NewAttachment("CreateBrand Request", allure.JSON, utils.CreateHttpAttachRequest(req)))
-		sCtx.WithAttachments(allure.NewAttachment("CreateBrand Response", allure.JSON, utils.CreateHttpAttachResponse(resp)))
 	})
 }
 
@@ -113,8 +110,7 @@ func (s *CreateBrandNegativeSuite) createBrandRequest(name, alias string, names 
 }
 
 func (s *CreateBrandNegativeSuite) attachRequestResponse(t provider.StepCtx, req *clientTypes.Request[models.CreateCapBrandRequestBody], resp *clientTypes.Response[models.CreateCapBrandResponseBody]) {
-	t.WithAttachments(allure.NewAttachment("CreateBrand Request", allure.JSON, utils.CreateHttpAttachRequest(req)))
-	t.WithAttachments(allure.NewAttachment("CreateBrand Response", allure.JSON, utils.CreateHttpAttachResponse(resp)))
+
 }
 
 func TestCreateBrandNegativeSuite(t *testing.T) {
