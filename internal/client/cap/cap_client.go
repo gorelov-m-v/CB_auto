@@ -19,8 +19,11 @@ type CapAPI interface {
 	UpdateBlockers(sCtx provider.StepCtx, req *types.Request[models.BlockersRequestBody]) *types.Response[struct{}]
 	GetBlockers(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetBlockersResponseBody]
 	GetPlayerLimits(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetPlayerLimitsResponseBody]
-	CreateLabel(sCtx provider.StepCtx, req *types.Request[models.CreateLabelRequestBody]) *types.Response[models.CreateLabelResponseBody]
-	GetLabel(sCtx provider.StepCtx, req *types.Request[struct{}]) *types.Response[models.GetLabelResponseBody]
+
+	GetCapCategory(sCtx provider.StepCtx, req *types.Request[struct{}]) *types.Response[models.GetCapCategoryResponseBody]
+	CreateCapCategory(sCtx provider.StepCtx, req *types.Request[models.CreateCapCategoryRequestBody]) *types.Response[models.CreateCapCategoryResponseBody]
+	DeleteCapCategory(sCtx provider.StepCtx, req *types.Request[struct{}]) *types.Response[struct{}]
+
 }
 
 type capClient struct {
@@ -141,6 +144,57 @@ func (c *capClient) GetLabel(sCtx provider.StepCtx, req *types.Request[struct{}]
 	resp, err := httpClient.DoRequest[struct{}, models.GetLabelResponseBody](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("GetLabel failed: %v", err)
+	}
+
+	return resp
+}
+
+func (c *capClient) CreateCapCategory(sCtx provider.StepCtx, req *types.Request[models.CreateCapCategoryRequestBody]) *types.Response[models.CreateCapCategoryResponseBody] {
+	req.Method = "POST"
+	req.Path = "/_cap/api/v1/categories"
+	resp, err := httpClient.DoRequest[models.CreateCapCategoryRequestBody, models.CreateCapCategoryResponseBody](sCtx, c.client, req)
+	if err != nil {
+		log.Printf("CreateCapCategory failed: %v", err)
+		return &types.Response[models.CreateCapCategoryResponseBody]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("CreateCapCategory failed: %v", err),
+			},
+		}
+	}
+
+	return resp
+}
+
+func (c *capClient) GetCapCategory(sCtx provider.StepCtx, req *types.Request[struct{}]) *types.Response[models.GetCapCategoryResponseBody] {
+	req.Method = "GET"
+	req.Path = "/_cap/api/v1/categories/{id}"
+	resp, err := httpClient.DoRequest[struct{}, models.GetCapCategoryResponseBody](sCtx, c.client, req)
+	if err != nil {
+		log.Printf("GetCapCategory failed: %v", err)
+		return &types.Response[models.GetCapCategoryResponseBody]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("GetCapCategory failed: %v", err),
+			},
+		}
+	}
+
+	return resp
+}
+
+func (c *capClient) DeleteCapCategory(sCtx provider.StepCtx, req *types.Request[struct{}]) *types.Response[struct{}] {
+	req.Method = "DELETE"
+	req.Path = "/_cap/api/v1/categories/{id}"
+	resp, err := httpClient.DoRequest[struct{}, struct{}](sCtx, c.client, req)
+	if err != nil {
+		log.Printf("DeleteCapCategory failed: %v", err)
+		return &types.Response[struct{}]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("DeleteCapCategory failed: %v", err),
+			},
+		}
 	}
 
 	return resp

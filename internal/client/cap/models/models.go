@@ -83,6 +83,42 @@ type PlayerLimit struct {
 	ExpiresAt     int64  `json:"expiresAt,omitempty"`
 }
 
+
+type CreateCapCategoryRequestBody struct {
+	Sort    int               `json:"sort"`
+	Alias   string            `json:"alias"`
+	Names   map[string]string `json:"names"`
+	Type    string            `json:"type"`
+	GroupID string            `json:"groupId"`
+}
+
+type CreateCapCategoryResponseBody struct {
+	ID string `json:"id"`
+}
+
+type CreateCapCategoryRequestHeaders struct {
+	Authorization  string
+	PlatformNodeID string
+}
+
+type GetCapCategoryRequestHeaders struct {
+	Authorization  string
+	PlatformNodeID string
+}
+
+type GetCapCategoryResponseBody struct {
+	ID         string            `json:"id"`
+	Names      map[string]string `json:"names"`
+	Alias      string            `json:"alias"`
+	ProjectId  string            `json:"projectId"`
+	GroupID    string            `json:"groupId"`
+	GamesCount int               `json:"gamesCount"`
+	Status     int               `json:"status"`
+	Sort       int               `json:"sort"`
+	IsDefault  bool              `json:"isDefault"`
+	Type       string            `json:"type"`
+	PassToCms  bool              `json:"passToCms"`
+
 type CreateLabelRequestBody struct {
 	Color       string       `json:"color"`
 	Titles      []LabelTitle `json:"titles"`
@@ -109,4 +145,5 @@ type GetLabelResponseBody struct {
 	UpdatedAt      string       `json:"updatedAt"`
 	Titles         []LabelTitle `json:"titles"`
 	Description    string       `json:"description"`
+
 }
