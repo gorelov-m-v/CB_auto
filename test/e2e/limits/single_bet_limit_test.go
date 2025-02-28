@@ -1,5 +1,5 @@
-//go:build limit
-// +build limit
+//go:build limits
+// +build limits
 
 package test
 
@@ -15,9 +15,13 @@ import (
 	publicModels "CB_auto/internal/client/public/models"
 	clientTypes "CB_auto/internal/client/types"
 	"CB_auto/internal/config"
+	"CB_auto/internal/repository"
+	"CB_auto/internal/repository/wallet"
 	"CB_auto/internal/transport/kafka"
 	"CB_auto/internal/transport/nats"
+	"CB_auto/internal/transport/redis"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
 )
@@ -29,6 +33,9 @@ type SingleBetLimitSuite struct {
 	kafka        *kafka.Kafka
 	natsClient   *nats.NatsClient
 	capClient    capAPI.CapAPI
+	database     *repository.Connector
+	walletRepo   *wallet.Repository
+	redisClient  *redis.RedisClient
 }
 
 func (s *SingleBetLimitSuite) BeforeAll(t provider.T) {
@@ -53,6 +60,16 @@ func (s *SingleBetLimitSuite) BeforeAll(t provider.T) {
 	t.WithNewStep("Инициализация CAP API клиента", func(sCtx provider.StepCtx) {
 		s.capClient = factory.InitClient[capAPI.CapAPI](sCtx, s.config, clientTypes.Cap)
 	})
+
+	t.WithNewStep("Соединение с базой данных wallet.", func(sCtx provider.StepCtx) {
+		connector := repository.OpenConnector(t, &s.config.MySQL, repository.Wallet)
+		s.database = &connector
+		s.walletRepo = wallet.NewRepository(s.database.DB(), &s.config.MySQL)
+	})
+
+	t.WithNewStep("Инициализация Redis клиента", func(sCtx provider.StepCtx) {
+		s.redisClient = redis.NewRedisClient(t, &s.config.Redis, redis.WalletClient)
+	})
 }
 
 func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
@@ -66,6 +83,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 		singleBetLimitResponse *clientTypes.Response[publicModels.GetSingleBetLimitsResponseBody] // изменить тип
 		setSingleBetLimitReq   *clientTypes.Request[publicModels.SetSingleBetLimitRequestBody]
 		limitMessage           kafka.LimitMessage
+		dbWallet               *wallet.Wallet
 	}
 
 	t.WithNewStep("Регистрация нового игрока", func(sCtx provider.StepCtx) {
@@ -88,6 +106,20 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 		})
 
 		sCtx.Require().NotEmpty(testData.registrationMessage.Player.ID, "ID игрока не пустой")
+	})
+
+	t.WithNewStep("Проверка базового кошелька игрока в базе данных", func(sCtx provider.StepCtx) {
+		walletFilter := map[string]interface{}{
+			"player_uuid": testData.registrationMessage.Player.ExternalID,
+			"is_default":  true,
+			"is_basic":    true,
+			"wallet_type": 1,
+			"currency":    testData.registrationMessage.Player.Currency,
+		}
+
+		testData.dbWallet = s.walletRepo.GetWallet(sCtx, walletFilter)
+
+		sCtx.Require().NotNil(testData.dbWallet, "Базовый кошелек найден в базе данных")
 	})
 
 	t.WithNewStep("Получение токена авторизации", func(sCtx provider.StepCtx) {
@@ -179,7 +211,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 	t.WithNewAsyncStep("Получение списка лимитов через CAP API", func(sCtx provider.StepCtx) {
 		req := &clientTypes.Request[any]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", s.capClient.GetToken()),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capClient.GetToken(sCtx)),
 				"Platform-NodeId": s.config.Node.ProjectID,
 				"Platform-Locale": "en",
 			},
@@ -202,6 +234,27 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 		sCtx.Assert().InDelta(testData.limitMessage.StartedAt, singleBetLimit.StartedAt, 10)
 		sCtx.Assert().InDelta(testData.limitMessage.ExpiresAt, singleBetLimit.ExpiresAt, 10)
 		sCtx.Assert().Zero(singleBetLimit.DeactivatedAt)
+	})
+
+	t.WithNewAsyncStep("Проверка данных кошелька в Redis", func(sCtx provider.StepCtx) {
+		var redisValue redis.WalletFullData
+		err := s.redisClient.GetWithRetry(sCtx, testData.dbWallet.UUID, &redisValue)
+
+		sCtx.Require().NoError(err, "Значение кошелька получено из Redis")
+		sCtx.Require().NotEmpty(redisValue.Limits, "Должен быть хотя бы один лимит")
+
+		limitData := redisValue.Limits[0]
+
+		sCtx.Assert().Equal(testData.limitMessage.ID, limitData.ExternalID, "ID лимита совпадает")
+		sCtx.Assert().Equal("single-bet", limitData.LimitType, "Тип лимита совпадает")
+		sCtx.Assert().Equal("", limitData.IntervalType, "Интервал лимита совпадает")
+		sCtx.Assert().Equal(testData.limitMessage.Amount, limitData.Amount, "Сумма лимита совпадает")
+		sCtx.Assert().Equal("0", limitData.Spent, "Потраченная сумма равна 0")
+		sCtx.Assert().Equal(testData.limitMessage.Amount, limitData.Rest, "Остаток равен сумме лимита")
+		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, limitData.CurrencyCode, "Валюта лимита совпадает")
+		sCtx.Assert().InDelta(testData.limitMessage.StartedAt, limitData.StartedAt, 10, "Время начала лимита")
+		sCtx.Assert().InDelta(testData.limitMessage.ExpiresAt, limitData.ExpiresAt, 10, "Время окончания лимита")
+		sCtx.Assert().True(limitData.Status, "Лимит активен")
 	})
 }
 

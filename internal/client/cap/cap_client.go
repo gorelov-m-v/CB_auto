@@ -5,15 +5,13 @@ import (
 	"CB_auto/internal/client/cap/models"
 	"CB_auto/internal/client/types"
 	"CB_auto/internal/config"
-	"fmt"
 	"log"
-	"net/http"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
 
 type CapAPI interface {
-	GetToken() string
+	GetToken(sCtx provider.StepCtx) string
 	CheckAdmin(sCtx provider.StepCtx, req *types.Request[models.AdminCheckRequestBody]) *types.Response[models.AdminCheckResponseBody]
 	CreateCapBrand(sCtx provider.StepCtx, req *types.Request[models.CreateCapBrandRequestBody]) *types.Response[models.CreateCapBrandResponseBody]
 	GetCapBrand(sCtx provider.StepCtx, req *types.Request[struct{}]) *types.Response[models.GetCapBrandResponseBody]
@@ -21,9 +19,11 @@ type CapAPI interface {
 	UpdateBlockers(sCtx provider.StepCtx, req *types.Request[models.BlockersRequestBody]) *types.Response[struct{}]
 	GetBlockers(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetBlockersResponseBody]
 	GetPlayerLimits(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetPlayerLimitsResponseBody]
+
 	GetCapCategory(sCtx provider.StepCtx, req *types.Request[struct{}]) *types.Response[models.GetCapCategoryResponseBody]
 	CreateCapCategory(sCtx provider.StepCtx, req *types.Request[models.CreateCapCategoryRequestBody]) *types.Response[models.CreateCapCategoryResponseBody]
 	DeleteCapCategory(sCtx provider.StepCtx, req *types.Request[struct{}]) *types.Response[struct{}]
+
 }
 
 type capClient struct {
@@ -37,8 +37,8 @@ func NewClient(sCtx provider.StepCtx, cfg *config.Config, baseClient *types.Clie
 	return client
 }
 
-func (c *capClient) GetToken() string {
-	return c.tokenStorage.GetToken()
+func (c *capClient) GetToken(sCtx provider.StepCtx) string {
+	return c.tokenStorage.GetToken(sCtx)
 }
 
 func (c *capClient) CheckAdmin(sCtx provider.StepCtx, req *types.Request[models.AdminCheckRequestBody]) *types.Response[models.AdminCheckResponseBody] {
@@ -47,12 +47,7 @@ func (c *capClient) CheckAdmin(sCtx provider.StepCtx, req *types.Request[models.
 	resp, err := httpClient.DoRequest[models.AdminCheckRequestBody, models.AdminCheckResponseBody](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("CheckAdmin failed: %v", err)
-		return &types.Response[models.AdminCheckResponseBody]{
-			StatusCode: http.StatusInternalServerError,
-			Error: &types.ErrorResponse{
-				Body: fmt.Sprintf("CheckAdmin failed: %v", err),
-			},
-		}
+		sCtx.Errorf("CheckAdmin failed: %v", err)
 	}
 
 	return resp
@@ -64,12 +59,6 @@ func (c *capClient) CreateCapBrand(sCtx provider.StepCtx, req *types.Request[mod
 	resp, err := httpClient.DoRequest[models.CreateCapBrandRequestBody, models.CreateCapBrandResponseBody](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("CreateCapBrand failed: %v", err)
-		return &types.Response[models.CreateCapBrandResponseBody]{
-			StatusCode: http.StatusInternalServerError,
-			Error: &types.ErrorResponse{
-				Body: fmt.Sprintf("CreateCapBrand failed: %v", err),
-			},
-		}
 	}
 
 	return resp
@@ -81,12 +70,6 @@ func (c *capClient) GetCapBrand(sCtx provider.StepCtx, req *types.Request[struct
 	resp, err := httpClient.DoRequest[struct{}, models.GetCapBrandResponseBody](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("GetCapBrand failed: %v", err)
-		return &types.Response[models.GetCapBrandResponseBody]{
-			StatusCode: http.StatusInternalServerError,
-			Error: &types.ErrorResponse{
-				Body: fmt.Sprintf("GetCapBrand failed: %v", err),
-			},
-		}
 	}
 
 	return resp
@@ -98,12 +81,6 @@ func (c *capClient) DeleteCapBrand(sCtx provider.StepCtx, req *types.Request[str
 	resp, err := httpClient.DoRequest[struct{}, struct{}](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("DeleteCapBrand failed: %v", err)
-		return &types.Response[struct{}]{
-			StatusCode: http.StatusInternalServerError,
-			Error: &types.ErrorResponse{
-				Body: fmt.Sprintf("DeleteCapBrand failed: %v", err),
-			},
-		}
 	}
 
 	return resp
@@ -115,12 +92,6 @@ func (c *capClient) UpdateBlockers(sCtx provider.StepCtx, req *types.Request[mod
 	resp, err := httpClient.DoRequest[models.BlockersRequestBody, struct{}](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("UpdateBlockers failed: %v", err)
-		return &types.Response[struct{}]{
-			StatusCode: http.StatusInternalServerError,
-			Error: &types.ErrorResponse{
-				Body: fmt.Sprintf("UpdateBlockers failed: %v", err),
-			},
-		}
 	}
 
 	return resp
@@ -132,12 +103,6 @@ func (c *capClient) GetBlockers(sCtx provider.StepCtx, req *types.Request[any]) 
 	resp, err := httpClient.DoRequest[any, models.GetBlockersResponseBody](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("GetBlockers failed: %v", err)
-		return &types.Response[models.GetBlockersResponseBody]{
-			StatusCode: http.StatusInternalServerError,
-			Error: &types.ErrorResponse{
-				Body: fmt.Sprintf("GetBlockers failed: %v", err),
-			},
-		}
 	}
 
 	return resp
@@ -155,12 +120,30 @@ func (c *capClient) GetPlayerLimits(sCtx provider.StepCtx, req *types.Request[an
 	resp, err := httpClient.DoRequest[any, models.GetPlayerLimitsResponseBody](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("GetPlayerLimits failed: %v", err)
-		return &types.Response[models.GetPlayerLimitsResponseBody]{
-			StatusCode: http.StatusInternalServerError,
-			Error: &types.ErrorResponse{
-				Body: fmt.Sprintf("GetPlayerLimits failed: %v", err),
-			},
-		}
+	}
+
+	return resp
+}
+
+func (c *capClient) CreateLabel(sCtx provider.StepCtx, req *types.Request[models.CreateLabelRequestBody]) *types.Response[models.CreateLabelResponseBody] {
+	req.Method = "POST"
+	req.Path = "/_cap/bonus/api/v1/label/create"
+
+	resp, err := httpClient.DoRequest[models.CreateLabelRequestBody, models.CreateLabelResponseBody](sCtx, c.client, req)
+	if err != nil {
+		log.Printf("CreateLabel failed: %v", err)
+	}
+
+	return resp
+}
+
+func (c *capClient) GetLabel(sCtx provider.StepCtx, req *types.Request[struct{}]) *types.Response[models.GetLabelResponseBody] {
+	req.Method = "GET"
+	req.Path = "/_cap/bonus/api/v1/label/show/{labelUUID}"
+
+	resp, err := httpClient.DoRequest[struct{}, models.GetLabelResponseBody](sCtx, c.client, req)
+	if err != nil {
+		log.Printf("GetLabel failed: %v", err)
 	}
 
 	return resp

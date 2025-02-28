@@ -57,6 +57,9 @@ var allowedFields = map[string]bool{
 	"currency":      true,
 	"wallet_status": true,
 	"balance":       true,
+	"is_default":    true,
+	"is_basic":      true,
+	"wallet_type":   true,
 }
 
 func (r *Repository) GetWallet(sCtx provider.StepCtx, filters map[string]interface{}) *Wallet {
@@ -105,7 +108,7 @@ func (r *Repository) GetWallet(sCtx provider.StepCtx, filters map[string]interfa
 	log.Printf("Using database: %v", r.db.Stats())
 
 	var wallet Wallet
-	err := repository.ExecuteWithRetry(context.Background(), r.cfg, func(ctx context.Context) error {
+	err := repository.ExecuteWithRetry(sCtx, r.cfg, func(ctx context.Context) error {
 		return r.db.QueryRowContext(ctx, query, args...).Scan(
 			&wallet.UUID,
 			&wallet.PlayerUUID,

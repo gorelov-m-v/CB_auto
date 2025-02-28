@@ -86,7 +86,7 @@ func (r *Repository) GetBrand(sCtx provider.StepCtx, filters map[string]interfac
 	var nodeUUIDStr string
 	var localizedNamesRaw []byte
 
-	err := repository.ExecuteWithRetry(context.Background(), r.cfg, func(ctx context.Context) error {
+	err := repository.ExecuteWithRetry(sCtx, r.cfg, func(ctx context.Context) error {
 		return r.db.QueryRowContext(ctx, query, args...).Scan(
 			&brand.UUID,
 			&brand.Alias,
@@ -104,7 +104,6 @@ func (r *Repository) GetBrand(sCtx provider.StepCtx, filters map[string]interfac
 		return nil
 	}
 
-	// Декодирование JSON с обработкой
 	if err := json.Unmarshal(localizedNamesRaw, &brand.LocalizedNames); err != nil {
 		log.Printf("Ошибка декодирования JSON: %v", err)
 		return nil

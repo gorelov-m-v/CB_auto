@@ -46,7 +46,7 @@ func (s *FastRegistrationSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация Redis клиента.", func(sCtx provider.StepCtx) {
-		s.redisClient = redis.NewRedisClient(t, &s.config.Redis)
+		s.redisClient = redis.NewRedisClient(t, &s.config.Redis, redis.PlayerClient)
 	})
 
 	t.WithNewStep("Инициализация Kafka.", func(sCtx provider.StepCtx) {
@@ -138,19 +138,19 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 	})
 
 	t.WithNewAsyncStep("Проверка значения в Redis.", func(sCtx provider.StepCtx) {
-		key := testData.playerRegistrationMessage.Player.ExternalID
-		wallets := s.redisClient.GetWithRetry(sCtx, key)
+		var wallets redis.WalletsMap
+		err := s.redisClient.GetWithRetry(sCtx, testData.playerRegistrationMessage.Player.ExternalID, &wallets)
+
+		sCtx.Require().NoError(err, "Значение кошелька получено из Redis")
+
 		var wallet redis.WalletData
 		for _, w := range wallets {
 			wallet = w
 			break
 		}
 
-		fmt.Println(wallet)
-
 		sCtx.Assert().Equal(int(nats.TypeReal), wallet.Type, "Тип кошелька в Redis – реальный")
 		sCtx.Assert().Equal(int(nats.StatusEnabled), wallet.Status, "Статус кошелька в Redis – включён")
-		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.WalletUUID, wallet.WalletUUID, "UUID кошелька в Redis совпадает с UUID из ивента `wallet_created`")
 	})
 
 	t.WithNewAsyncStep("Проверка создания кошелька в БД.", func(sCtx provider.StepCtx) {
@@ -199,6 +199,23 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.Currency, foundWallet.Currency, "Валюта кошелька совпадает с ожидаемой")
 		sCtx.Assert().Equal(constants.ZeroAmount, foundWallet.Balance, "Баланс кошелька равен 0")
 		sCtx.Assert().True(foundWallet.Default, "Кошелёк помечен как дефолтный")
+	})
+
+	t.WithNewAsyncStep("Проверка данных кошелька в Redis", func(sCtx provider.StepCtx) {
+		var redisValue redis.WalletFullData
+		err := s.redisClient.GetWithRetry(sCtx, testData.walletCreatedEvent.Payload.WalletUUID, &redisValue)
+
+		sCtx.Require().NoError(err, "Значение кошелька получено из Redis")
+		sCtx.Require().NotEmpty(redisValue.Limits, "Должен быть хотя бы один лимит")
+
+		limitData := redisValue.Limits[0]
+
+		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.WalletUUID, limitData.ExternalID, "ID лимита совпадает")
+		sCtx.Assert().Equal("turnover-of-funds", limitData.LimitType, "Тип лимита совпадает")
+		sCtx.Assert().Equal("daily", limitData.IntervalType, "Интервал лимита совпадает")
+		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.Currency, limitData.Amount, "Сумма лимита совпадает")
+		sCtx.Assert().Equal("0", limitData.Spent, "Потраченная сумма равна 0")
+		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.Currency, limitData.Rest, "Остаток равен сумме лимита")
 	})
 }
 
