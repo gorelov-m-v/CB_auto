@@ -22,7 +22,13 @@ import (
 	"github.com/ozontech/allure-go/pkg/framework/suite"
 )
 
-type UpdateBlockersSuite struct {
+type BlockersParam struct {
+	GamblingEnabled bool
+	BettingEnabled  bool
+	Description     string
+}
+
+type ParametrizedUpdateBlockersSuite struct {
 	suite.Suite
 	config        *config.Config
 	publicService publicAPI.PublicAPI
@@ -31,9 +37,10 @@ type UpdateBlockersSuite struct {
 	kafka         *kafka.Kafka
 	walletDB      *repository.Connector
 	walletRepo    *wallet.Repository
+	ParamBlockers []BlockersParam
 }
 
-func (s *UpdateBlockersSuite) BeforeAll(t provider.T) {
+func (s *ParametrizedUpdateBlockersSuite) BeforeAll(t provider.T) {
 	t.WithNewStep("Чтение конфигурационного файла.", func(sCtx provider.StepCtx) {
 		s.config = config.ReadConfig(t)
 	})
@@ -56,13 +63,20 @@ func (s *UpdateBlockersSuite) BeforeAll(t provider.T) {
 		s.walletDB = &connector
 		s.walletRepo = wallet.NewRepository(s.walletDB.DB(), &s.config.MySQL)
 	})
+
+	s.ParamBlockers = []BlockersParam{
+		{GamblingEnabled: true, BettingEnabled: true, Description: "Гэмблинг и беттинг включены"},
+		{GamblingEnabled: true, BettingEnabled: false, Description: "Гэмблинг включен, беттинг выключен"},
+		{GamblingEnabled: false, BettingEnabled: true, Description: "Гэмблинг выключен, беттинг включен"},
+		{GamblingEnabled: false, BettingEnabled: false, Description: "Гэмблинг и беттинг выключены"},
+	}
 }
 
-func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
+func (s *ParametrizedUpdateBlockersSuite) TableTestBlockers(t provider.T, param BlockersParam) {
 	t.Epic("Wallet")
 	t.Feature("Управление блокировками игрока")
 	t.Tags("Wallet", "Blockers")
-	t.Title("Проверка управления блокировками игрока")
+	t.Title(fmt.Sprintf("Проверка управления блокировками игрока: %s", param.Description))
 
 	type TestData struct {
 		registrationResponse *clientTypes.Response[publicModels.FastRegistrationResponseBody]
@@ -109,7 +123,7 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 		sCtx.Assert().NotEmpty(testData.walletCreatedEvent.Payload.WalletUUID, "UUID кошелька в ивенте `wallet_created` не пустой")
 	})
 
-	t.WithNewStep("Обновление блокировок игрока.", func(sCtx provider.StepCtx) {
+	t.WithNewStep(fmt.Sprintf("Обновление блокировок игрока: %s", param.Description), func(sCtx provider.StepCtx) {
 		req := &clientTypes.Request[capModels.BlockersRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
@@ -120,8 +134,8 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 				"player_uuid": testData.registrationMessage.Player.ExternalID,
 			},
 			Body: &capModels.BlockersRequestBody{
-				GamblingEnabled: false,
-				BettingEnabled:  true,
+				GamblingEnabled: param.GamblingEnabled,
+				BettingEnabled:  param.BettingEnabled,
 			},
 		}
 		resp := s.capService.UpdateBlockers(sCtx, req)
@@ -130,24 +144,26 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 	})
 
 	t.WithNewStep("Проверка события обновления блокировок в NATS.", func(sCtx provider.StepCtx) {
-		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
+		subject := fmt.Sprintf("%s.wallet.*.%s.%s", s.config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID, testData.walletCreatedEvent.Payload.WalletUUID)
 
 		testData.blockersSettedEvent = nats.FindMessageInStream(
 			sCtx, s.natsClient, subject, func(msg nats.BlockersSettedPayload, msgType string) bool {
 				return msgType == "setting_prevent_gamble_setted"
 			})
 
-		sCtx.Assert().False(testData.blockersSettedEvent.Payload.IsGamblingActive, "Гэмблинг отключен")
-		sCtx.Assert().True(testData.blockersSettedEvent.Payload.IsBettingActive, "Беттинг включен")
+		sCtx.Assert().Equal(param.GamblingEnabled, testData.blockersSettedEvent.Payload.IsGamblingActive, "Гэмблинг настроен правильно")
+		sCtx.Assert().Equal(param.BettingEnabled, testData.blockersSettedEvent.Payload.IsBettingActive, "Беттинг настроен правильно")
 	})
 
 	t.WithNewAsyncStep("Проверка блокировок в БД.", func(sCtx provider.StepCtx) {
 		walletFromDatabase := s.walletRepo.GetWallet(sCtx, map[string]interface{}{
-			"player_uuid": testData.registrationMessage.Player.ExternalID,
+			"player_uuid":        testData.registrationMessage.Player.ExternalID,
+			"is_gambling_active": param.GamblingEnabled,
+			"is_betting_active":  param.BettingEnabled,
 		})
 
-		sCtx.Assert().False(walletFromDatabase.IsGamblingActive, "Гэмблинг отключен в БД")
-		sCtx.Assert().True(walletFromDatabase.IsBettingActive, "Беттинг включен в БД")
+		sCtx.Assert().Equal(param.GamblingEnabled, walletFromDatabase.IsGamblingActive, "Гэмблинг настроен правильно в БД")
+		sCtx.Assert().Equal(param.BettingEnabled, walletFromDatabase.IsBettingActive, "Беттинг настроен правильно в БД")
 	})
 
 	t.WithNewAsyncStep("Проверка получения блокировок через API.", func(sCtx provider.StepCtx) {
@@ -163,12 +179,12 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 		resp := s.capService.GetBlockers(sCtx, req)
 
 		sCtx.Assert().Equal(http.StatusOK, resp.StatusCode, "Статус код ответа равен 200")
-		sCtx.Assert().False(resp.Body.GamblingEnabled, "Гэмблинг отключен в ответе API")
-		sCtx.Assert().True(resp.Body.BettingEnabled, "Беттинг включен в ответе API")
+		sCtx.Assert().Equal(param.GamblingEnabled, resp.Body.GamblingEnabled, "Гэмблинг настроен правильно в ответе API")
+		sCtx.Assert().Equal(param.BettingEnabled, resp.Body.BettingEnabled, "Беттинг настроен правильно в ответе API")
 	})
 }
 
-func (s *UpdateBlockersSuite) AfterAll(t provider.T) {
+func (s *ParametrizedUpdateBlockersSuite) AfterAll(t provider.T) {
 	if s.natsClient != nil {
 		s.natsClient.Close()
 	}
@@ -179,7 +195,7 @@ func (s *UpdateBlockersSuite) AfterAll(t provider.T) {
 	}
 }
 
-func TestUpdateBlockersSuite(t *testing.T) {
+func TestParametrizedUpdateBlockersSuite(t *testing.T) {
 	t.Parallel()
-	suite.RunSuite(t, new(UpdateBlockersSuite))
+	suite.RunSuite(t, new(ParametrizedUpdateBlockersSuite))
 }
