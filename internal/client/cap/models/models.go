@@ -84,10 +84,11 @@ type PlayerLimit struct {
 }
 
 type CreateCapCategoryRequestBody struct {
-	Sort  int               `json:"sort"`
-	Alias string            `json:"alias"`
-	Names map[string]string `json:"names"`
-	Type  string            `json:"type"`
+	Sort    int               `json:"sort"`
+	Alias   string            `json:"alias"`
+	Names   map[string]string `json:"names"`
+	Type    string            `json:"type"`
+	GroupID string            `json:"groupId"`
 }
 
 type CreateCapCategoryResponseBody struct {
