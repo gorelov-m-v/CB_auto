@@ -57,7 +57,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithRussianName(t provider.T) 
 		alias := fmt.Sprintf("test-brand-ru-%s", utils.GenerateAlias())
 		testData.createRequest = &clientTypes.Request[models.CreateCapBrandRequestBody]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 				"Platform-Nodeid": s.config.Node.ProjectID,
 			},
 			Body: &models.CreateCapBrandRequestBody{
@@ -94,7 +94,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithRussianName(t provider.T) 
 	t.WithNewStep("Очистка тестовых данных", func(sCtx provider.StepCtx) {
 		deleteReq := &clientTypes.Request[struct{}]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 				"Platform-Nodeid": s.config.Node.ProjectID,
 			},
 			PathParams: map[string]string{
@@ -116,7 +116,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithEnglishName(t provider.T) 
 	t.WithNewStep("Создание бренда с английским названием", func(sCtx provider.StepCtx) {
 		brandName := fmt.Sprintf("Test Brand %s", utils.GenerateAlias())
 		alias := fmt.Sprintf("test-brand-en-%s", utils.GenerateAlias())
-		testData.createRequest = s.createBrandRequest(brandName, alias, map[string]string{
+		testData.createRequest = s.createBrandRequest(sCtx, brandName, alias, map[string]string{
 			"en": brandName,
 		})
 
@@ -126,7 +126,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithEnglishName(t provider.T) 
 
 		s.attachRequestResponse(sCtx, testData.createRequest, createResp)
 
-		err := repository.ExecuteWithRetry(context.Background(), &s.config.MySQL, func(ctx context.Context) error {
+		err := repository.ExecuteWithRetry(sCtx, &s.config.MySQL, func(ctx context.Context) error {
 			brandData := s.brandRepo.GetBrand(sCtx, map[string]interface{}{
 				"uuid": testData.createCapBrandResponse.ID,
 			})
@@ -151,7 +151,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithMinMaxNames(t provider.T) 
 		timestamp := time.Now().UnixNano()
 		brandName := fmt.Sprintf("A%d", timestamp)[:2]
 		alias := fmt.Sprintf("min-%d", timestamp)
-		testData.createRequest = s.createBrandRequest(brandName, alias, map[string]string{
+		testData.createRequest = s.createBrandRequest(sCtx, brandName, alias, map[string]string{
 			"en": brandName,
 		})
 
@@ -185,7 +185,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithMinMaxNames(t provider.T) 
 		brandName := fmt.Sprintf("%s%d", strings.Repeat("A", remainingLength), timestamp)
 
 		alias := fmt.Sprintf("max-%d", timestamp)
-		testData.createRequest = s.createBrandRequest(brandName, alias, map[string]string{
+		testData.createRequest = s.createBrandRequest(sCtx, brandName, alias, map[string]string{
 			"en": brandName,
 		})
 
@@ -230,7 +230,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithDifferentAliases(t provide
 		t.WithNewStep(fmt.Sprintf("Создание бренда с alias: %s", aliasBase), func(sCtx provider.StepCtx) {
 			brandName := fmt.Sprintf("Test Brand %s", utils.GenerateAlias())
 			alias := fmt.Sprintf("%s-%s", aliasBase, utils.GenerateAlias())
-			testData.createRequest = s.createBrandRequest(brandName, alias, map[string]string{
+			testData.createRequest = s.createBrandRequest(sCtx, brandName, alias, map[string]string{
 				"en": brandName,
 			})
 
@@ -240,7 +240,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithDifferentAliases(t provide
 
 			s.attachRequestResponse(sCtx, testData.createRequest, createResp)
 
-			err := repository.ExecuteWithRetry(context.Background(), &s.config.MySQL, func(ctx context.Context) error {
+			err := repository.ExecuteWithRetry(sCtx, &s.config.MySQL, func(ctx context.Context) error {
 				brandData := s.brandRepo.GetBrand(sCtx, map[string]interface{}{
 					"uuid": testData.createCapBrandResponse.ID,
 				})
@@ -275,7 +275,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithMultiLanguage(t provider.T
 
 	t.WithNewStep("Создание мультиязычного бренда", func(sCtx provider.StepCtx) {
 		suffix := utils.GenerateAlias()
-		testData.createRequest = s.createBrandRequest("Multilingual Brand", fmt.Sprintf("multi-lang-%s", suffix), map[string]string{
+		testData.createRequest = s.createBrandRequest(sCtx, "Multilingual Brand", fmt.Sprintf("multi-lang-%s", suffix), map[string]string{
 			"en": fmt.Sprintf("Test Brand %s", suffix),
 			"ru": fmt.Sprintf("Тестовый бренд %s", suffix),
 			"es": fmt.Sprintf("Marca de prueba %s", suffix),
@@ -287,7 +287,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithMultiLanguage(t provider.T
 
 		s.attachRequestResponse(sCtx, testData.createRequest, createResp)
 
-		err := repository.ExecuteWithRetry(context.Background(), &s.config.MySQL, func(ctx context.Context) error {
+		err := repository.ExecuteWithRetry(sCtx, &s.config.MySQL, func(ctx context.Context) error {
 			brandData := s.brandRepo.GetBrand(sCtx, map[string]interface{}{
 				"uuid": testData.createCapBrandResponse.ID,
 			})
@@ -322,7 +322,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithSpecialCharacters(t provid
 	t.WithNewStep("Создание бренда со специальными символами", func(sCtx provider.StepCtx) {
 		brandName := fmt.Sprintf("Test Brand & Special %s", utils.GenerateAlias())
 		alias := fmt.Sprintf("test-brand-special-%s", utils.GenerateAlias())
-		testData.createRequest = s.createBrandRequest(brandName, alias, map[string]string{
+		testData.createRequest = s.createBrandRequest(sCtx, brandName, alias, map[string]string{
 			"en": brandName,
 		})
 
@@ -332,7 +332,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithSpecialCharacters(t provid
 
 		s.attachRequestResponse(sCtx, testData.createRequest, createResp)
 
-		err := repository.ExecuteWithRetry(context.Background(), &s.config.MySQL, func(ctx context.Context) error {
+		err := repository.ExecuteWithRetry(sCtx, &s.config.MySQL, func(ctx context.Context) error {
 			brandData := s.brandRepo.GetBrand(sCtx, map[string]interface{}{
 				"uuid": testData.createCapBrandResponse.ID,
 			})
@@ -358,10 +358,10 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithSpecialCharacters(t provid
 	})
 }
 
-func (s *CreateBrandPositiveSuite) createBrandRequest(name, alias string, names map[string]string) *clientTypes.Request[models.CreateCapBrandRequestBody] {
+func (s *CreateBrandPositiveSuite) createBrandRequest(sCtx provider.StepCtx, name, alias string, names map[string]string) *clientTypes.Request[models.CreateCapBrandRequestBody] {
 	return &clientTypes.Request[models.CreateCapBrandRequestBody]{
 		Headers: map[string]string{
-			"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+			"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 			"Platform-Nodeid": s.config.Node.ProjectID,
 		},
 		Body: &models.CreateCapBrandRequestBody{
@@ -381,7 +381,7 @@ func (s *CreateBrandPositiveSuite) cleanupBrand(t provider.T, brandID string) {
 	t.WithNewStep("Удаление тестового бренда", func(sCtx provider.StepCtx) {
 		deleteReq := &clientTypes.Request[struct{}]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 				"Platform-Nodeid": s.config.Node.ProjectID,
 			},
 			PathParams: map[string]string{

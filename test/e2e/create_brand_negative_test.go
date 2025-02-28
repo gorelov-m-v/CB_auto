@@ -37,7 +37,7 @@ func (s *CreateBrandNegativeSuite) TestCreateBrandWithoutName(t provider.T) {
 		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
 		req := &clientTypes.Request[models.CreateCapBrandRequestBody]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 				"Platform-Nodeid": s.config.Node.ProjectID,
 			},
 			Body: &models.CreateCapBrandRequestBody{
@@ -58,7 +58,7 @@ func (s *CreateBrandNegativeSuite) TestCreateBrandWithoutAlias(t provider.T) {
 		brandName := fmt.Sprintf("Test Brand %s", utils.GenerateAlias())
 		req := &clientTypes.Request[models.CreateCapBrandRequestBody]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 				"Platform-Nodeid": s.config.Node.ProjectID,
 			},
 			Body: &models.CreateCapBrandRequestBody{
@@ -79,7 +79,7 @@ func (s *CreateBrandNegativeSuite) TestCreateBrandWithAliasButNoName(t provider.
 		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
 		req := &clientTypes.Request[models.CreateCapBrandRequestBody]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 				"Platform-Nodeid": s.config.Node.ProjectID,
 			},
 			Body: &models.CreateCapBrandRequestBody{
@@ -100,7 +100,7 @@ func (s *CreateBrandNegativeSuite) TestCreateBrandWithNameButNoAlias(t provider.
 		brandName := fmt.Sprintf("Test Brand %s", utils.GenerateAlias())
 		req := &clientTypes.Request[models.CreateCapBrandRequestBody]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 				"Platform-Nodeid": s.config.Node.ProjectID,
 			},
 			Body: &models.CreateCapBrandRequestBody{

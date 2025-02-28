@@ -114,7 +114,6 @@ type PlayerLimit struct {
 	ExpiresAt     int64  `json:"expiresAt,omitempty"`
 }
 
-
 type CreateCapCategoryRequestBody struct {
 	Sort    int               `json:"sort"`
 	Alias   string            `json:"alias"`
@@ -149,6 +148,7 @@ type GetCapCategoryResponseBody struct {
 	IsDefault  bool              `json:"isDefault"`
 	Type       string            `json:"type"`
 	PassToCms  bool              `json:"passToCms"`
+}
 
 type CreateLabelRequestBody struct {
 	Color       string       `json:"color"`
@@ -176,5 +176,4 @@ type GetLabelResponseBody struct {
 	UpdatedAt      string       `json:"updatedAt"`
 	Titles         []LabelTitle `json:"titles"`
 	Description    string       `json:"description"`
-
 }

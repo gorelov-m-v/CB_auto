@@ -56,7 +56,7 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithRussianName(t provider.T) 
 		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
 		testData.createRequest = &clientTypes.Request[models.CreateCapBrandRequestBody]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 				"Platform-Nodeid": s.config.Node.ProjectID,
 			},
 			Body: &models.CreateCapBrandRequestBody{
@@ -77,7 +77,7 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithRussianName(t provider.T) 
 		alias := fmt.Sprintf("test-brand-ru-%s", utils.GenerateAlias())
 		testData.updateRequest = &clientTypes.Request[models.UpdateCapBrandRequestBody]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 				"Platform-Nodeid": s.config.Node.ProjectID,
 			},
 			PathParams: map[string]string{
@@ -99,7 +99,7 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithRussianName(t provider.T) 
 	t.WithNewStep("Удаление тестового бренда", func(sCtx provider.StepCtx) {
 		deleteReq := &clientTypes.Request[struct{}]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 				"Platform-Nodeid": s.config.Node.ProjectID,
 			},
 			PathParams: map[string]string{
@@ -122,7 +122,7 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithEnglishName(t provider.T) 
 	t.WithNewStep("Создание тестового бренда", func(sCtx provider.StepCtx) {
 		brandName := fmt.Sprintf("Test Brand %s", utils.GenerateAlias())
 		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
-		testData.createRequest = s.createBrandRequest(brandName, alias, map[string]string{
+		testData.createRequest = s.createBrandRequest(sCtx, brandName, alias, map[string]string{
 			"en": brandName,
 		})
 
@@ -134,12 +134,7 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithEnglishName(t provider.T) 
 	t.WithNewStep("Обновление бренда с английским названием", func(sCtx provider.StepCtx) {
 		brandName := fmt.Sprintf("Updated Test Brand %s", utils.GenerateAlias())
 		alias := fmt.Sprintf("test-brand-en-%s", utils.GenerateAlias())
-		testData.updateRequest = s.updateBrandRequest(
-			testData.createCapBrandResponse.ID,
-			brandName,
-			alias,
-			map[string]string{"en": brandName},
-		)
+		testData.updateRequest = s.updateBrandRequest(sCtx, testData.createCapBrandResponse.ID, brandName, alias, map[string]string{"en": brandName})
 
 		updateResp := s.capService.UpdateCapBrand(sCtx, testData.updateRequest)
 		sCtx.Assert().Equal(http.StatusOK, updateResp.StatusCode)
@@ -160,7 +155,7 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMinMaxNames(t provider.T) 
 	t.WithNewStep("Создание тестового бренда", func(sCtx provider.StepCtx) {
 		brandName := fmt.Sprintf("Test Brand %s", utils.GenerateAlias())
 		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
-		testData.createRequest = s.createBrandRequest(brandName, alias, map[string]string{
+		testData.createRequest = s.createBrandRequest(sCtx, brandName, alias, map[string]string{
 			"en": brandName,
 		})
 
@@ -175,12 +170,7 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMinMaxNames(t provider.T) 
 		minName := fmt.Sprintf("A%s", suffix)
 		minAlias := fmt.Sprintf("min-%s", utils.GenerateAlias())
 
-		testData.updateRequest = s.updateBrandRequest(
-			testData.createCapBrandResponse.ID,
-			minName,
-			minAlias,
-			map[string]string{"en": minName},
-		)
+		testData.updateRequest = s.updateBrandRequest(sCtx, testData.createCapBrandResponse.ID, minName, minAlias, map[string]string{"en": minName})
 
 		updateResp := s.capService.UpdateCapBrand(sCtx, testData.updateRequest)
 		sCtx.Assert().Equal(http.StatusOK, updateResp.StatusCode)
@@ -195,12 +185,7 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMinMaxNames(t provider.T) 
 		}
 		maxAlias := fmt.Sprintf("max-%s", utils.GenerateAlias())
 
-		testData.updateRequest = s.updateBrandRequest(
-			testData.createCapBrandResponse.ID,
-			maxName,
-			maxAlias,
-			map[string]string{"en": maxName},
-		)
+		testData.updateRequest = s.updateBrandRequest(sCtx, testData.createCapBrandResponse.ID, maxName, maxAlias, map[string]string{"en": maxName})
 
 		updateResp := s.capService.UpdateCapBrand(sCtx, testData.updateRequest)
 		sCtx.Assert().Equal(http.StatusOK, updateResp.StatusCode)
@@ -220,7 +205,7 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMultiLanguage(t provider.T
 	t.WithNewStep("Создание тестового бренда", func(sCtx provider.StepCtx) {
 		brandName := fmt.Sprintf("Test Brand %s", utils.GenerateAlias())
 		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
-		testData.createRequest = s.createBrandRequest(brandName, alias, map[string]string{
+		testData.createRequest = s.createBrandRequest(sCtx, brandName, alias, map[string]string{
 			"en": brandName,
 		})
 
@@ -232,7 +217,7 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMultiLanguage(t provider.T
 	t.WithNewStep("Обновление мультиязычного бренда", func(sCtx provider.StepCtx) {
 		suffix := utils.GenerateAlias()
 		alias := fmt.Sprintf("multi-lang-%s", suffix)
-		testData.updateRequest = s.updateBrandRequest(testData.createCapBrandResponse.ID, "Multilingual Brand", alias, map[string]string{
+		testData.updateRequest = s.updateBrandRequest(sCtx, testData.createCapBrandResponse.ID, "Multilingual Brand", alias, map[string]string{
 			"en": fmt.Sprintf("Updated Test Brand %s", suffix),
 			"ru": fmt.Sprintf("Обновленный тестовый бренд %s", suffix),
 			"es": fmt.Sprintf("Marca de prueba actualizada %s", suffix),
@@ -246,7 +231,7 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMultiLanguage(t provider.T
 	s.cleanupBrand(t, testData.createCapBrandResponse.ID)
 }
 
-func (s *UpdateBrandPositiveSuite) createBrandRequest(name, alias string, names map[string]string) *clientTypes.Request[models.CreateCapBrandRequestBody] {
+func (s *UpdateBrandPositiveSuite) createBrandRequest(sCtx provider.StepCtx, name, alias string, names map[string]string) *clientTypes.Request[models.CreateCapBrandRequestBody] {
 	if len(alias) < 2 {
 		alias = fmt.Sprintf("%s-%s", alias, utils.GenerateAlias())
 	}
@@ -259,7 +244,7 @@ func (s *UpdateBrandPositiveSuite) createBrandRequest(name, alias string, names 
 
 	return &clientTypes.Request[models.CreateCapBrandRequestBody]{
 		Headers: map[string]string{
-			"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+			"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 			"Platform-Nodeid": s.config.Node.ProjectID,
 		},
 		Body: &models.CreateCapBrandRequestBody{
@@ -271,7 +256,7 @@ func (s *UpdateBrandPositiveSuite) createBrandRequest(name, alias string, names 
 	}
 }
 
-func (s *UpdateBrandPositiveSuite) updateBrandRequest(id, name, alias string, names map[string]string) *clientTypes.Request[models.UpdateCapBrandRequestBody] {
+func (s *UpdateBrandPositiveSuite) updateBrandRequest(sCtx provider.StepCtx, id, name, alias string, names map[string]string) *clientTypes.Request[models.UpdateCapBrandRequestBody] {
 	if len(alias) < 2 {
 		alias = fmt.Sprintf("%s-%s", alias, utils.GenerateAlias())
 	}
@@ -284,7 +269,7 @@ func (s *UpdateBrandPositiveSuite) updateBrandRequest(id, name, alias string, na
 
 	return &clientTypes.Request[models.UpdateCapBrandRequestBody]{
 		Headers: map[string]string{
-			"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+			"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 			"Platform-Nodeid": s.config.Node.ProjectID,
 		},
 		PathParams: map[string]string{
@@ -303,14 +288,13 @@ func (s *UpdateBrandPositiveSuite) cleanupBrand(t provider.T, brandID string) {
 	t.WithNewStep("Удаление тестового бренда", func(sCtx provider.StepCtx) {
 		deleteReq := &clientTypes.Request[struct{}]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 				"Platform-Nodeid": s.config.Node.ProjectID,
 			},
 			PathParams: map[string]string{
 				"id": brandID,
 			},
 		}
-
 		deleteResp := s.capService.DeleteCapBrand(sCtx, deleteReq)
 		sCtx.Assert().Equal(http.StatusNoContent, deleteResp.StatusCode)
 	})

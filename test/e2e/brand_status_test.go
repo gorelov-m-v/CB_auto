@@ -45,7 +45,7 @@ func (s *BrandStatusSuite) TestBrandStatusManagement(t provider.T) {
 		brandName := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
 		createRequest := &types.Request[models.CreateCapBrandRequestBody]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 				"Platform-Nodeid": s.config.Node.ProjectID,
 			},
 			Body: &models.CreateCapBrandRequestBody{
@@ -67,7 +67,7 @@ func (s *BrandStatusSuite) TestBrandStatusManagement(t provider.T) {
 	t.WithNewStep("Включение бренда", func(sCtx provider.StepCtx) {
 		updateRequest := &types.Request[models.UpdateBrandStatusRequestBody]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 				"Platform-Nodeid": s.config.Node.ProjectID,
 			},
 			PathParams: map[string]string{
@@ -88,7 +88,7 @@ func (s *BrandStatusSuite) TestBrandStatusManagement(t provider.T) {
 	t.WithNewStep("Отключение бренда", func(sCtx provider.StepCtx) {
 		updateRequest := &types.Request[models.UpdateBrandStatusRequestBody]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 				"Platform-Nodeid": s.config.Node.ProjectID,
 			},
 			PathParams: map[string]string{
@@ -109,7 +109,7 @@ func (s *BrandStatusSuite) TestBrandStatusManagement(t provider.T) {
 	t.WithNewStep("Удаление тестового бренда", func(sCtx provider.StepCtx) {
 		deleteRequest := &types.Request[struct{}]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 				"Platform-Nodeid": s.config.Node.ProjectID,
 			},
 			PathParams: map[string]string{
@@ -125,7 +125,7 @@ func (s *BrandStatusSuite) TestBrandStatusManagement(t provider.T) {
 func (s *BrandStatusSuite) getBrandStatus(sCtx provider.StepCtx, brandID string) *types.Response[models.GetCapBrandResponseBody] {
 	getBrandRequest := &types.Request[struct{}]{
 		Headers: map[string]string{
-			"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+			"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 			"Platform-Nodeid": s.config.Node.ProjectID,
 		},
 		PathParams: map[string]string{

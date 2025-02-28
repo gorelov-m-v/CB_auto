@@ -5,7 +5,9 @@ import (
 	"CB_auto/internal/client/cap/models"
 	"CB_auto/internal/client/types"
 	"CB_auto/internal/config"
+	"fmt"
 	"log"
+	"net/http"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
@@ -24,12 +26,11 @@ type CapAPI interface {
 	UpdateCapBrand(sCtx provider.StepCtx, req *types.Request[models.UpdateCapBrandRequestBody]) *types.Response[models.UpdateCapBrandResponseBody]
 	UpdateCapBrandError(sCtx provider.StepCtx, req *types.Request[models.UpdateCapBrandRequestBody]) *types.Response[models.ErrorResponse]
 
-
 	GetCapCategory(sCtx provider.StepCtx, req *types.Request[struct{}]) *types.Response[models.GetCapCategoryResponseBody]
 	CreateCapCategory(sCtx provider.StepCtx, req *types.Request[models.CreateCapCategoryRequestBody]) *types.Response[models.CreateCapCategoryResponseBody]
 	DeleteCapCategory(sCtx provider.StepCtx, req *types.Request[struct{}]) *types.Response[struct{}]
-
-
+	CreateLabel(sCtx provider.StepCtx, req *types.Request[models.CreateLabelRequestBody]) *types.Response[models.CreateLabelResponseBody]
+	GetLabel(sCtx provider.StepCtx, req *types.Request[struct{}]) *types.Response[models.GetLabelResponseBody]
 }
 
 type capClient struct {
