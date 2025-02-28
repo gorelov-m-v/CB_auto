@@ -105,8 +105,6 @@ func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 		deleteResp := s.capService.DeleteCapBrand(sCtx, deleteReq)
 
 		sCtx.Assert().Equal(http.StatusNoContent, deleteResp.StatusCode, "Статус код ответа равен 204")
-
-
 	})
 
 	t.WithNewAsyncStep("Проверка удаления бренда в БД.", func(sCtx provider.StepCtx) {

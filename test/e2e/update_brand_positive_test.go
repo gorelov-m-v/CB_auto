@@ -10,7 +10,6 @@ import (
 	capAPI "CB_auto/internal/client/cap"
 	"CB_auto/internal/client/cap/models"
 	"CB_auto/internal/client/factory"
-	"CB_auto/internal/client/types"
 	clientTypes "CB_auto/internal/client/types"
 	"CB_auto/internal/config"
 	"CB_auto/internal/repository"
@@ -42,14 +41,6 @@ func (s *UpdateBrandPositiveSuite) BeforeAll(t provider.T) {
 		connector := repository.OpenConnector(t, &s.config.MySQL, repository.Core)
 		s.database = &connector
 	})
-
-	t.WithNewStep("Закрытие соединения с базой данных.", func(sCtx provider.StepCtx) {
-		if s.database != nil {
-			if err := s.database.Close(); err != nil {
-				sCtx.Assert().NoError(err, "Ошибка закрытия соединения с базой данных")
-			}
-		}
-	})
 }
 
 func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithRussianName(t provider.T) {
@@ -63,34 +54,61 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithRussianName(t provider.T) 
 	t.WithNewStep("Создание тестового бренда", func(sCtx provider.StepCtx) {
 		brandName := fmt.Sprintf("Test Brand %s", utils.GenerateAlias())
 		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
-		testData.createRequest = s.createBrandRequest(brandName, alias, map[string]string{
-			"en": brandName,
-		})
+		testData.createRequest = &clientTypes.Request[models.CreateCapBrandRequestBody]{
+			Headers: map[string]string{
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Platform-Nodeid": s.config.Node.ProjectID,
+			},
+			Body: &models.CreateCapBrandRequestBody{
+				Sort:        1,
+				Alias:       alias,
+				Names:       map[string]string{"en": brandName},
+				Description: fmt.Sprintf("Description for %s", brandName),
+			},
+		}
 
 		createResp := s.capService.CreateCapBrand(sCtx, testData.createRequest)
 		sCtx.Assert().Equal(http.StatusOK, createResp.StatusCode)
 		testData.createCapBrandResponse = &createResp.Body
-
-		s.attachCreateRequestResponse(sCtx, testData.createRequest, createResp)
 	})
 
 	t.WithNewStep("Обновление бренда с русским названием", func(sCtx provider.StepCtx) {
 		brandName := fmt.Sprintf("Тестовый бренд %s", utils.GenerateAlias())
 		alias := fmt.Sprintf("test-brand-ru-%s", utils.GenerateAlias())
-		testData.updateRequest = s.updateBrandRequest(
-			testData.createCapBrandResponse.ID,
-			brandName,
-			alias,
-			map[string]string{"ru": brandName},
-		)
+		testData.updateRequest = &clientTypes.Request[models.UpdateCapBrandRequestBody]{
+			Headers: map[string]string{
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Platform-Nodeid": s.config.Node.ProjectID,
+			},
+			PathParams: map[string]string{
+				"id": testData.createCapBrandResponse.ID,
+			},
+			Body: &models.UpdateCapBrandRequestBody{
+				Sort:        1,
+				Alias:       alias,
+				Names:       map[string]string{"ru": brandName},
+				Description: fmt.Sprintf("Updated description for %s", brandName),
+			},
+		}
 
 		updateResp := s.capService.UpdateCapBrand(sCtx, testData.updateRequest)
 		sCtx.Assert().Equal(http.StatusOK, updateResp.StatusCode)
 		testData.updateCapBrandResponse = &updateResp.Body
-
 	})
 
-	s.cleanupBrand(t, testData.createCapBrandResponse.ID)
+	t.WithNewStep("Удаление тестового бренда", func(sCtx provider.StepCtx) {
+		deleteReq := &clientTypes.Request[struct{}]{
+			Headers: map[string]string{
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Platform-Nodeid": s.config.Node.ProjectID,
+			},
+			PathParams: map[string]string{
+				"id": testData.createCapBrandResponse.ID,
+			},
+		}
+		deleteResp := s.capService.DeleteCapBrand(sCtx, deleteReq)
+		sCtx.Assert().Equal(http.StatusNoContent, deleteResp.StatusCode)
+	})
 }
 
 func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithEnglishName(t provider.T) {
@@ -111,8 +129,6 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithEnglishName(t provider.T) 
 		createResp := s.capService.CreateCapBrand(sCtx, testData.createRequest)
 		sCtx.Assert().Equal(http.StatusOK, createResp.StatusCode)
 		testData.createCapBrandResponse = &createResp.Body
-
-		s.attachCreateRequestResponse(sCtx, testData.createRequest, createResp)
 	})
 
 	t.WithNewStep("Обновление бренда с английским названием", func(sCtx provider.StepCtx) {
@@ -128,7 +144,6 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithEnglishName(t provider.T) 
 		updateResp := s.capService.UpdateCapBrand(sCtx, testData.updateRequest)
 		sCtx.Assert().Equal(http.StatusOK, updateResp.StatusCode)
 		testData.updateCapBrandResponse = &updateResp.Body
-
 	})
 
 	s.cleanupBrand(t, testData.createCapBrandResponse.ID)
@@ -152,12 +167,9 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMinMaxNames(t provider.T) 
 		createResp := s.capService.CreateCapBrand(sCtx, testData.createRequest)
 		sCtx.Assert().Equal(http.StatusOK, createResp.StatusCode)
 		testData.createCapBrandResponse = &createResp.Body
-
-		s.attachCreateRequestResponse(sCtx, testData.createRequest, createResp)
 	})
 
 	t.WithNewStep("Обновление бренда с минимальной длиной имени (2 символа)", func(sCtx provider.StepCtx) {
-
 		timestamp := time.Now().UnixNano()
 		suffix := fmt.Sprintf("%x", timestamp)[:2]
 		minName := fmt.Sprintf("A%s", suffix)
@@ -172,7 +184,6 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMinMaxNames(t provider.T) 
 
 		updateResp := s.capService.UpdateCapBrand(sCtx, testData.updateRequest)
 		sCtx.Assert().Equal(http.StatusOK, updateResp.StatusCode)
-
 	})
 
 	t.WithNewStep("Обновление бренда с максимальной длиной имени (100 символов)", func(sCtx provider.StepCtx) {
@@ -193,7 +204,6 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMinMaxNames(t provider.T) 
 
 		updateResp := s.capService.UpdateCapBrand(sCtx, testData.updateRequest)
 		sCtx.Assert().Equal(http.StatusOK, updateResp.StatusCode)
-
 	})
 
 	s.cleanupBrand(t, testData.createCapBrandResponse.ID)
@@ -231,14 +241,12 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMultiLanguage(t provider.T
 		updateResp := s.capService.UpdateCapBrand(sCtx, testData.updateRequest)
 		sCtx.Assert().Equal(http.StatusOK, updateResp.StatusCode)
 		testData.updateCapBrandResponse = &updateResp.Body
-
 	})
 
 	s.cleanupBrand(t, testData.createCapBrandResponse.ID)
 }
 
 func (s *UpdateBrandPositiveSuite) createBrandRequest(name, alias string, names map[string]string) *clientTypes.Request[models.CreateCapBrandRequestBody] {
-
 	if len(alias) < 2 {
 		alias = fmt.Sprintf("%s-%s", alias, utils.GenerateAlias())
 	}
@@ -264,7 +272,6 @@ func (s *UpdateBrandPositiveSuite) createBrandRequest(name, alias string, names 
 }
 
 func (s *UpdateBrandPositiveSuite) updateBrandRequest(id, name, alias string, names map[string]string) *clientTypes.Request[models.UpdateCapBrandRequestBody] {
-
 	if len(alias) < 2 {
 		alias = fmt.Sprintf("%s-%s", alias, utils.GenerateAlias())
 	}
@@ -290,14 +297,6 @@ func (s *UpdateBrandPositiveSuite) updateBrandRequest(id, name, alias string, na
 			Description: fmt.Sprintf("Updated description for %s", name),
 		},
 	}
-}
-
-func (s *UpdateBrandPositiveSuite) attachRequestResponse(t provider.StepCtx, req *clientTypes.Request[models.UpdateCapBrandRequestBody], resp *types.Response[models.UpdateCapBrandResponseBody]) {
-
-}
-
-func (s *UpdateBrandPositiveSuite) attachCreateRequestResponse(t provider.StepCtx, req *clientTypes.Request[models.CreateCapBrandRequestBody], resp *types.Response[models.CreateCapBrandResponseBody]) {
-
 }
 
 func (s *UpdateBrandPositiveSuite) cleanupBrand(t provider.T, brandID string) {
