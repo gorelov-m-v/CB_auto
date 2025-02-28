@@ -88,7 +88,6 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithRussianName(t provider.T) 
 		sCtx.Assert().Equal(http.StatusOK, updateResp.StatusCode)
 		testData.updateCapBrandResponse = &updateResp.Body
 
-		s.attachRequestResponse(sCtx, testData.updateRequest, updateResp)
 	})
 
 	s.cleanupBrand(t, testData.createCapBrandResponse.ID)
@@ -102,7 +101,6 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithEnglishName(t provider.T) 
 		updateCapBrandResponse *models.UpdateCapBrandResponseBody
 	}
 
-	// Создаем бренд для тестирования
 	t.WithNewStep("Создание тестового бренда", func(sCtx provider.StepCtx) {
 		brandName := fmt.Sprintf("Test Brand %s", utils.GenerateAlias())
 		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
@@ -131,7 +129,6 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithEnglishName(t provider.T) 
 		sCtx.Assert().Equal(http.StatusOK, updateResp.StatusCode)
 		testData.updateCapBrandResponse = &updateResp.Body
 
-		s.attachRequestResponse(sCtx, testData.updateRequest, updateResp)
 	})
 
 	s.cleanupBrand(t, testData.createCapBrandResponse.ID)
@@ -176,7 +173,6 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMinMaxNames(t provider.T) 
 		updateResp := s.capService.UpdateCapBrand(sCtx, testData.updateRequest)
 		sCtx.Assert().Equal(http.StatusOK, updateResp.StatusCode)
 
-		s.attachRequestResponse(sCtx, testData.updateRequest, updateResp)
 	})
 
 	t.WithNewStep("Обновление бренда с максимальной длиной имени (100 символов)", func(sCtx provider.StepCtx) {
@@ -198,7 +194,6 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMinMaxNames(t provider.T) 
 		updateResp := s.capService.UpdateCapBrand(sCtx, testData.updateRequest)
 		sCtx.Assert().Equal(http.StatusOK, updateResp.StatusCode)
 
-		s.attachRequestResponse(sCtx, testData.updateRequest, updateResp)
 	})
 
 	s.cleanupBrand(t, testData.createCapBrandResponse.ID)
@@ -237,7 +232,6 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMultiLanguage(t provider.T
 		sCtx.Assert().Equal(http.StatusOK, updateResp.StatusCode)
 		testData.updateCapBrandResponse = &updateResp.Body
 
-		s.attachRequestResponse(sCtx, testData.updateRequest, updateResp)
 	})
 
 	s.cleanupBrand(t, testData.createCapBrandResponse.ID)

@@ -64,7 +64,6 @@ func (s *CreateBrandNegativeSuite) TestCreateBrandWithoutAlias(t provider.T) {
 		resp := s.capService.CreateCapBrand(sCtx, req)
 		sCtx.Assert().Equal(http.StatusBadRequest, resp.StatusCode)
 
-		s.attachRequestResponse(sCtx, req, resp)
 	})
 }
 
@@ -76,7 +75,6 @@ func (s *CreateBrandNegativeSuite) TestCreateBrandWithAliasButNoName(t provider.
 		resp := s.capService.CreateCapBrand(sCtx, req)
 		sCtx.Assert().Equal(http.StatusBadRequest, resp.StatusCode)
 
-		s.attachRequestResponse(sCtx, req, resp)
 	})
 }
 
@@ -90,7 +88,6 @@ func (s *CreateBrandNegativeSuite) TestCreateBrandWithNameButNoAlias(t provider.
 		resp := s.capService.CreateCapBrand(sCtx, req)
 		sCtx.Assert().Equal(http.StatusBadRequest, resp.StatusCode)
 
-		s.attachRequestResponse(sCtx, req, resp)
 	})
 }
 
