@@ -184,3 +184,14 @@ type GetLabelResponseBody struct {
 	Titles         []LabelTitle `json:"titles"`
 	Description    string       `json:"description"`
 }
+
+type UpdateCapCategoryRequestBody struct {
+	Alias string            `json:"alias"`
+	Names map[string]string `json:"names"`
+	Sort  int               `json:"sort"`
+	Type  string            `json:"type"`
+}
+
+type UpdateCapCategoryResponseBody struct {
+	ID string `json:"id"`
+}

@@ -31,6 +31,8 @@ type CapAPI interface {
 	DeleteCapCategory(sCtx provider.StepCtx, req *types.Request[struct{}]) *types.Response[struct{}]
 	CreateLabel(sCtx provider.StepCtx, req *types.Request[models.CreateLabelRequestBody]) *types.Response[models.CreateLabelResponseBody]
 	GetLabel(sCtx provider.StepCtx, req *types.Request[struct{}]) *types.Response[models.GetLabelResponseBody]
+	UpdateCapCategory(sCtx provider.StepCtx, req *types.Request[models.UpdateCapCategoryRequestBody]) *types.Response[models.UpdateCapCategoryResponseBody]
+	UpdateCapCategoryError(sCtx provider.StepCtx, req *types.Request[models.UpdateCapCategoryRequestBody]) *types.Response[models.ErrorResponse]
 }
 
 type capClient struct {
@@ -251,6 +253,38 @@ func (c *capClient) UpdateCapBrandError(sCtx provider.StepCtx, req *types.Reques
 			StatusCode: http.StatusInternalServerError,
 			Error: &types.ErrorResponse{
 				Body: fmt.Sprintf("UpdateCapBrand failed: %v", err),
+			},
+		}
+	}
+	return resp
+}
+
+func (c *capClient) UpdateCapCategory(sCtx provider.StepCtx, req *types.Request[models.UpdateCapCategoryRequestBody]) *types.Response[models.UpdateCapCategoryResponseBody] {
+	req.Method = "PATCH"
+	req.Path = "/_cap/api/v1/categories/{id}"
+	resp, err := httpClient.DoRequest[models.UpdateCapCategoryRequestBody, models.UpdateCapCategoryResponseBody](sCtx, c.client, req)
+	if err != nil {
+		log.Printf("UpdateCategoty failed: %v", err)
+		return &types.Response[models.UpdateCapCategoryResponseBody]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("UpdateCapCategoty failed: %v", err),
+			},
+		}
+	}
+	return resp
+}
+
+func (c *capClient) UpdateCapCategoryError(sCtx provider.StepCtx, req *types.Request[models.UpdateCapCategoryRequestBody]) *types.Response[models.ErrorResponse] {
+	req.Method = "PATCH"
+	req.Path = "/_cap/api/v1/categories/{id}"
+	resp, err := httpClient.DoRequest[models.UpdateCapCategoryRequestBody, models.ErrorResponse](sCtx, c.client, req)
+	if err != nil {
+		log.Printf("UpdateCapCategory failed: %v", err)
+		return &types.Response[models.ErrorResponse]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("UpdateCapCategory failed: %v", err),
 			},
 		}
 	}
