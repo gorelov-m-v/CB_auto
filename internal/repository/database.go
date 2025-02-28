@@ -12,9 +12,10 @@ import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
 
-func ExecuteWithRetry(ctx context.Context, cfg *config.MySQLConfig, operation func(context.Context) error) error {
-	delayInSeconds := time.Duration(cfg.RetryDelay) * time.Second
-	log.Printf("Starting database operation with %d attempts and %v delay", cfg.RetryAttempts, delayInSeconds)
+func ExecuteWithRetry(sCtx provider.StepCtx, cfg *config.MySQLConfig, operation func(ctx context.Context) error) error {
+	ctx := context.Background()
+	delay := time.Duration(cfg.RetryDelay) * time.Second
+	log.Printf("Starting database operation with %d attempts and %v delay", cfg.RetryAttempts, delay)
 	var lastErr error
 	for attempt := 0; attempt < cfg.RetryAttempts; attempt++ {
 		if err := operation(ctx); err == nil {
@@ -23,14 +24,16 @@ func ExecuteWithRetry(ctx context.Context, cfg *config.MySQLConfig, operation fu
 		} else if err == sql.ErrNoRows {
 			lastErr = err
 			log.Printf("No rows found, attempt %d/%d", attempt+1, cfg.RetryAttempts)
+			sCtx.Fail()
 		} else {
 			lastErr = err
 			log.Printf("Database operation failed, attempt %d/%d: %v", attempt+1, cfg.RetryAttempts, err)
+			sCtx.Fail()
 		}
 
 		if attempt < cfg.RetryAttempts-1 {
-			log.Printf("Waiting %v before next attempt", delayInSeconds)
-			time.Sleep(delayInSeconds)
+			log.Printf("Waiting %v before next attempt", delay)
+			time.Sleep(delay)
 		}
 	}
 	return fmt.Errorf("operation failed after %d attempts: %w", cfg.RetryAttempts, lastErr)
@@ -49,12 +52,16 @@ type DSNType string
 const (
 	Core   DSNType = "core"
 	Wallet DSNType = "wallet"
+	Bonus  DSNType = "bonus"
 )
 
 func OpenConnector(t provider.T, config *config.MySQLConfig, dsnType DSNType) Connector {
 	dsn := config.DSNCore
-	if dsnType == Wallet {
+	switch dsnType {
+	case Wallet:
 		dsn = config.DSNWallet
+	case Bonus:
+		dsn = config.DSNBonus
 	}
 
 	db, err := sqlx.Open(config.DriverName, dsn)

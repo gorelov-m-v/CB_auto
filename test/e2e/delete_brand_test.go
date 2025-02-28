@@ -66,7 +66,7 @@ func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 	t.WithNewStep("Создание бренда.", func(sCtx provider.StepCtx) {
 		testData.createCapBrandRequest = &clientTypes.Request[models.CreateCapBrandRequestBody]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 				"Platform-NodeID": s.config.Node.ProjectID,
 			},
 			Body: &models.CreateCapBrandRequestBody{
@@ -96,7 +96,7 @@ func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 	t.WithNewStep("Удаление бренда.", func(sCtx provider.StepCtx) {
 		deleteReq := &clientTypes.Request[struct{}]{
 			Headers: map[string]string{
-				"Authorization": fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Authorization": fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 			},
 			PathParams: map[string]string{
 				"id": testData.createBrandResponse.Body.ID,

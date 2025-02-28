@@ -16,15 +16,12 @@ import (
 )
 
 type TokenStorage struct {
-	mu sync.RWMutex
-
+	mu        sync.RWMutex
 	token     string
 	refToken  string
 	expiresAt time.Time
-
-	client   CapAPI
-	config   *config.Config
-	provider provider.StepCtx
+	client    CapAPI
+	config    *config.Config
 }
 
 type jwtClaims struct {
@@ -52,15 +49,14 @@ func parseJWT(token string) (time.Time, error) {
 
 func NewTokenStorage(sCtx provider.StepCtx, cfg *config.Config, client CapAPI) *TokenStorage {
 	storage := &TokenStorage{
-		client:   client,
-		config:   cfg,
-		provider: sCtx,
+		client: client,
+		config: cfg,
 	}
-	storage.refreshToken()
+	storage.refreshToken(sCtx)
 	return storage
 }
 
-func (s *TokenStorage) GetToken() string {
+func (s *TokenStorage) GetToken(sCtx provider.StepCtx) string {
 	s.mu.RLock()
 	if time.Until(s.expiresAt) > 3*time.Minute {
 		token := s.token
@@ -76,25 +72,25 @@ func (s *TokenStorage) GetToken() string {
 		return s.token
 	}
 
-	s.refreshToken()
+	s.refreshToken(sCtx)
 	return s.token
 }
 
-func (s *TokenStorage) refreshToken() {
-	authReq := &types.Request[models.AdminCheckRequestBody]{
+func (s *TokenStorage) refreshToken(sCtx provider.StepCtx) {
+	req := &types.Request[models.AdminCheckRequestBody]{
 		Body: &models.AdminCheckRequestBody{
 			UserName: s.config.HTTP.CapUsername,
 			Password: s.config.HTTP.CapPassword,
 		},
 	}
 
-	authResp := s.client.CheckAdmin(s.provider, authReq)
-	s.token = authResp.Body.Token
-	s.refToken = authResp.Body.RefreshToken
+	res := s.client.CheckAdmin(sCtx, req)
+	s.token = res.Body.Token
+	s.refToken = res.Body.RefreshToken
 
-	expiresAt, err := parseJWT(authResp.Body.Token)
+	expiresAt, err := parseJWT(res.Body.Token)
 	if err != nil {
-		s.provider.Errorf("Failed to parse token expiration: %v", err)
+		sCtx.Errorf("Failed to parse token expiration: %v", err)
 		s.expiresAt = time.Now().Add(30 * time.Minute)
 	} else {
 		s.expiresAt = expiresAt
