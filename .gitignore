@@ -1,4 +1,10 @@
 ../config.json
+<<<<<<< HEAD
+config.json
+config.json
+.gitignore
+allure-results
+=======
 **/config.json
 **/config.json
 **/config.json
@@ -6,3 +12,4 @@
 **/config.json
 **/config.json
 **/config.json
+>>>>>>> origin/master

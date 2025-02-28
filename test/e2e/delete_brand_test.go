@@ -15,7 +15,6 @@ import (
 	"CB_auto/internal/transport/kafka"
 	"CB_auto/pkg/utils"
 
-	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
 )
@@ -106,9 +105,6 @@ func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 		deleteResp := s.capService.DeleteCapBrand(sCtx, deleteReq)
 
 		sCtx.Assert().Equal(http.StatusNoContent, deleteResp.StatusCode, "Статус код ответа равен 204")
-
-		sCtx.WithAttachments(allure.NewAttachment("Delete Request", allure.JSON, utils.CreateHttpAttachRequest(deleteReq)))
-		sCtx.WithAttachments(allure.NewAttachment("Delete Response", allure.JSON, utils.CreateHttpAttachResponse(deleteResp)))
 	})
 
 	t.WithNewAsyncStep("Проверка удаления бренда в БД.", func(sCtx provider.StepCtx) {

@@ -99,6 +99,11 @@ func (r *Repository) GetBrand(sCtx provider.StepCtx, filters map[string]interfac
 			&updatedAtUnix,
 		)
 	})
+
+	if err == sql.ErrNoRows {
+		return nil
+	}
+
 	if err != nil {
 		log.Printf("Ошибка при получении данных бренда: %v", err)
 		return nil
