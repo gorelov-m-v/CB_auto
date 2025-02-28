@@ -112,7 +112,7 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 	t.WithNewStep("Обновление блокировок игрока.", func(sCtx provider.StepCtx) {
 		req := &clientTypes.Request[capModels.BlockersRequestBody]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 				"Platform-Locale": "en",
 				"Content-Type":    "application/json",
 			},
@@ -153,7 +153,7 @@ func (s *UpdateBlockersSuite) TestUpdateBlockers(t provider.T) {
 	t.WithNewAsyncStep("Проверка получения блокировок через API.", func(sCtx provider.StepCtx) {
 		req := &clientTypes.Request[any]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 				"Platform-Locale": "en",
 			},
 			PathParams: map[string]string{

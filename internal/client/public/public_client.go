@@ -1,9 +1,7 @@
 package public
 
 import (
-	"fmt"
 	"log"
-	"net/http"
 
 	httpClient "CB_auto/internal/client"
 	"CB_auto/internal/client/public/models"
@@ -44,12 +42,6 @@ func (c *publicClient) FastRegistration(sCtx provider.StepCtx, req *types.Reques
 
 	if err != nil {
 		log.Printf("FastRegistration failed: %v", err)
-		return &types.Response[models.FastRegistrationResponseBody]{
-			StatusCode: http.StatusInternalServerError,
-			Error: &types.ErrorResponse{
-				Body: fmt.Sprintf("FastRegistration failed: %v", err),
-			},
-		}
 	}
 
 	return resp
@@ -61,12 +53,6 @@ func (c *publicClient) TokenCheck(sCtx provider.StepCtx, req *types.Request[mode
 	resp, err := httpClient.DoRequest[models.TokenCheckRequestBody, models.TokenCheckResponseBody](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("TokenCheck failed: %v", err)
-		return &types.Response[models.TokenCheckResponseBody]{
-			StatusCode: http.StatusInternalServerError,
-			Error: &types.ErrorResponse{
-				Body: fmt.Sprintf("TokenCheck failed: %v", err),
-			},
-		}
 	}
 
 	return resp
@@ -78,12 +64,6 @@ func (c *publicClient) GetWallets(sCtx provider.StepCtx, req *types.Request[any]
 	resp, err := httpClient.DoRequest[any, models.GetWalletsResponseBody](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("GetWallets failed: %v", err)
-		return &types.Response[models.GetWalletsResponseBody]{
-			StatusCode: http.StatusInternalServerError,
-			Error: &types.ErrorResponse{
-				Body: fmt.Sprintf("GetWallets failed: %v", err),
-			},
-		}
 	}
 
 	return resp
@@ -95,12 +75,6 @@ func (c *publicClient) CreateWallet(sCtx provider.StepCtx, req *types.Request[mo
 	resp, err := httpClient.DoRequest[models.CreateWalletRequestBody, models.CreateWalletResponseBody](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("CreateWallet failed: %v", err)
-		return &types.Response[models.CreateWalletResponseBody]{
-			StatusCode: http.StatusInternalServerError,
-			Error: &types.ErrorResponse{
-				Body: fmt.Sprintf("CreateWallet failed: %v", err),
-			},
-		}
 	}
 
 	return resp
@@ -112,12 +86,6 @@ func (c *publicClient) SwitchWallet(sCtx provider.StepCtx, req *types.Request[mo
 	resp, err := httpClient.DoRequest[models.SwitchWalletRequestBody, struct{}](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("SwitchWallet failed: %v", err)
-		return &types.Response[struct{}]{
-			StatusCode: http.StatusInternalServerError,
-			Error: &types.ErrorResponse{
-				Body: fmt.Sprintf("SwitchWallet failed: %v", err),
-			},
-		}
 	}
 
 	return resp
@@ -129,12 +97,6 @@ func (c *publicClient) RemoveWallet(sCtx provider.StepCtx, req *types.Request[an
 	resp, err := httpClient.DoRequest[any, struct{}](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("RemoveWallet failed: %v", err)
-		return &types.Response[struct{}]{
-			StatusCode: http.StatusInternalServerError,
-			Error: &types.ErrorResponse{
-				Body: fmt.Sprintf("RemoveWallet failed: %v", err),
-			},
-		}
 	}
 
 	return resp
@@ -146,12 +108,6 @@ func (c *publicClient) SetSingleBetLimit(sCtx provider.StepCtx, req *types.Reque
 	resp, err := httpClient.DoRequest[models.SetSingleBetLimitRequestBody, struct{}](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("SetSingleBetLimit failed: %v", err)
-		return &types.Response[struct{}]{
-			StatusCode: http.StatusInternalServerError,
-			Error: &types.ErrorResponse{
-				Body: fmt.Sprintf("SetSingleBetLimit failed: %v", err),
-			},
-		}
 	}
 
 	return resp
@@ -163,12 +119,6 @@ func (c *publicClient) SetCasinoLossLimit(sCtx provider.StepCtx, req *types.Requ
 	resp, err := httpClient.DoRequest[models.SetCasinoLossLimitRequestBody, struct{}](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("SetCasinoLossLimit failed: %v", err)
-		return &types.Response[struct{}]{
-			StatusCode: http.StatusInternalServerError,
-			Error: &types.ErrorResponse{
-				Body: fmt.Sprintf("SetCasinoLossLimit failed: %v", err),
-			},
-		}
 	}
 
 	return resp
@@ -180,12 +130,6 @@ func (c *publicClient) GetTurnoverLimits(sCtx provider.StepCtx, req *types.Reque
 	resp, err := httpClient.DoRequest[any, models.GetTurnoverLimitsResponseBody](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("GetTurnoverLimits failed: %v", err)
-		return &types.Response[models.GetTurnoverLimitsResponseBody]{
-			StatusCode: http.StatusInternalServerError,
-			Error: &types.ErrorResponse{
-				Body: fmt.Sprintf("GetTurnoverLimits failed: %v", err),
-			},
-		}
 	}
 
 	return resp
@@ -197,12 +141,6 @@ func (c *publicClient) GetSingleBetLimits(sCtx provider.StepCtx, req *types.Requ
 	resp, err := httpClient.DoRequest[any, models.GetSingleBetLimitsResponseBody](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("GetSingleBetLimits failed: %v", err)
-		return &types.Response[models.GetSingleBetLimitsResponseBody]{
-			StatusCode: http.StatusInternalServerError,
-			Error: &types.ErrorResponse{
-				Body: fmt.Sprintf("GetSingleBetLimits failed: %v", err),
-			},
-		}
 	}
 
 	return resp
@@ -214,12 +152,6 @@ func (c *publicClient) SetRestriction(sCtx provider.StepCtx, req *types.Request[
 	resp, err := httpClient.DoRequest[models.SetRestrictionRequestBody, models.SetRestrictionResponseBody](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("SetRestriction failed: %v", err)
-		return &types.Response[models.SetRestrictionResponseBody]{
-			StatusCode: http.StatusInternalServerError,
-			Error: &types.ErrorResponse{
-				Body: fmt.Sprintf("SetRestriction failed: %v", err),
-			},
-		}
 	}
 
 	return resp
@@ -231,12 +163,6 @@ func (c *publicClient) GetRestriction(sCtx provider.StepCtx, req *types.Request[
 	resp, err := httpClient.DoRequest[any, models.SetRestrictionResponseBody](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("GetRestriction failed: %v", err)
-		return &types.Response[models.SetRestrictionResponseBody]{
-			StatusCode: http.StatusInternalServerError,
-			Error: &types.ErrorResponse{
-				Body: fmt.Sprintf("GetRestriction failed: %v", err),
-			},
-		}
 	}
 
 	return resp
@@ -248,12 +174,6 @@ func (c *publicClient) GetCasinoLossLimits(sCtx provider.StepCtx, req *types.Req
 	resp, err := httpClient.DoRequest[any, models.GetCasinoLossLimitsResponseBody](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("GetCasinoLossLimits failed: %v", err)
-		return &types.Response[models.GetCasinoLossLimitsResponseBody]{
-			StatusCode: http.StatusInternalServerError,
-			Error: &types.ErrorResponse{
-				Body: fmt.Sprintf("GetCasinoLossLimits failed: %v", err),
-			},
-		}
 	}
 
 	return resp
@@ -265,12 +185,6 @@ func (c *publicClient) SetTurnoverLimit(sCtx provider.StepCtx, req *types.Reques
 	resp, err := httpClient.DoRequest[models.SetTurnoverLimitRequestBody, struct{}](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("SetTurnoverLimit failed: %v", err)
-		return &types.Response[struct{}]{
-			StatusCode: http.StatusInternalServerError,
-			Error: &types.ErrorResponse{
-				Body: fmt.Sprintf("SetTurnoverLimit failed: %v", err),
-			},
-		}
 	}
 
 	return resp

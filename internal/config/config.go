@@ -12,6 +12,7 @@ type MySQLConfig struct {
 	DriverName      string        `json:"driver_name"`
 	DSNCore         string        `json:"dsn_core"`
 	DSNWallet       string        `json:"dsn_wallet"`
+	DSNBonus        string        `json:"dsn_bonus"`
 	PingTimeout     time.Duration `json:"ping_timeout"`
 	ConnMaxLifetime time.Duration `json:"conn_max_lifetime"`
 	ConnMaxIdleTime time.Duration `json:"conn_max_idle_time"`
@@ -51,9 +52,11 @@ type HTTPConfig struct {
 }
 
 type RedisConfig struct {
-	Addr          string        `json:"addr"`
+	PlayerAddr    string        `json:"player_addr"`
+	WalletAddr    string        `json:"wallet_addr"`
 	Password      string        `json:"password"`
-	DB            int           `json:"db"`
+	PlayerDB      int           `json:"player_db"`
+	WalletDB      int           `json:"wallet_db"`
 	DialTimeout   time.Duration `json:"dial_timeout"`
 	ReadTimeout   time.Duration `json:"read_timeout"`
 	WriteTimeout  time.Duration `json:"write_timeout"`
@@ -76,7 +79,7 @@ func (k *KafkaConfig) GetTimeout() time.Duration {
 
 func ReadConfig(t provider.T) *Config {
 
-	if err := os.Setenv("ALLURE_OUTPUT_PATH", "C:/Users/User1/GolandProjects/CB_auto/allure-results"); err != nil {
+	if err := os.Setenv("ALLURE_OUTPUT_PATH", "C:/Users/User1/GolandProjects/CB_auto"); err != nil {
 		t.Fatalf("Ошибка установки пути для отчетов Allure: %v", err)
 	}
 

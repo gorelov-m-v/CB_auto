@@ -46,7 +46,7 @@ func (s *SwitchWalletSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация Redis клиента.", func(sCtx provider.StepCtx) {
-		s.redisClient = redis.NewRedisClient(t, &s.config.Redis)
+		s.redisClient = redis.NewRedisClient(t, &s.config.Redis, redis.PlayerClient)
 	})
 
 	t.WithNewStep("Инициализация Kafka.", func(sCtx provider.StepCtx) {

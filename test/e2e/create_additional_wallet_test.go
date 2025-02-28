@@ -47,7 +47,7 @@ func (s *CreateWalletSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация Redis клиента.", func(sCtx provider.StepCtx) {
-		s.redisClient = redis.NewRedisClient(t, &s.config.Redis)
+		s.redisClient = redis.NewRedisClient(t, &s.config.Redis, redis.PlayerClient)
 	})
 
 	t.WithNewStep("Инициализация Kafka.", func(sCtx provider.StepCtx) {
@@ -152,8 +152,10 @@ func (s *CreateWalletSuite) TestCreateWallet(t provider.T) {
 	})
 
 	t.WithNewStep("Проверка значения в Redis.", func(sCtx provider.StepCtx) {
-		key := testData.registrationMessage.Player.ExternalID
-		wallets := s.redisClient.GetWithRetry(sCtx, key)
+		var wallets redis.WalletsMap
+		err := s.redisClient.GetWithRetry(sCtx, testData.registrationMessage.Player.ExternalID, &wallets)
+
+		sCtx.Require().NoError(err, "Значение кошелька получено из Redis")
 
 		var foundWallet redis.WalletData
 		for _, w := range wallets {

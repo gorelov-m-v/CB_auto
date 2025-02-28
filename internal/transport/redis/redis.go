@@ -18,24 +18,45 @@ import (
 
 var ErrKeyNotFound = errors.New("redis: key not found")
 
+type RedisClientType string
+
+const (
+	PlayerClient RedisClientType = "player"
+	WalletClient RedisClientType = "wallet"
+)
+
 type RedisClient struct {
 	client        *redis.Client
 	retryAttempts int
 	retryDelay    time.Duration
 }
 
-func NewRedisClient(t provider.T, cfg *config.RedisConfig) *RedisClient {
+func NewRedisClient(t provider.T, cfg *config.RedisConfig, clientType RedisClientType) *RedisClient {
+	var addr string
+	var db int
+
+	switch clientType {
+	case PlayerClient:
+		addr = cfg.PlayerAddr
+		db = cfg.PlayerDB
+	case WalletClient:
+		addr = cfg.WalletAddr
+		db = cfg.WalletDB
+	default:
+		t.Fatalf("Неизвестный тип Redis-клиента: %s", clientType)
+	}
+
 	client := redis.NewClient(&redis.Options{
-		Addr:         cfg.Addr,
+		Addr:         addr,
 		Password:     cfg.Password,
-		DB:           cfg.DB,
+		DB:           db,
 		DialTimeout:  time.Duration(cfg.DialTimeout) * time.Second,
 		ReadTimeout:  time.Duration(cfg.ReadTimeout) * time.Second,
 		WriteTimeout: time.Duration(cfg.WriteTimeout) * time.Second,
 	})
 
 	if err := client.Ping(context.Background()).Err(); err != nil {
-		t.Fatalf("Ошибка подключения к Redis: %v", err)
+		t.Fatalf("Ошибка подключения к Redis (%s): %v", clientType, err)
 	}
 
 	return &RedisClient{
@@ -60,29 +81,30 @@ func (r *RedisClient) Get(key string) (string, error) {
 	return val, nil
 }
 
-func (r *RedisClient) GetWithRetry(sCtx provider.StepCtx, key string) WalletsMap {
+func (r *RedisClient) GetWithRetry(sCtx provider.StepCtx, key string, result interface{}) error {
 	var lastErr error
 	delay := r.retryDelay
-	var result WalletsMap
 
 	for i := 0; i < r.retryAttempts; i++ {
 		value, err := r.Get(key)
 		if err == nil && value != "" {
-			if err := json.Unmarshal([]byte(value), &result); err != nil {
+			if err := json.Unmarshal([]byte(value), result); err != nil {
 				log.Printf("Failed to unmarshal Redis value: %v", err)
+				lastErr = err
+				continue
 			}
 
 			sCtx.WithAttachments(allure.NewAttachment("Redis Value", allure.JSON, utils.CreatePrettyJSON(result)))
-
-			return result
+			return nil
 		}
 		lastErr = err
 		log.Printf("Attempt %d: Redis key %s not found or empty, retrying in %v...", i+1, key, delay)
 		time.Sleep(delay)
 		delay *= 2
 	}
+
 	log.Printf("Не удалось получить значение из Redis после %d попыток: %v", r.retryAttempts, lastErr)
-	return nil
+	return lastErr
 }
 
 func (r *RedisClient) Close() error {
