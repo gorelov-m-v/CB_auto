@@ -44,14 +44,13 @@ func InitClient(t provider.T, cfg *config.Config, clientType types.ClientType) *
 }
 
 func DoRequest[T any, V any](sCtx provider.StepCtx, c *types.Client, request *types.Request[T]) (*types.Response[V], error) {
-	req, err := makeRequest(c.ServiceURL, request)
+	req, bodyBytes, err := makeRequest(c.ServiceURL, request)
 	if err != nil {
 		return nil, fmt.Errorf("makeRequest failed: %v", err)
 	}
 
 	log.Printf("Request URL: %s, Method: %s, Headers: %+v", req.URL.String(), req.Method, req.Header)
-	if request.Body != nil {
-		bodyBytes, _ := json.Marshal(request.Body)
+	if len(bodyBytes) > 0 {
 		log.Printf("Request Body: %s", string(bodyBytes))
 	}
 
@@ -61,12 +60,12 @@ func DoRequest[T any, V any](sCtx provider.StepCtx, c *types.Client, request *ty
 	}
 	defer resp.Body.Close()
 
-	bodyBytes, err := io.ReadAll(resp.Body)
+	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %v", err)
 	}
 
-	log.Printf("Response Status: %d, Headers: %+v, Body: %s", resp.StatusCode, resp.Header, string(bodyBytes))
+	log.Printf("Response Status: %d, Headers: %+v, Body: %s", resp.StatusCode, resp.Header, string(responseBody))
 
 	response := &types.Response[V]{
 		StatusCode: resp.StatusCode,
@@ -74,12 +73,12 @@ func DoRequest[T any, V any](sCtx provider.StepCtx, c *types.Client, request *ty
 	}
 
 	if resp.StatusCode >= 400 {
-		response.Error = &types.ErrorResponse{Body: string(bodyBytes)}
+		response.Error = &types.ErrorResponse{Body: string(responseBody)}
 		return response, nil
 	}
 
-	if len(bodyBytes) > 0 {
-		if err := json.Unmarshal(bodyBytes, &response.Body); err != nil {
+	if len(responseBody) > 0 {
+		if err := json.Unmarshal(responseBody, &response.Body); err != nil {
 			return nil, fmt.Errorf("failed to decode response body: %v", err)
 		}
 	}
@@ -90,23 +89,27 @@ func DoRequest[T any, V any](sCtx provider.StepCtx, c *types.Client, request *ty
 	return response, nil
 }
 
-func makeRequest[T any](serviceURL string, r *types.Request[T]) (*http.Request, error) {
+func makeRequest[T any](serviceURL string, r *types.Request[T]) (*http.Request, []byte, error) {
+	if r.Headers == nil {
+		r.Headers = make(map[string]string)
+	}
+
 	path := r.Path
 	if len(r.PathParams) > 0 {
 		for key, value := range r.PathParams {
 			placeholder := fmt.Sprintf("{%s}", key)
-			path = strings.ReplaceAll(path, placeholder, value)
+			path = strings.ReplaceAll(path, placeholder, url.PathEscape(value))
 		}
 	}
 
 	baseURL, err := url.Parse(serviceURL)
 	if err != nil {
-		return nil, fmt.Errorf("invalid base url: %v", err)
+		return nil, nil, fmt.Errorf("invalid base url: %v", err)
 	}
 
 	relURL, err := url.Parse(path)
 	if err != nil {
-		return nil, fmt.Errorf("invalid path: %v", err)
+		return nil, nil, fmt.Errorf("invalid path: %v", err)
 	}
 
 	fullURL := baseURL.ResolveReference(relURL)
@@ -123,18 +126,21 @@ func makeRequest[T any](serviceURL string, r *types.Request[T]) (*http.Request, 
 	if r.Body != nil {
 		body, err = json.Marshal(r.Body)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal request body: %v", err)
+			return nil, nil, fmt.Errorf("failed to marshal request body: %v", err)
+		}
+		if _, exists := r.Headers["Content-Type"]; !exists {
+			r.Headers["Content-Type"] = "application/json"
 		}
 	}
 
 	req, err := http.NewRequest(r.Method, fullURL.String(), bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("request creation failed: %v", err)
+		return nil, nil, fmt.Errorf("request creation failed: %v", err)
 	}
 
 	for key, value := range r.Headers {
 		req.Header.Set(key, value)
 	}
 
-	return req, nil
+	return req, body, nil
 }

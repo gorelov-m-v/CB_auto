@@ -66,7 +66,7 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 
 		testData.createCapBrandRequest = &clientTypes.Request[models.CreateCapBrandRequestBody]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 				"Platform-Locale": "en",
 				"Platform-NodeId": s.config.Node.ProjectID,
 			},
@@ -101,7 +101,7 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 	t.WithNewStep("Удаление бренда.", func(sCtx provider.StepCtx) {
 		req := &clientTypes.Request[struct{}]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken()),
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 				"Platform-Nodeid": s.config.Node.ProjectID,
 			},
 			PathParams: map[string]string{
