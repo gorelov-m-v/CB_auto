@@ -1,6 +1,5 @@
 package category
 
-
 import (
 	"CB_auto/internal/config"
 	"CB_auto/internal/repository"
@@ -12,16 +11,12 @@ import (
 	"log"
 	"strings"
 
-	"time"
-
-
 	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
 
 type Category struct {
-
-	ID               int               `db:"id"`
+	ID               int64             `db:"id"`
 	Alias            string            `db:"alias"`
 	CreatedAt        int64             `db:"created_at"`
 	UpdatedAt        int64             `db:"updated_at"`
@@ -90,15 +85,18 @@ func (r *Repository) GetCategory(sCtx provider.StepCtx, filters map[string]inter
 		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
 
-
 	var category Category
 
 	var localizedNamesRaw []byte
 
-	err := repository.ExecuteWithRetry(context.Background(), r.cfg, func(ctx context.Context) error {
+	err := repository.ExecuteWithRetry(sCtx, r.cfg, func(ctx context.Context) error {
 		return r.db.QueryRowContext(ctx, query, args...).Scan(
 			&category.ID,
 			&category.Alias,
+			&category.CreatedAt,
+			&category.UpdatedAt,
+			&category.UUID,
+			&category.ProjectGroupUUID,
 			&category.ProjectUUID,
 			&category.StatusID,
 			&category.Sort,

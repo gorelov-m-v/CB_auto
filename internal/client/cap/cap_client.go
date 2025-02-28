@@ -162,6 +162,7 @@ func (c *capClient) CreateCapCategory(sCtx provider.StepCtx, req *types.Request[
 	resp, err := httpClient.DoRequest[models.CreateCapCategoryRequestBody, models.CreateCapCategoryResponseBody](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("CreateCapCategory failed: %v", err)
+		sCtx.Errorf("CreateCapCategory failed: %v", err)
 		return &types.Response[models.CreateCapCategoryResponseBody]{
 			StatusCode: http.StatusInternalServerError,
 			Error: &types.ErrorResponse{
@@ -169,7 +170,9 @@ func (c *capClient) CreateCapCategory(sCtx provider.StepCtx, req *types.Request[
 			},
 		}
 	}
-
+	if resp.StatusCode != http.StatusOK {
+		sCtx.Errorf("CreateCapCategory returned status %d: %v", resp.StatusCode, resp.Error)
+	}
 	return resp
 }
 
@@ -203,7 +206,6 @@ func (c *capClient) DeleteCapCategory(sCtx provider.StepCtx, req *types.Request[
 			},
 		}
 	}
-
 	return resp
 }
 

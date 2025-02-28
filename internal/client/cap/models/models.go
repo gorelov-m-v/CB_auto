@@ -1,9 +1,15 @@
 package models
 
 const (
-	StatusEnabled  = 1
 	StatusDisabled = 2
+	StatusEnabled  = 1
 	StatusDeleted  = 3
+
+	CategoryStatusDeleted = 2
+
+	TypeVertical   = "vertical"
+	TypeHorizontal = "horizontal"
+	TypeAllGames   = "allGames"
 )
 
 type AdminCheckRequestBody struct {
@@ -115,11 +121,12 @@ type PlayerLimit struct {
 }
 
 type CreateCapCategoryRequestBody struct {
-	Sort    int               `json:"sort"`
-	Alias   string            `json:"alias"`
-	Names   map[string]string `json:"names"`
-	Type    string            `json:"type"`
-	GroupID string            `json:"groupId"`
+	Sort      int               `json:"sort"`
+	Alias     string            `json:"alias"`
+	Names     map[string]string `json:"names"`
+	Type      string            `json:"type"`
+	GroupID   string            `json:"groupId"`
+	ProjectID string            `json:"projectId"`
 }
 
 type CreateCapCategoryResponseBody struct {
