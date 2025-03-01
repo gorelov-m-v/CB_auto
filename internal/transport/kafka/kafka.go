@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"CB_auto/internal/config"
@@ -16,16 +17,39 @@ import (
 type TopicType string
 
 const (
-	BrandTopic  TopicType = "beta-09_core.gambling.v1.Brand"
-	PlayerTopic TopicType = "beta-09_player.v1.account"
-	LimitTopic  TopicType = "beta-09_limits.v2"
+	BrandTopic      TopicType = "beta-09_core.gambling.v1.Brand"
+	PlayerTopic     TopicType = "beta-09_player.v1.account"
+	LimitTopic      TopicType = "beta-09_limits.v2"
+	ProjectionTopic TopicType = "beta-09_wallet.v8.projectionSource"
 )
 
-var allTopics = []TopicType{BrandTopic, PlayerTopic, LimitTopic}
+var allTopics = []TopicType{BrandTopic, PlayerTopic, LimitTopic, ProjectionTopic}
+
+type subscriber struct {
+	ch     chan kafka.Message
+	done   chan struct{}
+	closed atomic.Bool
+	once   sync.Once
+}
+
+func newSubscriber() *subscriber {
+	return &subscriber{
+		ch:   make(chan kafka.Message, 100),
+		done: make(chan struct{}),
+	}
+}
+
+func (sub *subscriber) Close() {
+	sub.once.Do(func() {
+		sub.closed.Store(true)
+		close(sub.done)
+		close(sub.ch)
+	})
+}
 
 type Kafka struct {
 	readers          []*kafka.Reader
-	subscribers      map[TopicType][]chan kafka.Message
+	subscribers      map[TopicType][]*subscriber
 	bufferedMessages map[TopicType][]kafka.Message
 	Timeout          time.Duration
 	ctx              context.Context
@@ -74,7 +98,7 @@ func CloseInstance(t provider.T) {
 
 func newConsumer(cfg *config.Config) *Kafka {
 	var readers []*kafka.Reader
-	subscribers := make(map[TopicType][]chan kafka.Message)
+	subscribers := make(map[TopicType][]*subscriber)
 	bufferedMessages := make(map[TopicType][]kafka.Message)
 
 	for _, topic := range allTopics {
@@ -107,10 +131,14 @@ func newConsumer(cfg *config.Config) *Kafka {
 }
 
 func (k *Kafka) startReading() {
+	k.mu.Lock()
 	if k.started {
+		k.mu.Unlock()
 		return
 	}
 	k.started = true
+	k.mu.Unlock()
+
 	k.wg.Add(len(k.readers))
 	for _, reader := range k.readers {
 		go k.readMessages(reader)
@@ -139,15 +167,20 @@ func (k *Kafka) readMessages(reader *kafka.Reader) {
 			log.Printf("Received message from topic %s, partition %d, offset %d: %s",
 				msg.Topic, msg.Partition, msg.Offset, string(msg.Value))
 
-			k.mu.Lock()
 			topic := TopicType(msg.Topic)
+			k.mu.Lock()
 			k.bufferedMessages[topic] = append(k.bufferedMessages[topic], msg)
-			subs := k.subscribers[topic]
+			subs := make([]*subscriber, len(k.subscribers[topic]))
+			copy(subs, k.subscribers[topic])
 			k.mu.Unlock()
 
-			for _, ch := range subs {
+			for _, sub := range subs {
+				if sub.closed.Load() {
+					continue
+				}
 				select {
-				case ch <- msg:
+				case sub.ch <- msg:
+				case <-sub.done:
 				case <-k.ctx.Done():
 					return
 				}
@@ -194,16 +227,25 @@ func FindMessageByFilter[T KafkaMessage](sCtx provider.StepCtx, k *Kafka, filter
 
 func (k *Kafka) SubscribeToTopic(topic TopicType) chan kafka.Message {
 	k.mu.Lock()
+	defer k.mu.Unlock()
+
 	buffered := make([]kafka.Message, len(k.bufferedMessages[topic]))
 	copy(buffered, k.bufferedMessages[topic])
-	ch := make(chan kafka.Message, 100)
-	k.subscribers[topic] = append(k.subscribers[topic], ch)
-	k.mu.Unlock()
 
-	for _, msg := range buffered {
-		ch <- msg
-	}
-	return ch
+	sub := newSubscriber()
+	k.subscribers[topic] = append(k.subscribers[topic], sub)
+
+	go func() {
+		for _, msg := range buffered {
+			select {
+			case sub.ch <- msg:
+			case <-sub.done:
+				return
+			}
+		}
+	}()
+
+	return sub.ch
 }
 
 func (k *Kafka) Unsubscribe(ch chan kafka.Message) {
@@ -212,10 +254,10 @@ func (k *Kafka) Unsubscribe(ch chan kafka.Message) {
 
 	for topic, subs := range k.subscribers {
 		for i, sub := range subs {
-			if sub == ch {
+			if sub.ch == ch {
+				sub.Close()
 				k.subscribers[topic] = append(subs[:i], subs[i+1:]...)
-				close(ch)
-				break
+				return
 			}
 		}
 	}
@@ -227,8 +269,8 @@ func (k *Kafka) close(t provider.T) {
 
 	k.mu.Lock()
 	for _, subs := range k.subscribers {
-		for _, ch := range subs {
-			close(ch)
+		for _, sub := range subs {
+			sub.Close()
 		}
 	}
 	k.subscribers = nil
@@ -261,6 +303,10 @@ func (m PlayerMessage) GetTopic() TopicType {
 
 func (m LimitMessage) GetTopic() TopicType {
 	return LimitTopic
+}
+
+func (m ProjectionSourceMessage) GetTopic() TopicType {
+	return ProjectionTopic
 }
 
 func GetTopicForType[T KafkaMessage]() TopicType {

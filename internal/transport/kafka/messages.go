@@ -67,3 +67,37 @@ const (
 	IntervalTypeWeekly  = "weekly"
 	IntervalTypeMonthly = "monthly"
 )
+
+type ProjectionSourceMessage struct {
+	Type              string `json:"type"`
+	SeqNumber         int64  `json:"seq_number"`
+	WalletUUID        string `json:"wallet_uuid"`
+	PlayerUUID        string `json:"player_uuid"`
+	NodeUUID          string `json:"node_uuid"`
+	Payload           string `json:"payload"`
+	Currency          string `json:"currency"`
+	Timestamp         int64  `json:"timestamp"`
+	SeqNumberNodeUUID string `json:"seq_number_node_uuid"`
+}
+
+type ProjectionPayload struct {
+	EventType string            `json:"event_type"`
+	Limits    []ProjectionLimit `json:"limits"`
+}
+
+type ProjectionLimit struct {
+	ExternalID   string `json:"external_id"`
+	LimitType    string `json:"limit_type"`
+	IntervalType string `json:"interval_type"`
+	Amount       string `json:"amount"`
+	CurrencyCode string `json:"currency_code"`
+	StartedAt    int64  `json:"started_at"`
+	ExpiresAt    int64  `json:"expires_at"`
+	Status       bool   `json:"status"`
+}
+
+func (m *ProjectionSourceMessage) UnmarshalPayload() (*ProjectionPayload, error) {
+	var payload ProjectionPayload
+	err := json.Unmarshal([]byte(m.Payload), &payload)
+	return &payload, err
+}
