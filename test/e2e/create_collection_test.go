@@ -61,8 +61,8 @@ func (s *CreateCollectionSuite) TestCreateCollection(t provider.T) {
 
 	var categoryID string
 	names := map[string]string{
-		"en": "Test Collection",
-		"ru": "Тестовая Коллекция",
+		"en": utils.Get(utils.CATEGORY_TITLE, 20),
+		"ru": utils.Get(utils.CATEGORY_TITLE, 20),
 	}
 
 	t.WithNewStep("Создание коллекции с русским и английским названием", func(sCtx provider.StepCtx) {
@@ -120,7 +120,7 @@ func (s *CreateCollectionSuite) TestCreateCollection(t provider.T) {
 			"uuid": categoryID,
 		})
 
-		sCtx.Assert().NotNil(category, "Коллекция найдена в БД")
+		sCtx.Require().NotNil(category, "Коллекция найдена в БД")
 		if category != nil {
 			sCtx.Assert().Equal(models.TypeHorizontal, category.Type, "Тип коллекции в БД совпадает")
 			sCtx.Assert().Equal(uint32(1), uint32(category.Sort), "Sort в БД совпадает")

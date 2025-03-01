@@ -109,14 +109,14 @@ func (s *DeleteCategorySuite) TestDeleteCategory(t provider.T) {
 			},
 		}
 
-		var resp *clientTypes.Response[struct{}]
+		var statusCode int
 		for i := 0; i < 3; i++ {
-			resp = s.capService.DeleteCapCategory(sCtx, req)
-			if resp.StatusCode == http.StatusNoContent {
+			statusCode = s.capService.DeleteCapCategory(sCtx, req).StatusCode
+			if statusCode == http.StatusNoContent {
 				break
 			}
 		}
-		sCtx.Assert().Equal(http.StatusNoContent, resp.StatusCode, "Категория успешно удалена")
+		sCtx.Assert().Equal(http.StatusNoContent, statusCode, "Категория успешно удалена")
 	})
 
 	t.WithNewStep("Проверка удаления категории в БД", func(sCtx provider.StepCtx) {

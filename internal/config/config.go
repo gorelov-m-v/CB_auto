@@ -78,11 +78,11 @@ func (k *KafkaConfig) GetTimeout() time.Duration {
 }
 
 func ReadConfig(t provider.T) *Config {
-	if err := os.Setenv("ALLURE_OUTPUT_PATH", "C:/Users/User1/GolandProjects/CB_auto/allure-results"); err != nil {
+	if err := os.Setenv("ALLURE_OUTPUT_PATH", "C:/Users/L/GolandProjects/CB_auto/allure-results"); err != nil {
 		t.Fatalf("Ошибка установки пути для отчетов Allure: %v", err)
 	}
 
-	configFile, err := os.Open("C:/Users/User1/GolandProjects/CB_auto/config.json")
+	configFile, err := os.Open("C:/Users/L/GolandProjects/CB_auto/config.json")
 	if err != nil {
 		t.Fatalf("Ошибка открытия файла конфигурации: %v", err)
 	}

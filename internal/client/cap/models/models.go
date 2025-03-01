@@ -12,6 +12,15 @@ const (
 	TypeAllGames   = "allGames"
 )
 
+const (
+	defaultSort      = 1
+	updatedSort      = 2
+	defaultStatus    = 2
+	deleteRetryCount = 3
+	categoryAliasLen = 10
+	categoryNameLen  = 20
+)
+
 type AdminCheckRequestBody struct {
 	UserName string `json:"username"`
 	Password string `json:"password"`

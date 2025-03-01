@@ -61,8 +61,8 @@ func (s *CreateCategorySuite) TestCreateCategory(t provider.T) {
 
 	var categoryID string
 	names := map[string]string{
-		"en": "Test Category",
-		"ru": "Тестовая Категория",
+		"en": utils.Get(utils.CATEGORY_TITLE, 20),
+		"ru": utils.Get(utils.CATEGORY_TITLE, 20),
 	}
 
 	t.WithNewStep("Создание категории с русским и английским названием", func(sCtx provider.StepCtx) {
@@ -120,7 +120,7 @@ func (s *CreateCategorySuite) TestCreateCategory(t provider.T) {
 			"uuid": categoryID,
 		})
 
-		sCtx.Assert().NotNil(category, "Категория найдена в БД")
+		sCtx.Require().NotNil(category, "Категория найдена в БД")
 		if category != nil {
 			sCtx.Assert().Equal(models.TypeVertical, category.Type, "Тип категории в БД совпадает")
 			sCtx.Assert().Equal(uint32(1), uint32(category.Sort), "Sort в БД совпадает")
