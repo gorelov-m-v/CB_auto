@@ -27,6 +27,7 @@ const (
 	BRAND_TITLE       = "brandTitle"
 	ALIAS             = "alias"
 	CATEGORY_TITLE    = "category_title"
+	COLLECTION_TITLE  = "collection_title"
 )
 
 const (

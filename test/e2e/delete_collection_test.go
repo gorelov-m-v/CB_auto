@@ -61,8 +61,8 @@ func (s *DeleteCollectionSuite) TestDeleteCollection(t provider.T) {
 
 	var collectionID string
 	names := map[string]string{
-		"en": "Test Collection",
-		"ru": "Тестовая Коллекция",
+		"en": utils.Get(utils.COLLECTION_TITLE, 20),
+		"ru": utils.Get(utils.COLLECTION_TITLE, 20),
 	}
 
 	t.WithNewStep("Создание коллекции", func(sCtx provider.StepCtx) {
