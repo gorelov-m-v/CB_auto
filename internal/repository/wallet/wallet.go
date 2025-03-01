@@ -52,14 +52,16 @@ func NewRepository(db *sql.DB, mysqlConfig *config.MySQLConfig) *Repository {
 }
 
 var allowedFields = map[string]bool{
-	"uuid":          true,
-	"player_uuid":   true,
-	"currency":      true,
-	"wallet_status": true,
-	"balance":       true,
-	"is_default":    true,
-	"is_basic":      true,
-	"wallet_type":   true,
+	"uuid":               true,
+	"player_uuid":        true,
+	"currency":           true,
+	"wallet_status":      true,
+	"balance":            true,
+	"is_default":         true,
+	"is_basic":           true,
+	"wallet_type":        true,
+	"is_gambling_active": true,
+	"is_betting_active":  true,
 }
 
 func (r *Repository) GetWallet(sCtx provider.StepCtx, filters map[string]interface{}) *Wallet {

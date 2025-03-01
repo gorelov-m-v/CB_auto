@@ -16,7 +16,11 @@ import (
 )
 
 type Category struct {
+<<<<<<< HEAD
 	ID               int64             `db:"id"`
+=======
+	ID               int               `db:"id"`
+>>>>>>> master
 	Alias            string            `db:"alias"`
 	CreatedAt        int64             `db:"created_at"`
 	UpdatedAt        int64             `db:"updated_at"`

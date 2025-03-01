@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,11 +16,9 @@ import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
 
-// NatsClient управляет подключением к NATS и получает сообщения в канал Messages.
 type NatsClient struct {
 	conn      *nats.Conn
 	js        nats.JetStreamContext
-	Messages  chan *nats.Msg
 	ctx       context.Context
 	cancel    context.CancelFunc
 	wg        sync.WaitGroup
@@ -28,7 +27,6 @@ type NatsClient struct {
 	subs      []*nats.Subscription
 }
 
-// NatsMessage оборачивает полученные данные с метаданными.
 type NatsMessage[T any] struct {
 	Payload   T
 	Metadata  *nats.MsgMetadata
@@ -39,7 +37,6 @@ type NatsMessage[T any] struct {
 	Type      string
 }
 
-// NewClient создаёт нового NATS клиента согласно конфигурации.
 func NewClient(cfg *config.NatsConfig) *NatsClient {
 	log.Printf("Creating new NATS client: hosts=%s", cfg.Hosts)
 
@@ -58,17 +55,17 @@ func NewClient(cfg *config.NatsConfig) *NatsClient {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &NatsClient{
-		conn:     nc,
-		js:       js,
-		Messages: make(chan *nats.Msg, 100),
-		ctx:      ctx,
-		cancel:   cancel,
-		timeout:  cfg.StreamTimeout * time.Second,
+		conn:    nc,
+		js:      js,
+		ctx:     ctx,
+		cancel:  cancel,
+		timeout: cfg.StreamTimeout * time.Second,
 	}
 }
 
-// SubscribeWithDeliverAll подписывается на указанный subject с опциями DeliverAll и другими.
-func (c *NatsClient) subscribeWithDeliverAll(subject string) {
+func (c *NatsClient) subscribeWithDeliverAll(subject string) (chan *nats.Msg, *nats.Subscription, error) {
+	msgCh := make(chan *nats.Msg, 100)
+
 	opts := []nats.SubOpt{
 		nats.DeliverAll(),
 		nats.AckExplicit(),
@@ -78,25 +75,30 @@ func (c *NatsClient) subscribeWithDeliverAll(subject string) {
 	}
 
 	sub, err := c.js.Subscribe(subject, func(msg *nats.Msg) {
-		c.Messages <- msg
+		msgCh <- msg
 	}, opts...)
 	if err != nil {
-		log.Printf("Ошибка при подписке на NATS: %v", err)
-		return
+		return nil, nil, err
 	}
+
 	c.subsMutex.Lock()
 	c.subs = append(c.subs, sub)
 	c.subsMutex.Unlock()
+	return msgCh, sub, nil
 }
 
-// FindMessageInStream подписывается на заданный subject и ждёт появления нужного сообщения,
-// используя внутренний таймаут (c.timeout). Если сообщение, удовлетворяющее filter, приходит – возвращается оно.
-// Если таймаут истекает, функция возвращает nil.
 func FindMessageInStream[T any](sCtx provider.StepCtx, n *NatsClient, subject string, filter func(data T, msgType string) bool) *NatsMessage[T] {
-	// Подписываемся на заданный subject.
-	n.subscribeWithDeliverAll(subject)
+	msgCh, sub, err := n.subscribeWithDeliverAll(subject)
+	if err != nil {
+		sCtx.Errorf("Ошибка при подписке на NATS: %v", err)
+		return nil
+	}
+	sCtx.Logf("NATS ПОИСК: Подписались на шаблон: %s", subject)
 
-	// Создаем контекст с таймаутом, равным внутреннему значению n.timeout.
+	n.wg.Add(1)
+	defer n.wg.Done()
+	defer sub.Unsubscribe()
+
 	ctx, cancel := context.WithTimeout(n.ctx, n.timeout)
 	defer cancel()
 
@@ -105,18 +107,41 @@ func FindMessageInStream[T any](sCtx provider.StepCtx, n *NatsClient, subject st
 		case <-ctx.Done():
 			sCtx.Errorf("Timeout waiting for message on subject %s", subject)
 			return nil
-		case msg, ok := <-n.Messages:
+		case msg, ok := <-msgCh:
 			if !ok {
-				sCtx.Errorf("Messages channel closed")
+				sCtx.Errorf("Канал сообщений закрыт для темы %s", subject)
 				return nil
 			}
-			log.Printf("Received NATS message on subject %s: %s", msg.Subject, string(msg.Data))
-			var data T
-			if err := json.Unmarshal(msg.Data, &data); err != nil {
-				sCtx.Logf("Error unmarshaling message: %v", err)
+
+			sCtx.Logf("NATS ПОИСК [%s]: Получено сообщение с темой: %s", subject, msg.Subject)
+
+			subjectParts := strings.Split(msg.Subject, ".")
+			templateParts := strings.Split(subject, ".")
+			if len(subjectParts) != len(templateParts) {
+				sCtx.Logf("NATS ПОИСК [%s]: Пропуск - разное количество частей в теме", subject)
 				continue
 			}
+
+			if len(subjectParts) > 3 && len(templateParts) > 3 {
+				subjectUUID := subjectParts[3]
+				templateUUID := templateParts[3]
+				if templateUUID != "*" && subjectUUID != templateUUID {
+					sCtx.Logf("NATS ПОИСК [%s]: Пропуск - UUID игрока не совпадает: %s != %s",
+						subject, templateUUID, subjectUUID)
+					continue
+				}
+			}
+
+			sCtx.Logf("NATS ПОИСК [%s]: Сообщение прошло проверку темы: %s", subject, msg.Subject)
+
+			var data T
+			if err := json.Unmarshal(msg.Data, &data); err != nil {
+				sCtx.Logf("NATS ПОИСК [%s]: Ошибка распаковки JSON: %v", subject, err)
+				continue
+			}
+
 			if filter(data, msg.Header.Get("type")) {
+				sCtx.Logf("NATS ПОИСК [%s]: Сообщение прошло фильтр данных", subject)
 				meta, _ := msg.Metadata()
 				sCtx.WithAttachments(allure.NewAttachment("NATS Message", allure.JSON, utils.CreatePrettyJSON(data)))
 				return &NatsMessage[T]{
@@ -128,14 +153,17 @@ func FindMessageInStream[T any](sCtx provider.StepCtx, n *NatsClient, subject st
 					Timestamp: meta.Timestamp,
 					Type:      msg.Header.Get("type"),
 				}
+			} else {
+				sCtx.Logf("NATS ПОИСК [%s]: Сообщение НЕ прошло фильтр данных", subject)
 			}
 		}
 	}
 }
 
-// Close корректно завершает работу NATS клиента.
 func (n *NatsClient) Close() {
 	n.cancel()
+
+	n.wg.Wait()
 
 	n.subsMutex.Lock()
 	for _, sub := range n.subs {
@@ -144,8 +172,6 @@ func (n *NatsClient) Close() {
 		}
 	}
 	n.subsMutex.Unlock()
-
-	close(n.Messages)
 
 	if err := n.conn.Drain(); err != nil {
 		log.Printf("Ошибка при закрытии NATS connection: %v", err)

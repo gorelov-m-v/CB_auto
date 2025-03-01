@@ -1,6 +1,3 @@
-//go:build limits
-// +build limits
-
 package test
 
 import (

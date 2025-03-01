@@ -1,6 +1,3 @@
-//go:build limits
-// +build limits
-
 package test
 
 import (
@@ -84,6 +81,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 		setSingleBetLimitReq   *clientTypes.Request[publicModels.SetSingleBetLimitRequestBody]
 		limitMessage           kafka.LimitMessage
 		dbWallet               *wallet.Wallet
+		singleBetEvent         *nats.NatsMessage[nats.LimitChangedV2]
 	}
 
 	t.WithNewStep("Регистрация нового игрока", func(sCtx provider.StepCtx) {
@@ -188,15 +186,15 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 	t.WithNewAsyncStep("Проверка NATS-сообщения о создании лимита", func(sCtx provider.StepCtx) {
 		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
 
-		singleBetEvent := nats.FindMessageInStream(sCtx, s.natsClient, subject, func(msg nats.LimitChangedV2, msgType string) bool {
+		testData.singleBetEvent = nats.FindMessageInStream(sCtx, s.natsClient, subject, func(msg nats.LimitChangedV2, msgType string) bool {
 			return msg.EventType == nats.EventTypeCreated &&
 				len(msg.Limits) > 0 &&
 				msg.Limits[0].LimitType == nats.LimitTypeSingleBet
 		})
 
-		sCtx.Require().NotNil(singleBetEvent, "Получено NATS-сообщение о создании лимита")
+		sCtx.Require().NotNil(testData.singleBetEvent, "Получено NATS-сообщение о создании лимита")
 
-		limit := singleBetEvent.Payload.Limits[0]
+		limit := testData.singleBetEvent.Payload.Limits[0]
 		sCtx.Assert().Equal(testData.limitMessage.ID, limit.ExternalID, "ID лимита совпадает")
 		sCtx.Assert().Equal(testData.limitMessage.Amount, limit.Amount, "Сумма лимита совпадает")
 		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, limit.CurrencyCode, "Валюта лимита совпадает")
@@ -205,7 +203,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 		sCtx.Assert().Equal(testData.limitMessage.StartedAt, limit.StartedAt, "Время начала установлено")
 		sCtx.Assert().Zero(limit.ExpiresAt, "Время окончания не установлено")
 		sCtx.Assert().Equal(nats.LimitTypeSingleBet, limit.LimitType, "Тип лимита совпадает")
-		sCtx.Assert().Equal(singleBetEvent.Payload.EventType, testData.limitMessage.EventType, "Тип события совпадает")
+		sCtx.Assert().Equal(testData.singleBetEvent.Payload.EventType, testData.limitMessage.EventType, "Тип события совпадает")
 	})
 
 	t.WithNewAsyncStep("Получение списка лимитов через CAP API", func(sCtx provider.StepCtx) {
@@ -255,6 +253,56 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 		sCtx.Assert().InDelta(testData.limitMessage.StartedAt, limitData.StartedAt, 10, "Время начала лимита")
 		sCtx.Assert().InDelta(testData.limitMessage.ExpiresAt, limitData.ExpiresAt, 10, "Время окончания лимита")
 		sCtx.Assert().True(limitData.Status, "Лимит активен")
+	})
+
+	t.WithNewAsyncStep("Проверка отправки события лимита в Kafka projection source", func(sCtx provider.StepCtx) {
+		projectionMessage := kafka.FindMessageByFilter[kafka.ProjectionSourceMessage](sCtx, s.kafka, func(msg kafka.ProjectionSourceMessage) bool {
+			if msg.Type != "limit_changed_v2" ||
+				msg.PlayerUUID != testData.registrationMessage.Player.ExternalID ||
+				msg.WalletUUID != testData.dbWallet.UUID {
+				return false
+			}
+
+			payload, err := msg.UnmarshalPayload()
+			if err != nil {
+				sCtx.Logf("Ошибка распаковки payload: %v", err)
+				return false
+			}
+
+			return payload.EventType == "created" &&
+				len(payload.Limits) > 0 &&
+				payload.Limits[0].LimitType == "single-bet" &&
+				payload.Limits[0].ExternalID == testData.limitMessage.ID
+		})
+
+		sCtx.Require().NotEmpty(projectionMessage.Type, "Сообщение limit_changed_v2 найдено в топике projection source")
+
+		sCtx.Assert().Equal("limit_changed_v2", projectionMessage.Type, "Тип сообщения корректен")
+		sCtx.Assert().Equal(testData.singleBetEvent.Metadata.Sequence, projectionMessage.SeqNumber, "Sequence совпадает")
+		sCtx.Assert().Equal(testData.registrationMessage.Player.ExternalID, projectionMessage.PlayerUUID, "UUID игрока совпадает")
+		sCtx.Assert().Equal(testData.dbWallet.UUID, projectionMessage.WalletUUID, "UUID кошелька совпадает")
+		sCtx.Assert().Equal(testData.registrationMessage.Player.Currency, projectionMessage.Currency, "Валюта совпадает")
+
+		payload, err := projectionMessage.UnmarshalPayload()
+		sCtx.Require().NoError(err, "Payload успешно распакован")
+
+		sCtx.Assert().Equal("created", payload.EventType, "Тип события в payload корректен")
+		sCtx.Require().GreaterOrEqual(len(payload.Limits), 1, "В payload есть хотя бы один лимит")
+
+		var targetLimit *kafka.ProjectionLimit
+		for i := range payload.Limits {
+			if payload.Limits[i].ExternalID == testData.limitMessage.ID {
+				targetLimit = &payload.Limits[i]
+				break
+			}
+		}
+		sCtx.Require().NotNil(targetLimit, "Лимит с нужным ID найден в payload")
+
+		sCtx.Assert().Equal("single-bet", targetLimit.LimitType, "Тип лимита корректен")
+		sCtx.Assert().Equal(testData.setSingleBetLimitReq.Body.Amount, targetLimit.Amount, "Сумма лимита совпадает")
+		sCtx.Assert().Equal(testData.setSingleBetLimitReq.Body.Currency, targetLimit.CurrencyCode, "Валюта лимита совпадает")
+		sCtx.Assert().True(targetLimit.Status, "Статус лимита активен")
+		sCtx.Assert().NotZero(targetLimit.StartedAt, "Время начала лимита установлено")
 	})
 }
 
