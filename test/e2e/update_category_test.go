@@ -62,13 +62,13 @@ func (s *UpdateCategorySuite) TestUpdateCategory(t provider.T) {
 	var categoryID string
 	var updateReq *clientTypes.Request[models.UpdateCapCategoryRequestBody]
 	originalNames := map[string]string{
-		"en": "Original Category",
-		"ru": "Оригинальная Категория",
+		"en": utils.Get(utils.COLLECTION_TITLE, 20),
+		"ru": utils.Get(utils.COLLECTION_TITLE, 20),
 	}
 
 	updatedNames := map[string]string{
-		"en": "Updated Category",
-		"ru": "Обновленная Категория",
+		"en": utils.Get(utils.COLLECTION_TITLE, 20),
+		"ru": utils.Get(utils.COLLECTION_TITLE, 20),
 	}
 
 	t.WithNewStep("Создание категории", func(sCtx provider.StepCtx) {

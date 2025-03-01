@@ -202,5 +202,6 @@ type UpdateCapCategoryRequestBody struct {
 }
 
 type UpdateCapCategoryResponseBody struct {
-	ID string `json:"id"`
+	ID    string `json:"id"`
+	Alias string `json:"alias"`
 }
