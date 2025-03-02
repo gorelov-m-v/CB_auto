@@ -62,13 +62,13 @@ func (s *UpdateCollectionSuite) TestUpdateCollection(t provider.T) {
 	var collectionID string
 	var updateReq *clientTypes.Request[models.UpdateCapCategoryRequestBody]
 	originalNames := map[string]string{
-		"en": utils.Get(utils.COLLECTION_TITLE, 20),
-		"ru": utils.Get(utils.COLLECTION_TITLE, 20),
+		"en": utils.GenerateAlias(20),
+		"ru": utils.GenerateAlias(20),
 	}
 
 	updatedNames := map[string]string{
-		"en": utils.Get(utils.COLLECTION_TITLE, 20),
-		"ru": utils.Get(utils.COLLECTION_TITLE, 20),
+		"en": utils.GenerateAlias(20),
+		"ru": utils.GenerateAlias(20),
 	}
 
 	t.WithNewStep("Создание коллекции", func(sCtx provider.StepCtx) {
@@ -141,14 +141,12 @@ func (s *UpdateCollectionSuite) TestUpdateCollection(t provider.T) {
 		}
 
 		deleteResp := s.capService.DeleteCapCategory(sCtx, deleteReq)
-		sCtx.Assert().Equal(http.StatusNoContent, deleteResp.StatusCode, "Коллекция успешно удалена")
-	})
+		sCtx.Assert().Equal(http.StatusNoContent, deleteResp.StatusCode, "Категория успешно удалена")
 
-	t.WithNewStep("Проверка удаления коллекции в БД", func(sCtx provider.StepCtx) {
 		collectionFromDB := s.collectionRepo.GetCategory(sCtx, map[string]interface{}{
 			"uuid": collectionID,
 		})
-		sCtx.Assert().Nil(collectionFromDB, "Коллекция удалена из БД")
+		sCtx.Assert().Nil(collectionFromDB, "Категория удалена из БД")
 	})
 }
 

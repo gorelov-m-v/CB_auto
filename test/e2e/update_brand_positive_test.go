@@ -52,8 +52,8 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithRussianName(t provider.T) 
 	}
 
 	t.WithNewStep("Создание тестового бренда", func(sCtx provider.StepCtx) {
-		brandName := fmt.Sprintf("Test Brand %s", utils.GenerateAlias())
-		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
+		brandName := fmt.Sprintf("Test Brand %s", utils.GenerateBrandTitle(20))
+		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias(20))
 		testData.createRequest = &clientTypes.Request[models.CreateCapBrandRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
@@ -73,8 +73,8 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithRussianName(t provider.T) 
 	})
 
 	t.WithNewStep("Обновление бренда с русским названием", func(sCtx provider.StepCtx) {
-		brandName := fmt.Sprintf("Тестовый бренд %s", utils.GenerateAlias())
-		alias := fmt.Sprintf("test-brand-ru-%s", utils.GenerateAlias())
+		brandName := fmt.Sprintf("Тестовый бренд %s", utils.GenerateBrandTitle(20))
+		alias := fmt.Sprintf("test-brand-ru-%s", utils.GenerateAlias(20))
 		testData.updateRequest = &clientTypes.Request[models.UpdateCapBrandRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
@@ -120,8 +120,8 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithEnglishName(t provider.T) 
 	}
 
 	t.WithNewStep("Создание тестового бренда", func(sCtx provider.StepCtx) {
-		brandName := fmt.Sprintf("Test Brand %s", utils.GenerateAlias())
-		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
+		brandName := fmt.Sprintf("Test Brand %s", utils.GenerateBrandTitle(20))
+		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias(20))
 		testData.createRequest = s.createBrandRequest(sCtx, brandName, alias, map[string]string{
 			"en": brandName,
 		})
@@ -132,8 +132,8 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithEnglishName(t provider.T) 
 	})
 
 	t.WithNewStep("Обновление бренда с английским названием", func(sCtx provider.StepCtx) {
-		brandName := fmt.Sprintf("Updated Test Brand %s", utils.GenerateAlias())
-		alias := fmt.Sprintf("test-brand-en-%s", utils.GenerateAlias())
+		brandName := fmt.Sprintf("Updated Test Brand %s", utils.GenerateBrandTitle(20))
+		alias := fmt.Sprintf("test-brand-en-%s", utils.GenerateAlias(20))
 		testData.updateRequest = s.updateBrandRequest(sCtx, testData.createCapBrandResponse.ID, brandName, alias, map[string]string{"en": brandName})
 
 		updateResp := s.capService.UpdateCapBrand(sCtx, testData.updateRequest)
@@ -153,8 +153,8 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMinMaxNames(t provider.T) 
 	}
 
 	t.WithNewStep("Создание тестового бренда", func(sCtx provider.StepCtx) {
-		brandName := fmt.Sprintf("Test Brand %s", utils.GenerateAlias())
-		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
+		brandName := fmt.Sprintf("Test Brand %s", utils.GenerateBrandTitle(20))
+		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias(20))
 		testData.createRequest = s.createBrandRequest(sCtx, brandName, alias, map[string]string{
 			"en": brandName,
 		})
@@ -168,7 +168,7 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMinMaxNames(t provider.T) 
 		timestamp := time.Now().UnixNano()
 		suffix := fmt.Sprintf("%x", timestamp)[:2]
 		minName := fmt.Sprintf("A%s", suffix)
-		minAlias := fmt.Sprintf("min-%s", utils.GenerateAlias())
+		minAlias := fmt.Sprintf("min-%s", utils.GenerateAlias(2))
 
 		testData.updateRequest = s.updateBrandRequest(sCtx, testData.createCapBrandResponse.ID, minName, minAlias, map[string]string{"en": minName})
 
@@ -183,7 +183,7 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMinMaxNames(t provider.T) 
 		if len(maxName) > 100 {
 			maxName = maxName[:100]
 		}
-		maxAlias := fmt.Sprintf("max-%s", utils.GenerateAlias())
+		maxAlias := fmt.Sprintf("max-%s", utils.GenerateAlias(20))
 
 		testData.updateRequest = s.updateBrandRequest(sCtx, testData.createCapBrandResponse.ID, maxName, maxAlias, map[string]string{"en": maxName})
 
@@ -203,8 +203,8 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMultiLanguage(t provider.T
 	}
 
 	t.WithNewStep("Создание тестового бренда", func(sCtx provider.StepCtx) {
-		brandName := fmt.Sprintf("Test Brand %s", utils.GenerateAlias())
-		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
+		brandName := fmt.Sprintf("Test Brand %s", utils.GenerateBrandTitle(20))
+		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias(20))
 		testData.createRequest = s.createBrandRequest(sCtx, brandName, alias, map[string]string{
 			"en": brandName,
 		})
@@ -215,7 +215,7 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMultiLanguage(t provider.T
 	})
 
 	t.WithNewStep("Обновление мультиязычного бренда", func(sCtx provider.StepCtx) {
-		suffix := utils.GenerateAlias()
+		suffix := utils.GenerateAlias(20)
 		alias := fmt.Sprintf("multi-lang-%s", suffix)
 		testData.updateRequest = s.updateBrandRequest(sCtx, testData.createCapBrandResponse.ID, "Multilingual Brand", alias, map[string]string{
 			"en": fmt.Sprintf("Updated Test Brand %s", suffix),
@@ -233,12 +233,12 @@ func (s *UpdateBrandPositiveSuite) TestUpdateBrandWithMultiLanguage(t provider.T
 
 func (s *UpdateBrandPositiveSuite) createBrandRequest(sCtx provider.StepCtx, name, alias string, names map[string]string) *clientTypes.Request[models.CreateCapBrandRequestBody] {
 	if len(alias) < 2 {
-		alias = fmt.Sprintf("%s-%s", alias, utils.GenerateAlias())
+		alias = fmt.Sprintf("%s-%s", alias, utils.GenerateAlias(20))
 	}
 
 	for lang, localName := range names {
 		if len(localName) < 2 {
-			names[lang] = fmt.Sprintf("%s-%s", localName, utils.GenerateAlias())
+			names[lang] = fmt.Sprintf("%s-%s", localName, utils.GenerateAlias(20))
 		}
 	}
 
@@ -258,12 +258,12 @@ func (s *UpdateBrandPositiveSuite) createBrandRequest(sCtx provider.StepCtx, nam
 
 func (s *UpdateBrandPositiveSuite) updateBrandRequest(sCtx provider.StepCtx, id, name, alias string, names map[string]string) *clientTypes.Request[models.UpdateCapBrandRequestBody] {
 	if len(alias) < 2 {
-		alias = fmt.Sprintf("%s-%s", alias, utils.GenerateAlias())
+		alias = fmt.Sprintf("%s-%s", alias, utils.GenerateAlias(20))
 	}
 
 	for lang, localName := range names {
 		if len(localName) < 2 {
-			names[lang] = fmt.Sprintf("%s-%s", localName, utils.GenerateAlias())
+			names[lang] = fmt.Sprintf("%s-%s", localName, utils.GenerateAlias(20))
 		}
 	}
 

@@ -61,8 +61,8 @@ func (s *CreateCollectionSuite) TestCreateCollection(t provider.T) {
 
 	var categoryID string
 	names := map[string]string{
-		"en": utils.Get(utils.CATEGORY_TITLE, 20),
-		"ru": utils.Get(utils.CATEGORY_TITLE, 20),
+		"en": utils.GenerateAlias(20),
+		"ru": utils.GenerateAlias(20),
 	}
 
 	t.WithNewStep("Создание коллекции с русским и английским названием", func(sCtx provider.StepCtx) {

@@ -42,7 +42,7 @@ func (s *BrandStatusSuite) TestBrandStatusManagement(t provider.T) {
 	var brandID string
 
 	t.WithNewStep("Создание тестового бренда", func(sCtx provider.StepCtx) {
-		brandName := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
+		brandName := fmt.Sprintf("test-brand-%s", utils.GenerateBrandTitle(20))
 		createRequest := &types.Request[models.CreateCapBrandRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
