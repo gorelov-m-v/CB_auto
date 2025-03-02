@@ -321,7 +321,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithSpecialCharacters(t provid
 
 	t.WithNewStep("Создание бренда со специальными символами", func(sCtx provider.StepCtx) {
 		brandName := fmt.Sprintf("Test Brand & Special %s", utils.GenerateBrandTitle(20))
-		alias := fmt.Sprintf("test-brand-special-%s", utils.GenerateBrandTitle(20))
+		alias := fmt.Sprintf("test-brand-special-%s", utils.GenerateAlias(20))
 		testData.createRequest = s.createBrandRequest(sCtx, brandName, alias, map[string]string{
 			"en": brandName,
 		})

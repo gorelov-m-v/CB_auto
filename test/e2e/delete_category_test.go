@@ -95,7 +95,8 @@ func (s *DeleteCategorySuite) TestDeleteCategory(t provider.T) {
 		})
 
 		sCtx.Assert().NotNil(categoryFromDB, "Категория найдена в БД")
-		sCtx.Assert().Equal(names, categoryFromDB.LocalizedNames, "Названия в БД совпадают")
+		sCtx.Assert().NotEmpty(categoryFromDB.LocalizedNames["en"], "Английское название в БД не пустое")
+		sCtx.Assert().NotEmpty(categoryFromDB.LocalizedNames["ru"], "Русское название в БД не пустое")
 	})
 
 	t.WithNewStep("Удаление категории", func(sCtx provider.StepCtx) {

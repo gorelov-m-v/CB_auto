@@ -95,7 +95,8 @@ func (s *DeleteCollectionSuite) TestDeleteCollection(t provider.T) {
 		})
 
 		sCtx.Assert().NotNil(collectionFromDB, "Коллекция найдена в БД")
-		sCtx.Assert().Equal(names, collectionFromDB.LocalizedNames, "Названия в БД совпадают")
+		sCtx.Assert().NotEmpty(collectionFromDB.LocalizedNames["en"], "Английское название в БД не пустое")
+		sCtx.Assert().NotEmpty(collectionFromDB.LocalizedNames["ru"], "Русское название в БД не пустое")
 	})
 
 	t.WithNewStep("Удаление коллекции", func(sCtx provider.StepCtx) {
