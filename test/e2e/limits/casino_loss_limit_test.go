@@ -264,6 +264,27 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
 		sCtx.Assert().InDelta(testData.limitMessage.ExpiresAt, limitData.ExpiresAt, 10, "Время окончания лимита")
 		sCtx.Assert().True(limitData.Status, "Лимит активен")
 	})
+
+	t.WithNewStep("Проверка отправки события лимита в Kafka projection source", func(sCtx provider.StepCtx) {
+		projectionMessage := kafka.FindMessageByFilter[kafka.ProjectionSourceMessage](sCtx, s.kafka, func(msg kafka.ProjectionSourceMessage) bool {
+			return msg.Type == "limit_changed_v2" &&
+				msg.PlayerUUID == testData.registrationMessage.Player.ExternalID &&
+				msg.WalletUUID == testData.dbWallet.UUID
+		})
+
+		sCtx.Require().NotEmpty(projectionMessage.Type, "Сообщение limit_changed_v2 найдено в топике projection source")
+		payload, err := projectionMessage.UnmarshalPayload()
+		sCtx.Require().NoError(err, "Payload успешно распакован")
+
+		limit := payload.Limits[0]
+		sCtx.Require().GreaterOrEqual(len(payload.Limits), 1, "В payload есть хотя бы один лимит")
+		sCtx.Assert().Equal("created", payload.EventType, "Тип события в payload корректен")
+		sCtx.Assert().Equal(testData.limitMessage.ID, limit.ExternalID, "ID лимита совпадает")
+		sCtx.Assert().Equal(testData.limitMessage.Amount, limit.Amount, "Сумма лимита совпадает")
+		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, limit.CurrencyCode, "Валюта лимита совпадает")
+		sCtx.Assert().Equal(testData.limitMessage.LimitType, limit.LimitType, "Тип лимита совпадает")
+		sCtx.Assert().True(limit.Status, "Лимит активен")
+	})
 }
 
 func (s *CasinoLossLimitSuite) AfterAll(t provider.T) {
