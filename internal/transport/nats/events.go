@@ -13,6 +13,7 @@ const (
 	BlockersSetted     EventType = "setting_prevent_gamble_setted"
 	BalanceAdjusted    EventType = "balance_adjusted"
 	BlockAmountStarted EventType = "block_amount_started"
+	BlockAmountRevoked EventType = "block_amount_revoked"
 )
 
 const (
@@ -134,4 +135,11 @@ type BlockAmountStartedPayload struct {
 	UserUUID  string `json:"user_uuid"`
 	UserName  string `json:"user_name"`
 	CreatedAt int64  `json:"created_at"`
+}
+
+type BlockAmountRevokedPayload struct {
+	UUID     string `json:"uuid"`
+	UserUUID string `json:"user_uuid"`
+	UserName string `json:"user_name"`
+	NodeUUID string `json:"node_uuid"`
 }
