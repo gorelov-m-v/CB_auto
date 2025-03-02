@@ -25,6 +25,7 @@ type CapAPI interface {
 	CreateBlockAmount(sCtx provider.StepCtx, req *types.Request[models.CreateBlockAmountRequestBody]) *types.Response[models.CreateBlockAmountResponseBody]
 	GetBlockAmountList(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.BlockAmountListResponseBody]
 	GetWalletList(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetWalletListResponseBody]
+	DeleteBlockAmount(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[struct{}]
 
 	UpdateBrandStatus(sCtx provider.StepCtx, req *types.Request[models.UpdateBrandStatusRequestBody]) *types.Response[struct{}]
 	UpdateCapBrand(sCtx provider.StepCtx, req *types.Request[models.UpdateCapBrandRequestBody]) *types.Response[models.UpdateCapBrandResponseBody]
@@ -320,6 +321,23 @@ func (c *capClient) GetWalletList(sCtx provider.StepCtx, req *types.Request[any]
 			StatusCode: http.StatusInternalServerError,
 			Error: &types.ErrorResponse{
 				Body: fmt.Sprintf("GetWalletList failed: %v", err),
+			},
+		}
+	}
+
+	return resp
+}
+
+func (c *capClient) DeleteBlockAmount(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[struct{}] {
+	req.Method = "DELETE"
+	req.Path = "/_cap/api/v1/wallet/delete-amount-block/{block_uuid}"
+	resp, err := httpClient.DoRequest[any, struct{}](sCtx, c.client, req)
+	if err != nil {
+		log.Printf("DeleteBlockAmount failed: %v", err)
+		return &types.Response[struct{}]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("DeleteBlockAmount failed: %v", err),
 			},
 		}
 	}

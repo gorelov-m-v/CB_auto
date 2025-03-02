@@ -72,6 +72,7 @@ const (
 	ProjectionEventBalanceAdjusted    = "balance_adjusted"
 	ProjectionEventLimitChanged       = "limit_changed_v2"
 	ProjectionEventBlockAmountStarted = "block_amount_started"
+	ProjectionEventBlockAmountRevoked = "block_amount_revoked"
 )
 
 const (
@@ -128,6 +129,12 @@ type ProjectionPayloadBlockAmount struct {
 	UserUUID  string `json:"user_uuid"`
 	UserName  string `json:"user_name"`
 	CreatedAt int64  `json:"created_at"`
+}
+
+type ProjectionPayloadBlockAmountRevoked struct {
+	UUID     string `json:"uuid"`
+	NodeUUID string `json:"node_uuid"`
+	Amount   string `json:"amount"`
 }
 
 func (m *ProjectionSourceMessage) UnmarshalPayloadTo(payload interface{}) error {
