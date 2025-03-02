@@ -177,3 +177,80 @@ type GetLabelResponseBody struct {
 	Titles         []LabelTitle `json:"titles"`
 	Description    string       `json:"description"`
 }
+
+const (
+	// Direction
+	DirectionIncrease = "INCREASE"
+	DirectionDecrease = "DECREASE"
+
+	// Reason
+	ReasonMalfunction        = "MALFUNCTION"
+	ReasonOperationalMistake = "OPERATIONAL_MISTAKE"
+	ReasonBalanceCorrection  = "BALANCE_CORRECTION"
+
+	// OperationType
+	OperationTypeCorrection         = "CORRECTION"
+	OperationTypeDeposit            = "DEPOSIT"
+	OperationTypeWithdrawal         = "WITHDRAWAL"
+	OperationTypeGift               = "GIFT"
+	OperationTypeReferralCommission = "REFERRAL_COMMISSION"
+	OperationTypeCashback           = "CASHBACK"
+	OperationTypeTournamentPrize    = "TOURNAMENT_PRIZE"
+	OperationTypeJackpot            = "JACKPOT"
+)
+
+type CreateBalanceAdjustmentRequestBody struct {
+	Currency      string  `json:"currency"`
+	Amount        float64 `json:"amount"`
+	Reason        string  `json:"reason"`
+	OperationType string  `json:"operationType"`
+	Direction     string  `json:"direction"`
+	Comment       string  `json:"comment"`
+}
+
+type CreateBalanceAdjustmentResponseBody struct{}
+
+type CreateBlockAmountRequestBody struct {
+	Reason   string `json:"reason"`
+	Amount   string `json:"amount"`
+	Currency string `json:"currency"`
+}
+
+type CreateBlockAmountResponseBody struct {
+	TransactionID string `json:"transactionId"`
+	Currency      string `json:"currency"`
+	Amount        string `json:"amount"`
+	Reason        string `json:"reason"`
+	UserID        string `json:"userId"`
+	UserName      string `json:"userName"`
+	CreatedAt     int64  `json:"createdAt"`
+}
+
+type BlockAmountListItem struct {
+	TransactionID string `json:"transactionId"`
+	Currency      string `json:"currency"`
+	Amount        string `json:"amount"`
+	Reason        string `json:"reason"`
+	UserID        string `json:"userId"`
+	UserName      string `json:"userName"`
+	CreatedAt     int64  `json:"createdAt"`
+	WalletID      string `json:"walletId"`
+	PlayerID      string `json:"playerId"`
+}
+
+type BlockAmountListResponseBody struct {
+	Items []BlockAmountListItem `json:"items"`
+}
+
+type GetWalletListWallet struct {
+	Currency            string `json:"currency"`
+	Balance             string `json:"balance"`
+	PaymentBlockAmount  string `json:"paymentBlockAmount"`
+	BlockAmount         string `json:"blockAmount"`
+	ActualBalance       string `json:"actualBalance"`
+	AvailableWithdrawal string `json:"availableWithdrawal"`
+}
+
+type GetWalletListResponseBody struct {
+	Wallets []GetWalletListWallet `json:"wallets"`
+}

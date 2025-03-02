@@ -7,9 +7,12 @@ import (
 type EventType string
 
 const (
-	WalletCreated  EventType = "wallet_created"
-	WalletDisabled EventType = "wallet_disabled"
-	BlockersSetted EventType = "setting_prevent_gamble_setted"
+	// Event Types
+	WalletCreated      EventType = "wallet_created"
+	WalletDisabled     EventType = "wallet_disabled"
+	BlockersSetted     EventType = "setting_prevent_gamble_setted"
+	BalanceAdjusted    EventType = "balance_adjusted"
+	BlockAmountStarted EventType = "block_amount_started"
 )
 
 const (
@@ -108,3 +111,27 @@ const (
 	IntervalTypeWeekly  = "weekly"
 	IntervalTypeMonthly = "monthly"
 )
+
+type BalanceAdjustedPayload struct {
+	Currenc       string `json:"currenc"` // Полный провал. Такая вот опечатка у нас :]
+	UUID          string `json:"uuid"`
+	Amount        string `json:"amount"`
+	OperationType int    `json:"operation_type"`
+	Direction     int    `json:"direction"`
+	Reason        int    `json:"reason"`
+	Comment       string `json:"comment"`
+	UserUUID      string `json:"user_uuid"`
+	UserName      string `json:"user_name"`
+}
+
+type BlockAmountStartedPayload struct {
+	UUID      string `json:"uuid"`
+	Status    int    `json:"status"`
+	Amount    string `json:"amount"`
+	Reason    string `json:"reason"`
+	Type      int    `json:"type"`
+	ExpiredAt int64  `json:"expired_at"`
+	UserUUID  string `json:"user_uuid"`
+	UserName  string `json:"user_name"`
+	CreatedAt int64  `json:"created_at"`
+}

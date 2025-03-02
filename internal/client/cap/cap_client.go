@@ -21,6 +21,10 @@ type CapAPI interface {
 	UpdateBlockers(sCtx provider.StepCtx, req *types.Request[models.BlockersRequestBody]) *types.Response[struct{}]
 	GetBlockers(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetBlockersResponseBody]
 	GetPlayerLimits(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetPlayerLimitsResponseBody]
+	CreateBalanceAdjustment(ctx provider.StepCtx, req *types.Request[models.CreateBalanceAdjustmentRequestBody]) *types.Response[models.CreateBalanceAdjustmentResponseBody]
+	CreateBlockAmount(sCtx provider.StepCtx, req *types.Request[models.CreateBlockAmountRequestBody]) *types.Response[models.CreateBlockAmountResponseBody]
+	GetBlockAmountList(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.BlockAmountListResponseBody]
+	GetWalletList(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetWalletListResponseBody]
 
 	UpdateBrandStatus(sCtx provider.StepCtx, req *types.Request[models.UpdateBrandStatusRequestBody]) *types.Response[struct{}]
 	UpdateCapBrand(sCtx provider.StepCtx, req *types.Request[models.UpdateCapBrandRequestBody]) *types.Response[models.UpdateCapBrandResponseBody]
@@ -252,5 +256,73 @@ func (c *capClient) UpdateCapBrandError(sCtx provider.StepCtx, req *types.Reques
 			},
 		}
 	}
+	return resp
+}
+
+func (c *capClient) CreateBalanceAdjustment(sCtx provider.StepCtx, req *types.Request[models.CreateBalanceAdjustmentRequestBody]) *types.Response[models.CreateBalanceAdjustmentResponseBody] {
+	req.Method = "POST"
+	req.Path = "/_cap/api/v1/wallet/{player_uuid}/create-balance-adjustment"
+	resp, err := httpClient.DoRequest[models.CreateBalanceAdjustmentRequestBody, models.CreateBalanceAdjustmentResponseBody](sCtx, c.client, req)
+	if err != nil {
+		log.Printf("CreateBalanceAdjustment failed: %v", err)
+		return &types.Response[models.CreateBalanceAdjustmentResponseBody]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("CreateBalanceAdjustment failed: %v", err),
+			},
+		}
+	}
+
+	return resp
+}
+
+func (c *capClient) CreateBlockAmount(sCtx provider.StepCtx, req *types.Request[models.CreateBlockAmountRequestBody]) *types.Response[models.CreateBlockAmountResponseBody] {
+	req.Method = "POST"
+	req.Path = "/_cap/api/v1/wallet/{player_uuid}/create-block-amount"
+	resp, err := httpClient.DoRequest[models.CreateBlockAmountRequestBody, models.CreateBlockAmountResponseBody](sCtx, c.client, req)
+	if err != nil {
+		log.Printf("CreateBlockAmount failed: %v", err)
+		return &types.Response[models.CreateBlockAmountResponseBody]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("CreateBlockAmount failed: %v", err),
+			},
+		}
+	}
+
+	return resp
+}
+
+func (c *capClient) GetBlockAmountList(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.BlockAmountListResponseBody] {
+	req.Method = "GET"
+	req.Path = "/_cap/api/v1/wallet/{player_uuid}/block-amount-list"
+	resp, err := httpClient.DoRequest[any, models.BlockAmountListResponseBody](sCtx, c.client, req)
+	if err != nil {
+		log.Printf("GetBlockAmountList failed: %v", err)
+		return &types.Response[models.BlockAmountListResponseBody]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("GetBlockAmountList failed: %v", err),
+			},
+		}
+	}
+
+	return resp
+}
+
+func (c *capClient) GetWalletList(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetWalletListResponseBody] {
+	req.Method = "GET"
+	req.Path = "/_cap/api/v2/wallet/{player_uuid}/list"
+	resp, err := httpClient.DoRequest[any, models.GetWalletListResponseBody](sCtx, c.client, req)
+	if err != nil {
+		log.Printf("GetWalletList failed: %v", err)
+		return &types.Response[models.GetWalletListResponseBody]{
+			StatusCode: http.StatusInternalServerError,
+			Error: &types.ErrorResponse{
+				Body: fmt.Sprintf("GetWalletList failed: %v", err),
+			},
+		}
+	}
+
 	return resp
 }
