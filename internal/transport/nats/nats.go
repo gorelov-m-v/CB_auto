@@ -167,8 +167,10 @@ func (n *NatsClient) Close() {
 
 	n.subsMutex.Lock()
 	for _, sub := range n.subs {
-		if err := sub.Unsubscribe(); err != nil {
-			log.Printf("Ошибка при отписке от NATS: %v", err)
+		if sub != nil {
+			if err := sub.Unsubscribe(); err != nil {
+				log.Printf("Ошибка при отписке от NATS: %v", err)
+			}
 		}
 	}
 	n.subsMutex.Unlock()
