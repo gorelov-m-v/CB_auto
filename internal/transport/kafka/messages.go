@@ -68,6 +68,17 @@ const (
 	IntervalTypeMonthly = "monthly"
 )
 
+const (
+	ProjectionEventBalanceAdjusted    = "balance_adjusted"
+	ProjectionEventLimitChanged       = "limit_changed_v2"
+	ProjectionEventBlockAmountStarted = "block_amount_started"
+	ProjectionEventBlockAmountRevoked = "block_amount_revoked"
+)
+
+const (
+	PlayerEventSignUpFast = "player.signUpFast"
+)
+
 type ProjectionSourceMessage struct {
 	Type              string `json:"type"`
 	SeqNumber         int64  `json:"seq_number"`
@@ -80,7 +91,7 @@ type ProjectionSourceMessage struct {
 	SeqNumberNodeUUID string `json:"seq_number_node_uuid"`
 }
 
-type ProjectionPayload struct {
+type ProjectionPayloadLimits struct {
 	EventType string            `json:"event_type"`
 	Limits    []ProjectionLimit `json:"limits"`
 }
@@ -96,8 +107,36 @@ type ProjectionLimit struct {
 	Status       bool   `json:"status"`
 }
 
-func (m *ProjectionSourceMessage) UnmarshalPayload() (*ProjectionPayload, error) {
-	var payload ProjectionPayload
-	err := json.Unmarshal([]byte(m.Payload), &payload)
-	return &payload, err
+type ProjectionPayloadAdjustment struct {
+	Amount        string `json:"amount"`
+	Comment       string `json:"comment"`
+	Currenc       string `json:"currenc"`
+	Direction     int    `json:"direction"`
+	OperationType int    `json:"operation_type"`
+	Reason        int    `json:"reason"`
+	UserName      string `json:"user_name"`
+	UserUUID      string `json:"user_uuid"`
+	UUID          string `json:"uuid"`
+}
+
+type ProjectionPayloadBlockAmount struct {
+	UUID      string `json:"uuid"`
+	Status    int    `json:"status"`
+	Amount    string `json:"amount"`
+	Reason    string `json:"reason"`
+	Type      int    `json:"type"`
+	ExpiredAt int64  `json:"expired_at"`
+	UserUUID  string `json:"user_uuid"`
+	UserName  string `json:"user_name"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+type ProjectionPayloadBlockAmountRevoked struct {
+	UUID     string `json:"uuid"`
+	NodeUUID string `json:"node_uuid"`
+	Amount   string `json:"amount"`
+}
+
+func (m *ProjectionSourceMessage) UnmarshalPayloadTo(payload interface{}) error {
+	return json.Unmarshal([]byte(m.Payload), payload)
 }
