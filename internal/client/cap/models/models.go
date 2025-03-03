@@ -1,9 +1,49 @@
 package models
 
+type StatusType int
+type LimitPeriodType string
+type LimitType string
+type DirectionType string
+type ReasonType string
+type OperationType string
+
 const (
-	StatusEnabled  = 1
-	StatusDisabled = 2
-	StatusDeleted  = 3
+	// DefaultLocale определяет язык по умолчанию
+	DefaultLocale = "en"
+
+	// StatusType определяет типы статусов
+	StatusEnabled  StatusType = 1
+	StatusDisabled StatusType = 2
+	StatusDeleted  StatusType = 3
+
+	// LimitPeriodType определяет периоды лимитов
+	LimitPeriodDaily   LimitPeriodType = "Daily"
+	LimitPeriodWeekly  LimitPeriodType = "Weekly"
+	LimitPeriodMonthly LimitPeriodType = "Monthly"
+
+	// LimitType определяет типы лимитов
+	LimitTypeSingleBet  LimitType = "Single bet"
+	LimitTypeTurnover   LimitType = "Turnover of funds"
+	LimitTypeCasinoLoss LimitType = "Casino loss"
+
+	// DirectionType определяет направление корректировок баланса
+	DirectionIncrease DirectionType = "INCREASE"
+	DirectionDecrease DirectionType = "DECREASE"
+
+	// ReasonType определяет причины операций
+	ReasonMalfunction        ReasonType = "MALFUNCTION"
+	ReasonOperationalMistake ReasonType = "OPERATIONAL_MISTAKE"
+	ReasonBalanceCorrection  ReasonType = "BALANCE_CORRECTION"
+
+	// OperationType определяет типы операций
+	OperationTypeCorrection         OperationType = "CORRECTION"
+	OperationTypeDeposit            OperationType = "DEPOSIT"
+	OperationTypeWithdrawal         OperationType = "WITHDRAWAL"
+	OperationTypeGift               OperationType = "GIFT"
+	OperationTypeReferralCommission OperationType = "REFERRAL_COMMISSION"
+	OperationTypeCashback           OperationType = "CASHBACK"
+	OperationTypeTournamentPrize    OperationType = "TOURNAMENT_PRIZE"
+	OperationTypeJackpot            OperationType = "JACKPOT"
 )
 
 type AdminCheckRequestBody struct {
@@ -43,7 +83,7 @@ type GetCapBrandResponseBody struct {
 	Alias       string            `json:"alias"`
 	Description string            `json:"description"`
 	GameIDs     []string          `json:"gameIds"`
-	Status      int               `json:"status"`
+	Status      StatusType        `json:"status"`
 	Sort        int               `json:"sort"`
 	NodeID      string            `json:"nodeId"`
 	CreatedAt   int64             `json:"createdAt"`
@@ -66,7 +106,7 @@ type GetBlockersResponseBody struct {
 }
 
 type UpdateBrandStatusRequestBody struct {
-	Status int `json:"status"`
+	Status StatusType `json:"status"`
 }
 
 type UpdateCapBrandRequestBody struct {
@@ -90,28 +130,22 @@ type BrandEvent struct {
 	} `json:"brand"`
 }
 
-const (
-	LimitTypeSingleBet  = "Single bet"
-	LimitTypeTurnover   = "Turnover of funds"
-	LimitTypeCasinoLoss = "Casino loss"
-)
-
 type GetPlayerLimitsResponseBody struct {
 	Data  []PlayerLimit `json:"data"`
 	Total int           `json:"total"`
 }
 
 type PlayerLimit struct {
-	Type          string `json:"type"`
-	Status        bool   `json:"status"`
-	Period        string `json:"period"`
-	Currency      string `json:"currency"`
-	Amount        string `json:"amount"`
-	Rest          string `json:"rest,omitempty"`
-	CreatedAt     int64  `json:"createdAt"`
-	DeactivatedAt int64  `json:"deactivatedAt,omitempty"`
-	StartedAt     int64  `json:"startedAt"`
-	ExpiresAt     int64  `json:"expiresAt,omitempty"`
+	Type          LimitType       `json:"type"`
+	Status        bool            `json:"status"`
+	Period        LimitPeriodType `json:"period"`
+	Currency      string          `json:"currency"`
+	Amount        string          `json:"amount"`
+	Rest          string          `json:"rest,omitempty"`
+	CreatedAt     int64           `json:"createdAt"`
+	DeactivatedAt int64           `json:"deactivatedAt,omitempty"`
+	StartedAt     int64           `json:"startedAt"`
+	ExpiresAt     int64           `json:"expiresAt,omitempty"`
 }
 
 type CreateCapCategoryRequestBody struct {
@@ -143,7 +177,7 @@ type GetCapCategoryResponseBody struct {
 	ProjectId  string            `json:"projectId"`
 	GroupID    string            `json:"groupId"`
 	GamesCount int               `json:"gamesCount"`
-	Status     int               `json:"status"`
+	Status     StatusType        `json:"status"`
 	Sort       int               `json:"sort"`
 	IsDefault  bool              `json:"isDefault"`
 	Type       string            `json:"type"`
@@ -178,34 +212,13 @@ type GetLabelResponseBody struct {
 	Description    string       `json:"description"`
 }
 
-const (
-	// Direction
-	DirectionIncrease = "INCREASE"
-	DirectionDecrease = "DECREASE"
-
-	// Reason
-	ReasonMalfunction        = "MALFUNCTION"
-	ReasonOperationalMistake = "OPERATIONAL_MISTAKE"
-	ReasonBalanceCorrection  = "BALANCE_CORRECTION"
-
-	// OperationType
-	OperationTypeCorrection         = "CORRECTION"
-	OperationTypeDeposit            = "DEPOSIT"
-	OperationTypeWithdrawal         = "WITHDRAWAL"
-	OperationTypeGift               = "GIFT"
-	OperationTypeReferralCommission = "REFERRAL_COMMISSION"
-	OperationTypeCashback           = "CASHBACK"
-	OperationTypeTournamentPrize    = "TOURNAMENT_PRIZE"
-	OperationTypeJackpot            = "JACKPOT"
-)
-
 type CreateBalanceAdjustmentRequestBody struct {
-	Currency      string  `json:"currency"`
-	Amount        float64 `json:"amount"`
-	Reason        string  `json:"reason"`
-	OperationType string  `json:"operationType"`
-	Direction     string  `json:"direction"`
-	Comment       string  `json:"comment"`
+	Currency      string        `json:"currency"`
+	Amount        float64       `json:"amount"`
+	Reason        ReasonType    `json:"reason"`
+	OperationType OperationType `json:"operationType"`
+	Direction     DirectionType `json:"direction"`
+	Comment       string        `json:"comment"`
 }
 
 type CreateBalanceAdjustmentResponseBody struct{}

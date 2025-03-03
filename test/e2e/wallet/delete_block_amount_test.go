@@ -59,9 +59,7 @@ func (s *DeleteBlockAmountSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Соединение с базой данных", func(sCtx provider.StepCtx) {
-		connector := repository.OpenConnector(t, &s.config.MySQL, repository.Wallet)
-		s.database = &connector
-		s.walletRepo = wallet.NewRepository(s.database.DB(), &s.config.MySQL)
+		s.walletRepo = wallet.NewRepository(repository.OpenConnector(t, &s.config.MySQL, repository.Wallet).DB(), &s.config.MySQL)
 	})
 }
 

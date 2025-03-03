@@ -25,6 +25,8 @@ type PublicAPI interface {
 	GetRestriction(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.SetRestrictionResponseBody]
 	GetCasinoLossLimits(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetCasinoLossLimitsResponseBody]
 	SetTurnoverLimit(sCtx provider.StepCtx, req *types.Request[models.SetTurnoverLimitRequestBody]) *types.Response[struct{}]
+	CreateDeposit(sCtx provider.StepCtx, req *types.Request[models.DepositRequestBody]) *types.Response[struct{}]
+	UpdatePlayer(sCtx provider.StepCtx, req *types.Request[models.UpdatePlayerRequestBody]) *types.Response[models.UpdatePlayerResponseBody]
 }
 
 type publicClient struct {
@@ -185,6 +187,28 @@ func (c *publicClient) SetTurnoverLimit(sCtx provider.StepCtx, req *types.Reques
 	resp, err := httpClient.DoRequest[models.SetTurnoverLimitRequestBody, struct{}](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("SetTurnoverLimit failed: %v", err)
+	}
+
+	return resp
+}
+
+func (c *publicClient) CreateDeposit(sCtx provider.StepCtx, req *types.Request[models.DepositRequestBody]) *types.Response[struct{}] {
+	req.Method = "POST"
+	req.Path = "/_front_api/api/v2/payment/deposit"
+	resp, err := httpClient.DoRequest[models.DepositRequestBody, struct{}](sCtx, c.client, req)
+	if err != nil {
+		log.Printf("CreateDeposit failed: %v", err)
+	}
+
+	return resp
+}
+
+func (c *publicClient) UpdatePlayer(sCtx provider.StepCtx, req *types.Request[models.UpdatePlayerRequestBody]) *types.Response[models.UpdatePlayerResponseBody] {
+	req.Method = "PUT"
+	req.Path = "/_front_api/api/v1/player"
+	resp, err := httpClient.DoRequest[models.UpdatePlayerRequestBody, models.UpdatePlayerResponseBody](sCtx, c.client, req)
+	if err != nil {
+		log.Printf("UpdatePlayer failed: %v", err)
 	}
 
 	return resp

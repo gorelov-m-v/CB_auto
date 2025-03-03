@@ -100,7 +100,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 
 	t.WithNewStep("Проверка Kafka-сообщения о регистрации игрока", func(sCtx provider.StepCtx) {
 		testData.registrationMessage = kafka.FindMessageByFilter[kafka.PlayerMessage](sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
-			return msg.Message.EventType == "player.signUpFast" &&
+			return msg.Message.EventType == kafka.PlayerEventSignUpFast &&
 				msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
 
@@ -112,7 +112,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 			"player_uuid": testData.registrationMessage.Player.ExternalID,
 			"is_default":  true,
 			"is_basic":    true,
-			"wallet_type": 1,
+			"wallet_type": wallet.WalletTypeReal,
 			"currency":    testData.registrationMessage.Player.Currency,
 		}
 
@@ -212,7 +212,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capClient.GetToken(sCtx)),
 				"Platform-NodeId": s.config.Node.ProjectID,
-				"Platform-Locale": "en",
+				"Platform-Locale": capModels.DefaultLocale,
 			},
 			PathParams: map[string]string{
 				"playerID": testData.registrationMessage.Player.ExternalID,
