@@ -154,6 +154,5 @@ func (s *UpdateCategorySuite) TestUpdateCategory(t provider.T) {
 }
 
 func TestUpdateCategorySuite(t *testing.T) {
-	t.Parallel()
 	suite.RunSuite(t, new(UpdateCategorySuite))
 }

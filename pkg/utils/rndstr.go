@@ -90,7 +90,7 @@ func Get(config string, length int) string {
 	case BRAND_TITLE:
 		return generateRandomString(length, latinChars+digits)
 	case ALIAS:
-		return generateAlias(length)
+		return GenerateAlias(length)
 	case CATEGORY_TITLE:
 		return generateCategoryTitle(length)
 	default:
@@ -250,21 +250,27 @@ func generateAlias(length int) string {
 	if length <= 0 {
 		return ""
 	}
+
 	allowed := "abcdefghijklmnopqrstuvwxyz0123456789-"
-	allowedNoHyphen := "abcdefghijklmnopqrstuvwxyz0123456789"
 	var sb strings.Builder
 	var last byte
-	for i := 0; i < length; i++ {
-		var choices string
-		if i > 0 && last == '-' {
-			choices = allowedNoHyphen
+
+	ch := allowed[rand.Intn(len(allowed))]
+	sb.WriteByte(ch)
+	last = ch
+
+	for i := 1; i < length; i++ {
+		if last == '-' {
+			ch := allowed[:len(allowed)-1][rand.Intn(len(allowed)-1)]
+			sb.WriteByte(ch)
+			last = ch
 		} else {
-			choices = allowed
+			ch := allowed[rand.Intn(len(allowed))]
+			sb.WriteByte(ch)
+			last = ch
 		}
-		ch := choices[rand.Intn(len(choices))]
-		sb.WriteByte(ch)
-		last = ch
 	}
+
 	return sb.String()
 }
 
