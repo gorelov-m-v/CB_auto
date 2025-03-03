@@ -1,9 +1,24 @@
 package models
 
 const (
-	StatusEnabled  = 1
 	StatusDisabled = 2
+	StatusEnabled  = 1
 	StatusDeleted  = 3
+
+	CategoryStatusDeleted = 2
+
+	TypeVertical   = "vertical"
+	TypeHorizontal = "horizontal"
+	TypeAllGames   = "allGames"
+)
+
+const (
+	defaultSort      = 1
+	updatedSort      = 2
+	defaultStatus    = 2
+	deleteRetryCount = 3
+	categoryAliasLen = 10
+	categoryNameLen  = 20
 )
 
 type AdminCheckRequestBody struct {
@@ -115,11 +130,12 @@ type PlayerLimit struct {
 }
 
 type CreateCapCategoryRequestBody struct {
-	Sort    int               `json:"sort"`
-	Alias   string            `json:"alias"`
-	Names   map[string]string `json:"names"`
-	Type    string            `json:"type"`
-	GroupID string            `json:"groupId"`
+	Sort      int               `json:"sort"`
+	Alias     string            `json:"alias"`
+	Names     map[string]string `json:"names"`
+	Type      string            `json:"type"`
+	GroupID   string            `json:"groupId"`
+	ProjectID string            `json:"projectId"`
 }
 
 type CreateCapCategoryResponseBody struct {
@@ -178,6 +194,18 @@ type GetLabelResponseBody struct {
 	Description    string       `json:"description"`
 }
 
+<<<<<<< HEAD
+type UpdateCapCategoryRequestBody struct {
+	Alias string            `json:"alias"`
+	Names map[string]string `json:"names"`
+	Sort  int               `json:"sort"`
+	Type  string            `json:"type"`
+}
+
+type UpdateCapCategoryResponseBody struct {
+	ID    string `json:"id"`
+	Alias string `json:"alias"`
+=======
 const (
 	// Direction
 	DirectionIncrease = "INCREASE"
@@ -253,4 +281,5 @@ type GetWalletListWallet struct {
 
 type GetWalletListResponseBody struct {
 	Wallets []GetWalletListWallet `json:"wallets"`
+>>>>>>> master
 }

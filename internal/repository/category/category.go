@@ -16,7 +16,7 @@ import (
 )
 
 type Category struct {
-	ID               int               `db:"id"`
+	ID               int64             `db:"id"`
 	Alias            string            `db:"alias"`
 	CreatedAt        int64             `db:"created_at"`
 	UpdatedAt        int64             `db:"updated_at"`
@@ -93,6 +93,10 @@ func (r *Repository) GetCategory(sCtx provider.StepCtx, filters map[string]inter
 		return r.db.QueryRowContext(ctx, query, args...).Scan(
 			&category.ID,
 			&category.Alias,
+			&category.CreatedAt,
+			&category.UpdatedAt,
+			&category.UUID,
+			&category.ProjectGroupUUID,
 			&category.ProjectUUID,
 			&category.StatusID,
 			&category.Sort,

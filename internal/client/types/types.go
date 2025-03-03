@@ -26,7 +26,9 @@ type Response[V any] struct {
 }
 
 type ErrorResponse struct {
-	Body string `json:"body"`
+	Body    string              `json:"body"`
+	Message string              `json:"message"`
+	Errors  map[string][]string `json:"errors"`
 }
 
 type ClientType string
