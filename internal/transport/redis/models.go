@@ -1,6 +1,20 @@
 package redis
 
+type LimitPeriodType string
+type LimitType string
 type WalletsMap map[string]WalletData
+
+const (
+	// LimitPeriodType определяет типы периодов для лимитов
+	LimitPeriodDaily   LimitPeriodType = "daily"
+	LimitPeriodWeekly  LimitPeriodType = "weekly"
+	LimitPeriodMonthly LimitPeriodType = "monthly"
+
+	// LimitType определяет типы лимитов
+	LimitTypeSingleBet     LimitType = "single-bet"
+	LimitTypeCasinoLoss    LimitType = "casino-loss"
+	LimitTypeTurnoverFunds LimitType = "turnover-of-funds"
+)
 
 type WalletData struct {
 	WalletUUID string `json:"wallet_uuid"`
@@ -59,16 +73,16 @@ type BonusInfo struct {
 }
 
 type LimitData struct {
-	ExternalID   string `json:"ExternalID"`
-	LimitType    string `json:"LimitType"`
-	IntervalType string `json:"IntervalType"`
-	Amount       string `json:"Amount"`
-	Spent        string `json:"Spent"`
-	Rest         string `json:"Rest"`
-	CurrencyCode string `json:"CurrencyCode"`
-	StartedAt    int64  `json:"StartedAt"`
-	ExpiresAt    int64  `json:"ExpiresAt"`
-	Status       bool   `json:"Status"`
+	ExternalID   string          `json:"ExternalID"`
+	LimitType    LimitType       `json:"LimitType"`
+	IntervalType LimitPeriodType `json:"IntervalType"`
+	Amount       string          `json:"Amount"`
+	Spent        string          `json:"Spent"`
+	Rest         string          `json:"Rest"`
+	CurrencyCode string          `json:"CurrencyCode"`
+	StartedAt    int64           `json:"StartedAt"`
+	ExpiresAt    int64           `json:"ExpiresAt"`
+	Status       bool            `json:"Status"`
 }
 
 type BlockedAmount struct {

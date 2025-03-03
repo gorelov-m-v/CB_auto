@@ -55,9 +55,7 @@ func (s *CasinoLossLimitSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Соединение с базой данных wallet.", func(sCtx provider.StepCtx) {
-		connector := repository.OpenConnector(t, &s.config.MySQL, repository.Wallet)
-		s.database = &connector
-		s.walletRepo = wallet.NewRepository(s.database.DB(), &s.config.MySQL)
+		s.walletRepo = wallet.NewRepository(repository.OpenConnector(t, &s.config.MySQL, repository.Wallet).DB(), &s.config.MySQL)
 	})
 
 	t.WithNewStep("Инициализация Redis клиента", func(sCtx provider.StepCtx) {
@@ -102,7 +100,7 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
 
 	t.WithNewStep("Проверка сообщения в Kafka о регистрации игрока", func(sCtx provider.StepCtx) {
 		testData.registrationMessage = kafka.FindMessageByFilter[kafka.PlayerMessage](sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
-			return msg.Message.EventType == "player.signUpFast" &&
+			return msg.Message.EventType == kafka.PlayerEventSignUpFast &&
 				msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
 
@@ -114,7 +112,7 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
 			"player_uuid": testData.registrationMessage.Player.ExternalID,
 			"is_default":  true,
 			"is_basic":    true,
-			"wallet_type": 1,
+			"wallet_type": wallet.WalletTypeReal,
 			"currency":    testData.registrationMessage.Player.Currency,
 		}
 
@@ -144,7 +142,7 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
 			Body: &publicModels.SetCasinoLossLimitRequestBody{
 				Amount:    "100",
 				Currency:  s.config.Node.DefaultCurrency,
-				Type:      "daily",
+				Type:      publicModels.LimitPeriodDaily,
 				StartedAt: time.Now().Unix(),
 			},
 		}
@@ -198,7 +196,7 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capClient.GetToken(sCtx)),
 				"Platform-NodeId": s.config.Node.ProjectID,
-				"Platform-Locale": "en",
+				"Platform-Locale": capModels.DefaultLocale,
 			},
 			PathParams: map[string]string{
 				"playerID": testData.registrationMessage.Player.ExternalID,
@@ -213,7 +211,7 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
 		singleBetLimit := playerLimitsResponse.Body.Data[0]
 		sCtx.Assert().Equal(capModels.LimitTypeCasinoLoss, singleBetLimit.Type)
 		sCtx.Assert().True(singleBetLimit.Status)
-		sCtx.Assert().Equal("Daily", singleBetLimit.Period)
+		sCtx.Assert().Equal(capModels.LimitPeriodDaily, singleBetLimit.Period)
 		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, singleBetLimit.Currency)
 		sCtx.Assert().Equal(testData.limitMessage.Amount, singleBetLimit.Rest)
 		sCtx.Assert().Equal(testData.limitMessage.Amount, singleBetLimit.Amount)
@@ -257,8 +255,8 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
 		limitData := redisValue.Limits[0]
 
 		sCtx.Assert().Equal(testData.limitMessage.ID, limitData.ExternalID, "ID лимита совпадает")
-		sCtx.Assert().Equal("casino-loss", limitData.LimitType, "Тип лимита совпадает")
-		sCtx.Assert().Equal("daily", limitData.IntervalType, "Интервал лимита совпадает")
+		sCtx.Assert().Equal(redis.LimitTypeSingleBet, limitData.LimitType, "Тип лимита совпадает")
+		sCtx.Assert().Equal(redis.LimitPeriodDaily, limitData.IntervalType, "Интервал лимита совпадает")
 		sCtx.Assert().Equal(testData.limitMessage.Amount, limitData.Amount, "Сумма лимита совпадает")
 		sCtx.Assert().Equal("0", limitData.Spent, "Потраченная сумма равна 0")
 		sCtx.Assert().Equal(testData.limitMessage.Amount, limitData.Rest, "Остаток равен сумме лимита")

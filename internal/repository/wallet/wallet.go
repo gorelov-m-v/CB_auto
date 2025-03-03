@@ -16,6 +16,14 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+type WalletType int
+
+const (
+	// WalletType определяет типы кошельков
+	WalletTypeReal  WalletType = 1
+	WalletTypeBonus WalletType = 2
+)
+
 type Wallet struct {
 	UUID                string          `db:"uuid"`
 	PlayerUUID          string          `db:"player_uuid"`
@@ -27,7 +35,7 @@ type Wallet struct {
 	IsDefault           bool            `db:"is_default"`
 	IsBasic             bool            `db:"is_basic"`
 	IsBlocked           bool            `db:"is_blocked"`
-	WalletType          int             `db:"wallet_type"`
+	WalletType          WalletType      `db:"wallet_type"`
 	Seq                 int             `db:"seq"`
 	IsGamblingActive    bool            `db:"is_gambling_active"`
 	IsBettingActive     bool            `db:"is_betting_active"`
