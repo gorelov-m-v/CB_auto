@@ -1,6 +1,3 @@
-//go:build limits
-// +build limits
-
 package test
 
 import (
@@ -220,19 +217,19 @@ func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capClient.GetToken(sCtx)),
 				"Platform-NodeId": s.config.Node.ProjectID,
-				"Platform-Locale": capModels.DefaultLocale,
+				"Platform-Locale": capModels.LocaleEn,
 			},
 			PathParams: map[string]string{
 				"playerID": testData.registrationMessage.Player.ExternalID,
 			},
 		}
 
-		playerLimitsResponse := s.capClient.GetPlayerLimits(sCtx, req)
+		resp := s.capClient.GetPlayerLimits(sCtx, req)
 
-		sCtx.Assert().Equal(http.StatusOK, playerLimitsResponse.StatusCode, "Список лимитов получен")
-		sCtx.Assert().Equal(1, playerLimitsResponse.Body.Total, "Количество лимитов корректно")
+		sCtx.Assert().Equal(http.StatusOK, resp.StatusCode, "Список лимитов получен")
+		sCtx.Assert().Equal(1, resp.Body.Total, "Количество лимитов корректно")
 
-		turnoverLimit := playerLimitsResponse.Body.Data[0]
+		turnoverLimit := resp.Body.Data[0]
 		sCtx.Assert().Equal(capModels.LimitTypeTurnover, turnoverLimit.Type)
 		sCtx.Assert().True(turnoverLimit.Status)
 		sCtx.Assert().Equal(capModels.LimitPeriodDaily, turnoverLimit.Period)

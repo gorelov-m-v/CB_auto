@@ -2,6 +2,8 @@ package public
 
 import (
 	"log"
+	// "bytes"
+	// "mime/multipart"
 
 	httpClient "CB_auto/internal/client"
 	"CB_auto/internal/client/public/models"
@@ -27,6 +29,7 @@ type PublicAPI interface {
 	SetTurnoverLimit(sCtx provider.StepCtx, req *types.Request[models.SetTurnoverLimitRequestBody]) *types.Response[struct{}]
 	CreateDeposit(sCtx provider.StepCtx, req *types.Request[models.DepositRequestBody]) *types.Response[struct{}]
 	UpdatePlayer(sCtx provider.StepCtx, req *types.Request[models.UpdatePlayerRequestBody]) *types.Response[models.UpdatePlayerResponseBody]
+	VerifyIdentity(sCtx provider.StepCtx, req *types.Request[models.VerifyIdentityRequestBody]) *types.Response[models.VerifyIdentityResponseBody]
 }
 
 type publicClient struct {
@@ -209,6 +212,29 @@ func (c *publicClient) UpdatePlayer(sCtx provider.StepCtx, req *types.Request[mo
 	resp, err := httpClient.DoRequest[models.UpdatePlayerRequestBody, models.UpdatePlayerResponseBody](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("UpdatePlayer failed: %v", err)
+	}
+
+	return resp
+}
+
+func (c *publicClient) VerifyIdentity(sCtx provider.StepCtx, req *types.Request[models.VerifyIdentityRequestBody]) *types.Response[models.VerifyIdentityResponseBody] {
+	req.Method = "POST"
+	req.Path = "/_front_api/api/v1/player/verification/identity"
+
+	req.SetFormField("number", req.Body.Number)
+	req.SetFormField("type", req.Body.Type)
+
+	if req.Body.IssuedDate != "" {
+		req.SetFormField("issuedDate", req.Body.IssuedDate)
+	}
+
+	if req.Body.ExpiryDate != "" {
+		req.SetFormField("expiryDate", req.Body.ExpiryDate)
+	}
+
+	resp, err := httpClient.DoRequest[models.VerifyIdentityRequestBody, models.VerifyIdentityResponseBody](sCtx, c.client, req)
+	if err != nil {
+		log.Printf("VerifyIdentity failed: %v", err)
 	}
 
 	return resp

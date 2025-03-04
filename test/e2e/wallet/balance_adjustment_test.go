@@ -17,6 +17,7 @@ import (
 	"CB_auto/internal/transport/kafka"
 	"CB_auto/internal/transport/nats"
 	"CB_auto/internal/transport/redis"
+	"CB_auto/pkg/mappers"
 	"CB_auto/pkg/utils"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -73,7 +74,7 @@ func (s *BalanceAdjustmentSuite) TestBalanceAdjustment(t provider.T) {
 		registrationResponse  *clientTypes.Response[publicModels.FastRegistrationResponseBody]
 		registrationMessage   kafka.PlayerMessage
 		walletCreatedEvent    *nats.NatsMessage[nats.WalletCreatedPayload]
-		adjustmentRequest     *clientTypes.Request[capModels.CreateBalanceAdjustmentRequestBody] // Добавляем запрос
+		adjustmentRequest     *clientTypes.Request[capModels.CreateBalanceAdjustmentRequestBody]
 		adjustmentResponse    *clientTypes.Response[capModels.CreateBalanceAdjustmentResponseBody]
 		balanceAdjustedEvent  *nats.NatsMessage[nats.BalanceAdjustedPayload]
 		projectionAdjustEvent kafka.ProjectionSourceMessage
@@ -121,7 +122,7 @@ func (s *BalanceAdjustmentSuite) TestBalanceAdjustment(t provider.T) {
 		testData.adjustmentRequest = &clientTypes.Request[capModels.CreateBalanceAdjustmentRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capClient.GetToken(sCtx)),
-				"Platform-Locale": capModels.DefaultLocale,
+				"Platform-Locale": capModels.LocaleEn,
 				"Platform-NodeID": s.config.Node.ProjectID,
 			},
 			PathParams: map[string]string{
@@ -151,14 +152,44 @@ func (s *BalanceAdjustmentSuite) TestBalanceAdjustment(t provider.T) {
 		})
 
 		sCtx.Assert().NotNil(testData.balanceAdjustedEvent, "Событие balance_adjusted получено")
-		sCtx.Assert().Equal("100", testData.balanceAdjustedEvent.Payload.Amount, "Сумма корректировки равна 100")
-		sCtx.Assert().Equal(1, testData.balanceAdjustedEvent.Payload.Direction, "Направление - увеличение (1)")
-		sCtx.Assert().Equal(1, testData.balanceAdjustedEvent.Payload.OperationType, "Тип операции - deposit (1)")
-		sCtx.Assert().Equal(1, testData.balanceAdjustedEvent.Payload.Reason, "Причина - operational mistake (1)")
-		sCtx.Assert().Equal(testData.adjustmentRequest.Body.Comment, testData.balanceAdjustedEvent.Payload.Comment, "Комментарий верный")
-		sCtx.Assert().Equal(s.config.Node.DefaultCurrency, testData.balanceAdjustedEvent.Payload.Currenc, "Валюта верная")
-		sCtx.Assert().NotEmpty(testData.balanceAdjustedEvent.Payload.UserUUID, "UUID пользователя не пустой")
-		sCtx.Assert().Equal(s.config.HTTP.CapUsername, testData.balanceAdjustedEvent.Payload.UserName, "Имя пользователя - admin")
+
+		expectedAmount := testData.adjustmentRequest.Body.Amount
+		actualAmount := mappers.StringToAmount(testData.balanceAdjustedEvent.Payload.Amount)
+		sCtx.Assert().Equal(expectedAmount, actualAmount, "Сумма корректировки совпадает")
+
+		sCtx.Assert().Equal(
+			mappers.MapDirectionToNats(testData.adjustmentRequest.Body.Direction),
+			testData.balanceAdjustedEvent.Payload.Direction,
+			"Направление корректировки совпадает")
+
+		sCtx.Assert().Equal(
+			mappers.MapOperationTypeToNats(testData.adjustmentRequest.Body.OperationType),
+			testData.balanceAdjustedEvent.Payload.OperationType,
+			"Тип операции совпадает")
+
+		sCtx.Assert().Equal(
+			mappers.MapReasonToNats(testData.adjustmentRequest.Body.Reason),
+			testData.balanceAdjustedEvent.Payload.Reason,
+			"Причина корректировки совпадает")
+
+		sCtx.Assert().Equal(
+			testData.adjustmentRequest.Body.Comment,
+			testData.balanceAdjustedEvent.Payload.Comment,
+			"Комментарий совпадает")
+
+		sCtx.Assert().Equal(
+			testData.adjustmentRequest.Body.Currency,
+			testData.balanceAdjustedEvent.Payload.Currenc,
+			"Валюта совпадает")
+
+		sCtx.Assert().NotEmpty(
+			testData.balanceAdjustedEvent.Payload.UserUUID,
+			"UUID пользователя не пустой")
+
+		sCtx.Assert().Equal(
+			s.config.HTTP.CapUsername,
+			testData.balanceAdjustedEvent.Payload.UserName,
+			"Имя пользователя - admin")
 	})
 
 	t.WithNewAsyncStep("Проверка отправки события корректировки баланса в Kafka projection source", func(sCtx provider.StepCtx) {
@@ -178,10 +209,25 @@ func (s *BalanceAdjustmentSuite) TestBalanceAdjustment(t provider.T) {
 		err := testData.projectionAdjustEvent.UnmarshalPayloadTo(&adjustmentPayload)
 		sCtx.Require().NoError(err, "Payload успешно распарсен")
 
-		sCtx.Assert().Equal("100", adjustmentPayload.Amount, "Сумма корректировки равна 100")
-		sCtx.Assert().Equal(1, adjustmentPayload.Direction, "Направление - увеличение (1)")
-		sCtx.Assert().Equal(1, adjustmentPayload.OperationType, "Тип операции - deposit (1)")
-		sCtx.Assert().Equal(1, adjustmentPayload.Reason, "Причина - operational mistake (1)")
+		expectedAmount := testData.adjustmentRequest.Body.Amount
+		actualAmount := mappers.StringToAmount(adjustmentPayload.Amount)
+		sCtx.Assert().Equal(expectedAmount, actualAmount, "Сумма корректировки равна запрошенной")
+
+		sCtx.Assert().Equal(
+			mappers.MapDirectionToNats(testData.adjustmentRequest.Body.Direction),
+			adjustmentPayload.Direction,
+			"Направление корректировки совпадает")
+
+		sCtx.Assert().Equal(
+			mappers.MapOperationTypeToNats(testData.adjustmentRequest.Body.OperationType),
+			adjustmentPayload.OperationType,
+			"Тип операции совпадает")
+
+		sCtx.Assert().Equal(
+			mappers.MapReasonToNats(testData.adjustmentRequest.Body.Reason),
+			adjustmentPayload.Reason,
+			"Причина корректировки совпадает")
+
 		sCtx.Assert().Equal(testData.adjustmentRequest.Body.Comment, adjustmentPayload.Comment, "Комментарий верный")
 		sCtx.Assert().Equal(s.config.Node.DefaultCurrency, adjustmentPayload.Currenc, "Валюта верная")
 		sCtx.Assert().Equal(s.config.HTTP.CapUsername, adjustmentPayload.UserName, "Имя пользователя - admin")
@@ -194,7 +240,9 @@ func (s *BalanceAdjustmentSuite) TestBalanceAdjustment(t provider.T) {
 
 		sCtx.Require().NoError(err, "Значение кошелька получено из Redis")
 
-		sCtx.Assert().Equal(fmt.Sprintf("%.0f", testData.adjustmentRequest.Body.Amount), redisValue.Balance, "Баланс кошелька соответствует сумме корректировки")
+		expectedBalance := fmt.Sprintf("%.0f", testData.adjustmentRequest.Body.Amount)
+		sCtx.Assert().Equal(expectedBalance, redisValue.Balance, "Баланс кошелька соответствует сумме корректировки")
+
 		sCtx.Assert().Equal(int(testData.balanceAdjustedEvent.Sequence), redisValue.LastSeqNumber, "Номер последовательности совпадает")
 	})
 }

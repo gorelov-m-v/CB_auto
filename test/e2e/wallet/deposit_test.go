@@ -176,6 +176,24 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 		sCtx.Require().Equal(http.StatusCreated, resp.StatusCode, "Лимит на оборот средств установлен")
 	})
 
+	t.WithNewStep("Верификация идентичности игрока", func(sCtx provider.StepCtx) {
+		verifyIdentityReq := &clientTypes.Request[publicModels.VerifyIdentityRequestBody]{
+			Headers: map[string]string{
+				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
+			},
+			Body: &publicModels.VerifyIdentityRequestBody{
+				Number:     "305003277",      // Номер документа
+				Type:       "4",              // Тип документа (например, 4 - паспорт)
+				IssuedDate: "1421463275.791", // Дата выдачи в формате timestamp
+				ExpiryDate: "1921463275.791", // Дата истечения в формате timestamp
+			},
+		}
+
+		verifyResponse := s.publicClient.VerifyIdentity(sCtx, verifyIdentityReq)
+
+		sCtx.Require().Equal(http.StatusCreated, verifyResponse.StatusCode, "Идентичность успешно верифицирована")
+	})
+
 	time.Sleep(10 * time.Second)
 
 	t.WithNewStep("Создание депозита", func(sCtx provider.StepCtx) {

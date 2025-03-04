@@ -9,7 +9,7 @@ type OperationType string
 
 const (
 	// DefaultLocale определяет язык по умолчанию
-	DefaultLocale = "en"
+	LocaleEn = "en"
 
 	// StatusType определяет типы статусов
 	StatusEnabled  StatusType = 1
@@ -30,12 +30,12 @@ const (
 	DirectionIncrease DirectionType = "INCREASE"
 	DirectionDecrease DirectionType = "DECREASE"
 
-	// ReasonType определяет причины операций
+	// ReasonType определяет причины корректировок баланса
 	ReasonMalfunction        ReasonType = "MALFUNCTION"
 	ReasonOperationalMistake ReasonType = "OPERATIONAL_MISTAKE"
 	ReasonBalanceCorrection  ReasonType = "BALANCE_CORRECTION"
 
-	// OperationType определяет типы операций
+	// OperationType определяет типы корректировок баланса
 	OperationTypeCorrection         OperationType = "CORRECTION"
 	OperationTypeDeposit            OperationType = "DEPOSIT"
 	OperationTypeWithdrawal         OperationType = "WITHDRAWAL"
