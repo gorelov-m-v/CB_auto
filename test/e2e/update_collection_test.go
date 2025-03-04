@@ -62,13 +62,13 @@ func (s *UpdateCollectionSuite) TestUpdateCollection(t provider.T) {
 	var collectionID string
 	var updateReq *clientTypes.Request[models.UpdateCapCategoryRequestBody]
 	originalNames := map[string]string{
-		"en": utils.GenerateBrandTitle(20),
-		"ru": utils.GenerateBrandTitle(20),
+		"en": utils.Get(utils.COLLECTION_TITLE, 20),
+		"ru": utils.Get(utils.COLLECTION_TITLE, 20),
 	}
 
 	updatedNames := map[string]string{
-		"en": utils.GenerateBrandTitle(20),
-		"ru": utils.GenerateBrandTitle(20),
+		"en": utils.Get(utils.COLLECTION_TITLE, 20),
+		"ru": utils.Get(utils.COLLECTION_TITLE, 20),
 	}
 
 	t.WithNewStep("Создание коллекции", func(sCtx provider.StepCtx) {

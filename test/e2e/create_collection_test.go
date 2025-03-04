@@ -61,12 +61,12 @@ func (s *CreateCollectionSuite) TestCreateCollection(t provider.T) {
 
 	var categoryID string
 	names := map[string]string{
-		"en": utils.GenerateBrandTitle(20),
-		"ru": utils.GenerateBrandTitle(20),
+		"en": utils.Get(utils.COLLECTION_TITLE, 20),
+		"ru": utils.Get(utils.COLLECTION_TITLE, 20),
 	}
 
 	t.WithNewStep("Создание коллекции с русским и английским названием", func(sCtx provider.StepCtx) {
-		categoryAlias := utils.GenerateAlias(10)
+		categoryAlias := utils.Get(utils.ALIAS, 10)
 		req := &clientTypes.Request[models.CreateCapCategoryRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
@@ -84,9 +84,6 @@ func (s *CreateCollectionSuite) TestCreateCollection(t provider.T) {
 		}
 
 		resp := s.capService.CreateCapCategory(sCtx, req)
-		if resp.StatusCode != http.StatusOK {
-			sCtx.Logf("Error response: %+v", resp)
-		}
 		sCtx.Assert().Equal(http.StatusOK, resp.StatusCode, "Коллекция успешно создана")
 		categoryID = resp.Body.ID
 		sCtx.Assert().NotEmpty(categoryID, "ID созданной коллекции не пустой")

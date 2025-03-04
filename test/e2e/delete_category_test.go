@@ -61,8 +61,8 @@ func (s *DeleteCategorySuite) TestDeleteCategory(t provider.T) {
 
 	var categoryID string
 	names := map[string]string{
-		"en": "Test Category",
-		"ru": "Тестовая Категория",
+		"en": utils.Get(utils.CATEGORY_TITLE, 20),
+		"ru": utils.Get(utils.CATEGORY_TITLE, 20),
 	}
 
 	t.WithNewStep("Создание категории", func(sCtx provider.StepCtx) {
@@ -110,13 +110,7 @@ func (s *DeleteCategorySuite) TestDeleteCategory(t provider.T) {
 			},
 		}
 
-		var statusCode int
-		for i := 0; i < 3; i++ {
-			statusCode = s.capService.DeleteCapCategory(sCtx, req).StatusCode
-			if statusCode == http.StatusNoContent {
-				break
-			}
-		}
+		statusCode := s.capService.DeleteCapCategory(sCtx, req).StatusCode
 		sCtx.Assert().Equal(http.StatusNoContent, statusCode, "Категория успешно удалена")
 	})
 

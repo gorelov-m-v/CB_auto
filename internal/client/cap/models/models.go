@@ -194,7 +194,6 @@ type GetLabelResponseBody struct {
 	Description    string       `json:"description"`
 }
 
-<<<<<<< HEAD
 type UpdateCapCategoryRequestBody struct {
 	Alias string            `json:"alias"`
 	Names map[string]string `json:"names"`
@@ -205,7 +204,8 @@ type UpdateCapCategoryRequestBody struct {
 type UpdateCapCategoryResponseBody struct {
 	ID    string `json:"id"`
 	Alias string `json:"alias"`
-=======
+}
+
 const (
 	// Direction
 	DirectionIncrease = "INCREASE"
@@ -216,7 +216,6 @@ const (
 	ReasonOperationalMistake = "OPERATIONAL_MISTAKE"
 	ReasonBalanceCorrection  = "BALANCE_CORRECTION"
 
-	// OperationType
 	OperationTypeCorrection         = "CORRECTION"
 	OperationTypeDeposit            = "DEPOSIT"
 	OperationTypeWithdrawal         = "WITHDRAWAL"
@@ -281,5 +280,4 @@ type GetWalletListWallet struct {
 
 type GetWalletListResponseBody struct {
 	Wallets []GetWalletListWallet `json:"wallets"`
->>>>>>> master
 }

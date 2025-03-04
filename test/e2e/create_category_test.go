@@ -14,6 +14,7 @@ import (
 	"CB_auto/internal/repository/category"
 	"CB_auto/pkg/utils"
 
+	_ "github.com/go-sql-driver/mysql" // Драйвер MySQL
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
 )
@@ -61,8 +62,8 @@ func (s *CreateCategorySuite) TestCreateCategory(t provider.T) {
 
 	var categoryID string
 	names := map[string]string{
-		"en": utils.GenerateBrandTitle(20),
-		"ru": utils.GenerateBrandTitle(20),
+		"en": utils.Get(utils.CATEGORY_TITLE, 20),
+		"ru": utils.Get(utils.CATEGORY_TITLE, 20),
 	}
 
 	t.WithNewStep("Создание категории с русским и английским названием", func(sCtx provider.StepCtx) {
@@ -120,7 +121,7 @@ func (s *CreateCategorySuite) TestCreateCategory(t provider.T) {
 		})
 
 		sCtx.Require().NotNil(category, "Категория найдена в БД")
-		if category != nil {
+		{
 			sCtx.Assert().Equal(models.TypeVertical, category.Type, "Тип категории в БД совпадает")
 			sCtx.Assert().Equal(uint32(1), uint32(category.Sort), "Sort в БД совпадает")
 			sCtx.Assert().Equal(int16(2), int16(category.StatusID), "Status в БД совпадает")
@@ -131,7 +132,6 @@ func (s *CreateCategorySuite) TestCreateCategory(t provider.T) {
 	})
 
 	t.WithNewStep("Удаление тестовой категории", func(sCtx provider.StepCtx) {
-
 		req := &clientTypes.Request[struct{}]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
@@ -142,14 +142,7 @@ func (s *CreateCategorySuite) TestCreateCategory(t provider.T) {
 			},
 		}
 
-		var resp *clientTypes.Response[struct{}]
-		for i := 0; i < 3; i++ {
-			resp = s.capService.DeleteCapCategory(sCtx, req)
-			if resp.StatusCode == http.StatusNoContent {
-				break
-			}
-
-		}
+		resp := s.capService.DeleteCapCategory(sCtx, req)
 		sCtx.Assert().Equal(http.StatusNoContent, resp.StatusCode, "Категория успешно удалена")
 	})
 }

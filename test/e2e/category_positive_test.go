@@ -49,10 +49,10 @@ func (s *CategoryPositiveSuite) TestCategoryFields(t provider.T) {
 		alias    string
 		expected int
 	}{
-		{"Минимальная длина названия", "Ab", utils.GenerateAlias(10), http.StatusOK},
-		{"Максимальная длина названия", utils.GenerateCategoryTitle(25), utils.GenerateAlias(10), http.StatusOK},
-		{"Минимальная длина alias", utils.GenerateCategoryTitle(10), utils.GenerateAlias(2), http.StatusOK},
-		{"Максимальная длина alias", utils.GenerateCategoryTitle(10), utils.GenerateAlias(100), http.StatusOK},
+		{"Минимальная длина названия", "Ab", utils.Get(utils.ALIAS, 10), http.StatusOK},
+		{"Максимальная длина названия", utils.Get(utils.CATEGORY_TITLE, 2), utils.Get(utils.ALIAS, 10), http.StatusOK},
+		{"Минимальная длина alias", utils.Get(utils.CATEGORY_TITLE, 2), utils.Get(utils.ALIAS, 10), http.StatusOK},
+		{"Максимальная длина alias", utils.Get(utils.CATEGORY_TITLE, 2), utils.Get(utils.ALIAS, 10), http.StatusOK},
 	}
 
 	for _, tc := range testCases {

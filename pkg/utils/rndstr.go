@@ -27,6 +27,7 @@ const (
 	BRAND_TITLE       = "brandTitle"
 	ALIAS             = "alias"
 	CATEGORY_TITLE    = "category_title"
+	COLLECTION_TITLE  = "collection_title"
 )
 
 const (
@@ -90,9 +91,11 @@ func Get(config string, length int) string {
 	case BRAND_TITLE:
 		return generateRandomString(length, latinChars+digits)
 	case ALIAS:
-		return GenerateAlias(length)
+		return generateAlias(length)
 	case CATEGORY_TITLE:
 		return generateCategoryTitle(length)
+	case COLLECTION_TITLE:
+		return generateCollectionTitle(length)
 	default:
 		return "Unknown argument to perform random string generation!"
 	}
@@ -283,6 +286,35 @@ func generateRandomString(length int, charSet string) string {
 }
 
 func generateCategoryTitle(length int) string {
+	if length > 25 {
+		length = 25
+	}
+	if length <= 0 {
+		return ""
+	}
+
+	allowed := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" +
+		"0123456789" +
+		"абвгдеёжзийклмнопрстуфхцчшщъыьэюя" +
+		"АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ" +
+		" -")
+
+	result := make([]rune, length)
+	for i := range result {
+		result[i] = allowed[rand.Intn(len(allowed))]
+	}
+
+	if result[0] == ' ' {
+		result[0] = 'A'
+	}
+	if result[length-1] == ' ' {
+		result[length-1] = 'z'
+	}
+
+	return string(result)
+}
+
+func generateCollectionTitle(length int) string {
 	if length > 25 {
 		length = 25
 	}
