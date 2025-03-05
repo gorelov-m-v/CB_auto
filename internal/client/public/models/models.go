@@ -205,3 +205,13 @@ type UpdatePlayerResponseBody struct {
 	ActivitySectorAlias      *string `json:"activitySectorAlias"`
 	ActivitySectorInput      *string `json:"activitySectorInput"`
 }
+
+type VerifyIdentityRequestBody struct {
+	Number     string `json:"number"`
+	Type       string `json:"type"`
+	IssuedDate string `json:"issuedDate,omitempty"`
+	ExpiryDate string `json:"expiryDate,omitempty"`
+}
+
+type VerifyIdentityResponseBody struct {
+}

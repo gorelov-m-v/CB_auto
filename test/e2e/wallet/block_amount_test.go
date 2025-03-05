@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	capAPI "CB_auto/internal/client/cap"
+	"CB_auto/internal/client/cap/models"
 	capModels "CB_auto/internal/client/cap/models"
 	"CB_auto/internal/client/factory"
 	publicAPI "CB_auto/internal/client/public"
@@ -123,9 +124,8 @@ func (s *BlockAmountSuite) TestBlockAmount(t provider.T) {
 		testData.adjustmentRequest = &clientTypes.Request[capModels.CreateBalanceAdjustmentRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capClient.GetToken(sCtx)),
-				"Platform-Locale": "ru",
+				"Platform-Locale": models.LocaleEn,
 				"Platform-NodeID": s.config.Node.ProjectID,
-				"Content-Type":    "application/json",
 			},
 			PathParams: map[string]string{
 				"player_uuid": testData.registrationMessage.Player.ExternalID,
@@ -149,9 +149,8 @@ func (s *BlockAmountSuite) TestBlockAmount(t provider.T) {
 		testData.blockRequest = &clientTypes.Request[capModels.CreateBlockAmountRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capClient.GetToken(sCtx)),
-				"Platform-Locale": "ru",
+				"Platform-Locale": models.LocaleEn,
 				"Platform-NodeID": s.config.Node.ProjectID,
-				"Content-Type":    "application/json",
 			},
 			PathParams: map[string]string{
 				"player_uuid": testData.walletCreatedEvent.Payload.PlayerUUID,
@@ -247,7 +246,7 @@ func (s *BlockAmountSuite) TestBlockAmount(t provider.T) {
 		blockListRequest := &clientTypes.Request[any]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capClient.GetToken(sCtx)),
-				"Platform-Locale": "ru",
+				"Platform-Locale": models.LocaleEn,
 				"Platform-NodeID": s.config.Node.ProjectID,
 			},
 			PathParams: map[string]string{
@@ -269,7 +268,7 @@ func (s *BlockAmountSuite) TestBlockAmount(t provider.T) {
 		walletListRequest := &clientTypes.Request[any]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capClient.GetToken(sCtx)),
-				"Platform-Locale": "ru",
+				"Platform-Locale": models.LocaleEn,
 				"Platform-NodeID": s.config.Node.ProjectID,
 			},
 			PathParams: map[string]string{

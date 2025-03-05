@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
@@ -18,6 +19,95 @@ import (
 	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
+
+func makeRequest[T any](serviceURL string, r *types.Request[T]) (*http.Request, []byte, error) {
+	path := r.Path
+	if len(r.PathParams) > 0 {
+		for key, value := range r.PathParams {
+			placeholder := fmt.Sprintf("{%s}", key)
+			path = strings.ReplaceAll(path, placeholder, url.PathEscape(value))
+		}
+	}
+
+	baseURL, err := url.Parse(serviceURL)
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid base url: %v", err)
+	}
+
+	relURL, err := url.Parse(path)
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid path: %v", err)
+	}
+
+	fullURL := baseURL.ResolveReference(relURL)
+	if len(r.QueryParams) > 0 {
+		query := fullURL.Query()
+		for key, value := range r.QueryParams {
+			query.Set(key, value)
+		}
+		fullURL.RawQuery = query.Encode()
+	}
+
+	var bodyBytes []byte
+	var req *http.Request
+
+	if r.Multipart != nil {
+		body := &bytes.Buffer{}
+		writer := multipart.NewWriter(body)
+
+		for name, value := range r.Multipart.Fields {
+			if err := writer.WriteField(name, value); err != nil {
+				return nil, nil, fmt.Errorf("failed to write field %s: %v", name, err)
+			}
+		}
+
+		for field, file := range r.Multipart.Files {
+			part, err := writer.CreateFormFile(field, file.Filename)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to create form file %s: %v", field, err)
+			}
+			if _, err := part.Write(file.Data); err != nil {
+				return nil, nil, fmt.Errorf("failed to write file data for %s: %v", field, err)
+			}
+		}
+
+		if err := writer.Close(); err != nil {
+			return nil, nil, fmt.Errorf("failed to close multipart writer: %v", err)
+		}
+
+		bodyBytes = body.Bytes()
+		req, err = http.NewRequest(r.Method, fullURL.String(), bytes.NewReader(bodyBytes))
+		if err != nil {
+			return nil, nil, fmt.Errorf("request creation failed: %v", err)
+		}
+
+		req.Header.Set("Content-Type", writer.FormDataContentType())
+	} else {
+		var bodyBuffer io.Reader
+		if r.Body != nil {
+			bodyBytes, err = json.Marshal(r.Body)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to marshal request body: %v", err)
+			}
+			bodyBuffer = bytes.NewBuffer(bodyBytes)
+		}
+
+		req, err = http.NewRequest(r.Method, fullURL.String(), bodyBuffer)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create request: %v", err)
+		}
+
+		if r.Body != nil && req.Header.Get("Content-Type") == "" {
+			req.Header.Set("Content-Type", "application/json")
+		}
+	}
+
+	for key, value := range r.Headers {
+		req.Header.Set(key, value)
+	}
+
+	return req, bodyBytes, nil
+}
 
 func InitClient(t provider.T, cfg *config.Config, clientType types.ClientType) *types.Client {
 	var baseURL string
@@ -46,7 +136,7 @@ func InitClient(t provider.T, cfg *config.Config, clientType types.ClientType) *
 func DoRequest[T any, V any](sCtx provider.StepCtx, c *types.Client, request *types.Request[T]) (*types.Response[V], error) {
 	req, bodyBytes, err := makeRequest(c.ServiceURL, request)
 	if err != nil {
-		return nil, fmt.Errorf("makeRequest failed: %v", err)
+		return nil, fmt.Errorf("request creation failed: %v", err)
 	}
 
 	log.Printf("Request URL: %s, Method: %s, Headers: %+v", req.URL.String(), req.Method, req.Header)
@@ -87,60 +177,4 @@ func DoRequest[T any, V any](sCtx provider.StepCtx, c *types.Client, request *ty
 	sCtx.WithAttachments(allure.NewAttachment("HTTP response", allure.JSON, utils.CreateHttpAttachResponse(response)))
 
 	return response, nil
-}
-
-func makeRequest[T any](serviceURL string, r *types.Request[T]) (*http.Request, []byte, error) {
-	if r.Headers == nil {
-		r.Headers = make(map[string]string)
-	}
-
-	path := r.Path
-	if len(r.PathParams) > 0 {
-		for key, value := range r.PathParams {
-			placeholder := fmt.Sprintf("{%s}", key)
-			path = strings.ReplaceAll(path, placeholder, url.PathEscape(value))
-		}
-	}
-
-	baseURL, err := url.Parse(serviceURL)
-	if err != nil {
-		return nil, nil, fmt.Errorf("invalid base url: %v", err)
-	}
-
-	relURL, err := url.Parse(path)
-	if err != nil {
-		return nil, nil, fmt.Errorf("invalid path: %v", err)
-	}
-
-	fullURL := baseURL.ResolveReference(relURL)
-
-	if len(r.QueryParams) > 0 {
-		query := fullURL.Query()
-		for key, value := range r.QueryParams {
-			query.Set(key, value)
-		}
-		fullURL.RawQuery = query.Encode()
-	}
-
-	var body []byte
-	if r.Body != nil {
-		body, err = json.Marshal(r.Body)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to marshal request body: %v", err)
-		}
-		if _, exists := r.Headers["Content-Type"]; !exists {
-			r.Headers["Content-Type"] = "application/json"
-		}
-	}
-
-	req, err := http.NewRequest(r.Method, fullURL.String(), bytes.NewReader(body))
-	if err != nil {
-		return nil, nil, fmt.Errorf("request creation failed: %v", err)
-	}
-
-	for key, value := range r.Headers {
-		req.Header.Set(key, value)
-	}
-
-	return req, body, nil
 }
