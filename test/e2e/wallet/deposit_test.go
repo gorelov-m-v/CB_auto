@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	capAPI "CB_auto/internal/client/cap"
+	capModels "CB_auto/internal/client/cap/models"
 	"CB_auto/internal/client/factory"
 	publicAPI "CB_auto/internal/client/public"
 	publicModels "CB_auto/internal/client/public/models"
@@ -27,6 +29,7 @@ type SingleBetLimitSuite struct {
 	suite.Suite
 	config       *config.Config
 	publicClient publicAPI.PublicAPI
+	capClient    capAPI.CapAPI
 	kafka        *kafka.Kafka
 	natsClient   *nats.NatsClient
 	walletRepo   *wallet.Repository
@@ -59,6 +62,10 @@ func (s *SingleBetLimitSuite) BeforeAll(t provider.T) {
 	t.WithNewStep("Инициализация Redis клиента", func(sCtx provider.StepCtx) {
 		s.redisClient = redis.NewRedisClient(t, &s.config.Redis, redis.WalletClient)
 	})
+
+	t.WithNewStep("Инициализация CAP API клиента", func(sCtx provider.StepCtx) {
+		s.capClient = factory.InitClient[capAPI.CapAPI](sCtx, s.config, clientTypes.Cap)
+	})
 }
 
 func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
@@ -66,15 +73,16 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 	t.Title("Проверка создания single-bet лимита в Kafka, NATS, Redis, MySQL, Public API, CAP API")
 
 	var testData struct {
-		registrationResponse  *clientTypes.Response[publicModels.FastRegistrationResponseBody]
-		authorizationResponse *clientTypes.Response[publicModels.TokenCheckResponseBody]
-		registrationMessage   kafka.PlayerMessage
-		depositRequest        *clientTypes.Request[publicModels.DepositRequestBody]
-		depositResponse       *clientTypes.Response[struct{}]
-		updatePlayerRequest   *clientTypes.Request[publicModels.UpdatePlayerRequestBody]
-		updatePlayerResponse  *clientTypes.Response[publicModels.UpdatePlayerResponseBody]
-		setSingleBetLimitReq  *clientTypes.Request[publicModels.SetSingleBetLimitRequestBody]
-		setTurnoverLimitReq   *clientTypes.Request[publicModels.SetTurnoverLimitRequestBody]
+		registrationResponse       *clientTypes.Response[publicModels.FastRegistrationResponseBody]
+		authorizationResponse      *clientTypes.Response[publicModels.TokenCheckResponseBody]
+		registrationMessage        kafka.PlayerMessage
+		depositRequest             *clientTypes.Request[publicModels.DepositRequestBody]
+		depositResponse            *clientTypes.Response[struct{}]
+		updatePlayerRequest        *clientTypes.Request[publicModels.UpdatePlayerRequestBody]
+		updatePlayerResponse       *clientTypes.Response[publicModels.UpdatePlayerResponseBody]
+		setSingleBetLimitReq       *clientTypes.Request[publicModels.SetSingleBetLimitRequestBody]
+		setTurnoverLimitReq        *clientTypes.Request[publicModels.SetTurnoverLimitRequestBody]
+		verificationStatusResponse *clientTypes.Response[[]publicModels.VerificationStatusResponseItem]
 	}
 
 	t.WithNewStep("Регистрация нового игрока", func(sCtx provider.StepCtx) {
@@ -177,21 +185,86 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 	})
 
 	t.WithNewStep("Верификация идентичности игрока", func(sCtx provider.StepCtx) {
-		verifyIdentityReq := &clientTypes.Request[publicModels.VerifyIdentityRequestBody]{
+		req := &clientTypes.Request[publicModels.VerifyIdentityRequestBody]{
 			Headers: map[string]string{
 				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
 			},
 			Body: &publicModels.VerifyIdentityRequestBody{
-				Number:     "305003277",      // Номер документа
-				Type:       "4",              // Тип документа (например, 4 - паспорт)
-				IssuedDate: "1421463275.791", // Дата выдачи в формате timestamp
-				ExpiryDate: "1921463275.791", // Дата истечения в формате timestamp
+				Number:     "305003277",
+				Type:       publicModels.VerificationTypeIdentity,
+				IssuedDate: "1421463275.791",
+				ExpiryDate: "1921463275.791",
 			},
 		}
 
-		verifyResponse := s.publicClient.VerifyIdentity(sCtx, verifyIdentityReq)
+		resp := s.publicClient.VerifyIdentity(sCtx, req)
 
-		sCtx.Require().Equal(http.StatusCreated, verifyResponse.StatusCode, "Идентичность успешно верифицирована")
+		sCtx.Require().Equal(http.StatusCreated, resp.StatusCode, "Идентичность успешно верифицирована")
+	})
+
+	t.WithNewStep("Проверка статуса верификации игрока", func(sCtx provider.StepCtx) {
+		verificationStatusReq := &clientTypes.Request[any]{
+			Headers: map[string]string{
+				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
+			},
+		}
+
+		testData.verificationStatusResponse = s.publicClient.GetVerificationStatus(sCtx, verificationStatusReq)
+
+		sCtx.Require().Equal(http.StatusOK, testData.verificationStatusResponse.StatusCode, "Статус-код ответа равен 200")
+	})
+
+	t.WithNewStep("Обновление статуса верификации", func(sCtx provider.StepCtx) {
+		req := &clientTypes.Request[capModels.UpdateVerificationStatusRequestBody]{
+			Headers: map[string]string{
+				"Authorization":   fmt.Sprintf("Bearer %s", s.capClient.GetToken(sCtx)),
+				"Platform-NodeID": s.config.Node.ProjectID,
+			},
+			PathParams: map[string]string{
+				"verification_id": testData.verificationStatusResponse.Body[0].DocumentID,
+			},
+			Body: &capModels.UpdateVerificationStatusRequestBody{
+				Note:   "",
+				Reason: "",
+				Status: capModels.VerificationStatusApproved,
+			},
+		}
+
+		resp := s.capClient.UpdateVerificationStatus(sCtx, req)
+
+		sCtx.Require().Equal(http.StatusNoContent, resp.StatusCode, "Статус-код ответа равен 204")
+	})
+
+	t.WithNewStep("Запрос верификации телефона", func(sCtx provider.StepCtx) {
+		req := &clientTypes.Request[publicModels.RequestVerificationRequestBody]{
+			Headers: map[string]string{
+				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
+			},
+			Body: &publicModels.RequestVerificationRequestBody{
+				Contact: "+37167598673",
+				Type:    publicModels.ContactTypePhone,
+			},
+		}
+
+		resp := s.publicClient.RequestContactVerification(sCtx, req)
+
+		sCtx.Require().Equal(http.StatusOK, resp.StatusCode, "Запрос верификации телефона успешно создан")
+	})
+
+	t.WithNewStep("Запрос верификации электронной почты", func(sCtx provider.StepCtx) {
+		req := &clientTypes.Request[publicModels.RequestVerificationRequestBody]{
+			Headers: map[string]string{
+				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
+			},
+			Body: &publicModels.RequestVerificationRequestBody{
+				Contact: fmt.Sprintf("test%d@example.com", time.Now().Unix()),
+				Type:    publicModels.ContactTypeEmail,
+			},
+		}
+
+		resp := s.publicClient.RequestContactVerification(sCtx, req)
+
+		sCtx.Require().Equal(http.StatusOK, resp.StatusCode, "Запрос верификации email успешно создан")
 	})
 
 	time.Sleep(10 * time.Second)
@@ -199,9 +272,8 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 	t.WithNewStep("Создание депозита", func(sCtx provider.StepCtx) {
 		testData.depositRequest = &clientTypes.Request[publicModels.DepositRequestBody]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
-				"Content-Type":    "application/json",
-				"Platform-Locale": "en",
+				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
+				"Content-Type":  "application/json",
 			},
 			Body: &publicModels.DepositRequestBody{
 				Amount:          "10",

@@ -6,9 +6,10 @@ type LimitType string
 type DirectionType string
 type ReasonType string
 type OperationType string
+type VerificationStatus int
 
 const (
-	// DefaultLocale определяет язык по умолчанию
+	// Locale определяет язык переводов
 	LocaleEn = "en"
 
 	// StatusType определяет типы статусов
@@ -44,6 +45,9 @@ const (
 	OperationTypeCashback           OperationType = "CASHBACK"
 	OperationTypeTournamentPrize    OperationType = "TOURNAMENT_PRIZE"
 	OperationTypeJackpot            OperationType = "JACKPOT"
+
+	// VerificationStatus определяет статусы верификации
+	VerificationStatusApproved VerificationStatus = 2
 )
 
 type AdminCheckRequestBody struct {
@@ -266,4 +270,10 @@ type GetWalletListWallet struct {
 
 type GetWalletListResponseBody struct {
 	Wallets []GetWalletListWallet `json:"wallets"`
+}
+
+type UpdateVerificationStatusRequestBody struct {
+	Note   string             `json:"note"`
+	Reason string             `json:"reason"`
+	Status VerificationStatus `json:"status"`
 }

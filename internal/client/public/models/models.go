@@ -1,9 +1,13 @@
 package models
 
 type LimitPeriodType string
+type VerificationType string
+type VerificationStatus int
+type DocumentType string
+type ContactType string
 
 const (
-	// Периоды лимитов
+	// LimitPeriodType определяет периоды лимитов
 	LimitPeriodDaily   LimitPeriodType = "daily"
 	LimitPeriodWeekly  LimitPeriodType = "weekly"
 	LimitPeriodMonthly LimitPeriodType = "monthly"
@@ -15,6 +19,23 @@ const (
 
 	// Заголовок "Platform-Locale" по умолчанию
 	DefaultLocale = "en"
+
+	// VerificationType определяет типы верификаций
+	VerificationTypeAddress  VerificationType = "2"
+	VerificationTypeIdentity VerificationType = "4"
+
+	// VerificationStatus определяет статусы верификации
+	VerificationStatusPending  VerificationStatus = 0
+	VerificationStatusApproved VerificationStatus = 1
+	VerificationStatusRejected VerificationStatus = 2
+
+	// DocumentType определяет типы документов
+	DocumentTypeIdentity DocumentType = "4"
+	DocumentTypeAddress  DocumentType = "2"
+
+	// ContactType определяет типы контактов
+	ContactTypePhone ContactType = "PHONE"
+	ContactTypeEmail ContactType = "EMAIL"
 )
 
 type FastRegistrationRequestBody struct {
@@ -207,11 +228,29 @@ type UpdatePlayerResponseBody struct {
 }
 
 type VerifyIdentityRequestBody struct {
-	Number     string `json:"number"`
-	Type       string `json:"type"`
-	IssuedDate string `json:"issuedDate,omitempty"`
-	ExpiryDate string `json:"expiryDate,omitempty"`
+	Number     string           `json:"number"`
+	Type       VerificationType `json:"type"`
+	IssuedDate string           `json:"issuedDate,omitempty"`
+	ExpiryDate string           `json:"expiryDate,omitempty"`
 }
 
 type VerifyIdentityResponseBody struct {
+}
+
+type VerificationStatusResponseItem struct {
+	Status         VerificationStatus `json:"status"`
+	DocumentID     string             `json:"documentId"`
+	Reason         any                `json:"reason,omitempty"`
+	Type           VerificationType   `json:"type"`
+	DocumentType   DocumentType       `json:"documentType"`
+	DocumentNumber string             `json:"documentNumber,omitempty"`
+	ExpireDate     int64              `json:"expireDate,omitempty"`
+}
+
+type RequestVerificationRequestBody struct {
+	Contact string      `json:"contact"`
+	Type    ContactType `json:"type"`
+}
+
+type RequestVerificationResponseBody struct {
 }
