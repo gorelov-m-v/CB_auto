@@ -10,11 +10,12 @@ import (
 var (
 	natsReasonToCapReason = map[int]models.ReasonType{
 		1: models.ReasonOperationalMistake,
-		2: models.ReasonMalfunction,
-		3: models.ReasonBalanceCorrection,
+		0: models.ReasonMalfunction,
+		2: models.ReasonBalanceCorrection,
 	}
 
 	natsOperationTypeToCapType = map[int]models.OperationType{
+		0: models.OperationTypeCorrection,
 		1: models.OperationTypeDeposit,
 		2: models.OperationTypeWithdrawal,
 		3: models.OperationTypeGift,
