@@ -1,5 +1,22 @@
 package models
 
+type LimitPeriodType string
+
+const (
+	// Периоды лимитов
+	LimitPeriodDaily   LimitPeriodType = "daily"
+	LimitPeriodWeekly  LimitPeriodType = "weekly"
+	LimitPeriodMonthly LimitPeriodType = "monthly"
+
+	// Редиректы пеймента
+	DepositRedirectURLFailed  = "https://beta-09.b2bdev.pro/en/account/deposit/failed"
+	DepositRedirectURLSuccess = "https://beta-09.b2bdev.pro/en/account/deposit/success"
+	DepositRedirectURLPending = "https://beta-09.b2bdev.pro/en/account/deposit/pending"
+
+	// Заголовок "Platform-Locale" по умолчанию
+	DefaultLocale = "en"
+)
+
 type FastRegistrationRequestBody struct {
 	Country  string `json:"country"`
 	Currency string `json:"currency"`
@@ -48,10 +65,10 @@ type SetSingleBetLimitRequestBody struct {
 }
 
 type SetCasinoLossLimitRequestBody struct {
-	Currency  string `json:"currency"`
-	Type      string `json:"type"` // daily, weekly, monthly
-	Amount    string `json:"amount"`
-	StartedAt int64  `json:"startedAt"`
+	Amount    string          `json:"amount"`
+	Currency  string          `json:"currency"`
+	Type      LimitPeriodType `json:"type"`
+	StartedAt int64           `json:"startedAt"`
 }
 
 type UpcomingChangeData struct {
@@ -123,8 +140,68 @@ type SetRestrictionResponseBody struct {
 }
 
 type SetTurnoverLimitRequestBody struct {
-	Amount    string `json:"amount"`
-	Currency  string `json:"currency"`
-	Type      string `json:"type"` // daily, weekly, monthly
-	StartedAt int64  `json:"startedAt"`
+	Amount    string          `json:"amount"`
+	Currency  string          `json:"currency"`
+	Type      LimitPeriodType `json:"type"`
+	StartedAt int64           `json:"startedAt"`
+}
+
+type DepositRedirectURLs struct {
+	Failed  string `json:"failed"`
+	Success string `json:"success"`
+	Pending string `json:"pending"`
+}
+
+type DepositRequestBody struct {
+	Amount          string              `json:"amount"`
+	PaymentMethodID int                 `json:"paymentMethodId"`
+	Currency        string              `json:"currency"`
+	Country         string              `json:"country"`
+	Redirect        DepositRedirectURLs `json:"redirect"`
+}
+
+type UpdatePlayerRequestBody struct {
+	FirstName        string `json:"firstName"`
+	LastName         string `json:"lastName"`
+	Gender           int    `json:"gender"`
+	City             string `json:"city"`
+	Postcode         string `json:"postcode"`
+	PermanentAddress string `json:"permanentAddress"`
+	PersonalID       string `json:"personalId"`
+	Profession       string `json:"profession"`
+	IBAN             string `json:"iban"`
+	Birthday         string `json:"birthday"`
+	Country          string `json:"country"`
+}
+
+type UpdatePlayerResponseBody struct {
+	ID                       string  `json:"id"`
+	AccountID                string  `json:"accountId"`
+	Email                    *string `json:"email"`
+	Phone                    *string `json:"phone"`
+	NodeID                   string  `json:"nodeId"`
+	FirstName                string  `json:"firstName"`
+	MiddleName               *string `json:"middleName"`
+	LastName                 string  `json:"lastName"`
+	Gender                   int     `json:"gender"`
+	PermanentAddress         string  `json:"permanentAddress"`
+	City                     string  `json:"city"`
+	Region                   *string `json:"region"`
+	Country                  string  `json:"country"`
+	Postcode                 string  `json:"postcode"`
+	Birthday                 string  `json:"birthday"`
+	PersonalID               string  `json:"personalId"`
+	RegSource                string  `json:"regSource"`
+	Locale                   string  `json:"locale"`
+	IBAN                     string  `json:"iban"`
+	Profession               string  `json:"profession"`
+	Status                   int     `json:"status"`
+	IsPoliticallyInvolved    *bool   `json:"isPoliticallyInvolved"`
+	PlaceOfWork              *string `json:"placeOfWork"`
+	JobAlias                 *string `json:"jobAlias"`
+	JobInput                 *string `json:"jobInput"`
+	AvgMonthlySalaryEURAlias *string `json:"avgMonthlySalaryEURAlias"`
+	AvgMonthlySalaryEURInput *string `json:"avgMonthlySalaryEURInput"`
+	ActivitySectorAlias      *string `json:"activitySectorAlias"`
+	ActivitySectorInput      *string `json:"activitySectorInput"`
 }

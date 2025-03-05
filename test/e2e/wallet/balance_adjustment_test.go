@@ -59,9 +59,7 @@ func (s *BalanceAdjustmentSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Соединение с базой данных", func(sCtx provider.StepCtx) {
-		connector := repository.OpenConnector(t, &s.config.MySQL, repository.Wallet)
-		s.database = &connector
-		s.walletRepo = wallet.NewRepository(s.database.DB(), &s.config.MySQL)
+		s.walletRepo = wallet.NewRepository(repository.OpenConnector(t, &s.config.MySQL, repository.Wallet).DB(), &s.config.MySQL)
 	})
 }
 
@@ -123,9 +121,8 @@ func (s *BalanceAdjustmentSuite) TestBalanceAdjustment(t provider.T) {
 		testData.adjustmentRequest = &clientTypes.Request[capModels.CreateBalanceAdjustmentRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capClient.GetToken(sCtx)),
-				"Platform-Locale": "ru",
+				"Platform-Locale": capModels.DefaultLocale,
 				"Platform-NodeID": s.config.Node.ProjectID,
-				"Content-Type":    "application/json",
 			},
 			PathParams: map[string]string{
 				"player_uuid": testData.registrationMessage.Player.ExternalID,

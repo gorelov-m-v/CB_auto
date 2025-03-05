@@ -107,9 +107,8 @@ func (s *CreateCollectionSuite) TestCreateCollection(t provider.T) {
 		sCtx.Assert().Equal(models.TypeHorizontal, resp.Body.Type, "Тип коллекции корректен")
 		sCtx.Assert().Equal(s.config.Node.ProjectID, resp.Body.ProjectId, "ProjectID коллекции корректен")
 		sCtx.Assert().Equal(1, resp.Body.Sort, "Sort коллекции корректен")
-		sCtx.Assert().Equal(2, resp.Body.Status, "Status коллекции корректен")
+		sCtx.Assert().Equal(models.StatusDisabled, resp.Body.Status, "Status коллекции корректен")
 		sCtx.Assert().False(resp.Body.IsDefault, "IsDefault коллекции корректен")
-
 	})
 
 	t.WithNewStep("Проверка коллекции в БД", func(sCtx provider.StepCtx) {

@@ -10,10 +10,9 @@ import (
 	"CB_auto/internal/client/factory"
 	clientTypes "CB_auto/internal/client/types"
 	"CB_auto/internal/config"
-	"CB_auto/pkg/utils"
-
 	"CB_auto/internal/repository"
 	"CB_auto/internal/repository/label"
+	"CB_auto/pkg/utils"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"

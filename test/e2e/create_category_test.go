@@ -111,7 +111,7 @@ func (s *CreateCategorySuite) TestCreateCategory(t provider.T) {
 		sCtx.Assert().Equal(models.TypeVertical, resp.Body.Type, "Тип категории корректен")
 		sCtx.Assert().Equal(s.config.Node.ProjectID, resp.Body.ProjectId, "ProjectID категории корректен")
 		sCtx.Assert().Equal(1, resp.Body.Sort, "Sort категории корректен")
-		sCtx.Assert().Equal(2, resp.Body.Status, "Status категории корректен")
+		sCtx.Assert().Equal(models.StatusDisabled, resp.Body.Status, "Status категории корректен")
 		sCtx.Assert().False(resp.Body.IsDefault, "IsDefault категории корректен")
 	})
 

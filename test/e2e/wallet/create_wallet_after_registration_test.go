@@ -23,13 +23,14 @@ import (
 
 type FastRegistrationSuite struct {
 	suite.Suite
-	config        *config.Config
-	publicService publicAPI.PublicAPI
-	natsClient    *nats.NatsClient
-	redisClient   *redis.RedisClient
-	kafka         *kafka.Kafka
-	walletDB      *repository.Connector
-	walletRepo    *wallet.Repository
+	config            *config.Config
+	publicService     publicAPI.PublicAPI
+	natsClient        *nats.NatsClient
+	redisWalletClient *redis.RedisClient
+	redisPlayerClient *redis.RedisClient
+	kafka             *kafka.Kafka
+	walletDB          *repository.Connector
+	walletRepo        *wallet.Repository
 }
 
 func (s *FastRegistrationSuite) BeforeAll(t provider.T) {
@@ -46,7 +47,8 @@ func (s *FastRegistrationSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Инициализация Redis клиента.", func(sCtx provider.StepCtx) {
-		s.redisClient = redis.NewRedisClient(t, &s.config.Redis, redis.PlayerClient)
+		s.redisPlayerClient = redis.NewRedisClient(t, &s.config.Redis, redis.PlayerClient)
+		s.redisWalletClient = redis.NewRedisClient(t, &s.config.Redis, redis.WalletClient)
 	})
 
 	t.WithNewStep("Инициализация Kafka.", func(sCtx provider.StepCtx) {
@@ -54,9 +56,7 @@ func (s *FastRegistrationSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Соединение с базой данных wallet.", func(sCtx provider.StepCtx) {
-		connector := repository.OpenConnector(t, &s.config.MySQL, repository.Wallet)
-		s.walletDB = &connector
-		s.walletRepo = wallet.NewRepository(s.walletDB.DB(), &s.config.MySQL)
+		s.walletRepo = wallet.NewRepository(repository.OpenConnector(t, &s.config.MySQL, repository.Wallet).DB(), &s.config.MySQL)
 	})
 }
 
@@ -139,7 +139,7 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 
 	t.WithNewAsyncStep("Проверка значения в Redis.", func(sCtx provider.StepCtx) {
 		var wallets redis.WalletsMap
-		err := s.redisClient.GetWithRetry(sCtx, testData.playerRegistrationMessage.Player.ExternalID, &wallets)
+		err := s.redisPlayerClient.GetWithRetry(sCtx, testData.playerRegistrationMessage.Player.ExternalID, &wallets)
 
 		sCtx.Require().NoError(err, "Значение кошелька получено из Redis")
 
@@ -203,19 +203,51 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 
 	t.WithNewAsyncStep("Проверка данных кошелька в Redis", func(sCtx provider.StepCtx) {
 		var redisValue redis.WalletFullData
-		err := s.redisClient.GetWithRetry(sCtx, testData.walletCreatedEvent.Payload.WalletUUID, &redisValue)
+		err := s.redisWalletClient.GetWithRetry(sCtx, testData.walletCreatedEvent.Payload.WalletUUID, &redisValue)
 
 		sCtx.Require().NoError(err, "Значение кошелька получено из Redis")
-		sCtx.Require().NotEmpty(redisValue.Limits, "Должен быть хотя бы один лимит")
+		sCtx.Require().NotEmpty(redisValue.WalletUUID, "Кошелек создан в Redis")
 
-		limitData := redisValue.Limits[0]
+		// Проверка основных данных кошелька
+		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.WalletUUID, redisValue.WalletUUID, "UUID кошелька совпадает")
+		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.PlayerUUID, redisValue.PlayerUUID, "UUID игрока совпадает")
+		sCtx.Assert().Equal("00000000-0000-0000-0000-000000000000", redisValue.PlayerBonusUUID, "Бонусный UUID пустой")
+		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.NodeUUID, redisValue.NodeUUID, "UUID ноды совпадает")
 
-		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.WalletUUID, limitData.ExternalID, "ID лимита совпадает")
-		sCtx.Assert().Equal("turnover-of-funds", limitData.LimitType, "Тип лимита совпадает")
-		sCtx.Assert().Equal("daily", limitData.IntervalType, "Интервал лимита совпадает")
-		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.Currency, limitData.Amount, "Сумма лимита совпадает")
-		sCtx.Assert().Equal("0", limitData.Spent, "Потраченная сумма равна 0")
-		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.Currency, limitData.Rest, "Остаток равен сумме лимита")
+		// Проверка типа и статуса
+		sCtx.Assert().Equal(int(nats.TypeReal), redisValue.Type, "Тип кошелька - реальный")
+		sCtx.Assert().Equal(int(nats.StatusEnabled), redisValue.Status, "Статус кошелька - включён")
+		sCtx.Assert().True(redisValue.Valid, "Кошелёк валидный")
+
+		// Проверка флагов активности
+		sCtx.Assert().True(redisValue.IsGamblingActive, "Гэмблинг активен")
+		sCtx.Assert().True(redisValue.IsBettingActive, "Беттинг активен")
+
+		// Проверка валюты и баланса
+		sCtx.Assert().Equal(s.config.Node.DefaultCurrency, redisValue.Currency, "Валюта совпадает")
+		sCtx.Assert().Equal("0", redisValue.Balance, "Баланс равен 0")
+		sCtx.Assert().Equal("0", redisValue.AvailableWithdrawalBalance, "Доступный для вывода баланс равен 0")
+		sCtx.Assert().Equal("0", redisValue.BalanceBefore, "Предыдущий баланс равен 0")
+
+		// Проверка дат
+		sCtx.Assert().NotZero(redisValue.CreatedAt, "Дата создания не нулевая")
+		sCtx.Assert().NotZero(redisValue.UpdatedAt, "Дата обновления не нулевая")
+		sCtx.Assert().Equal(int(testData.walletCreatedEvent.Sequence), redisValue.LastSeqNumber, "Номер последовательности верный")
+
+		// Проверка флагов
+		sCtx.Assert().True(redisValue.Default, "Кошелёк помечен как дефолтный")
+		sCtx.Assert().True(redisValue.Main, "Кошелёк помечен как основной")
+		sCtx.Assert().False(redisValue.IsBlocked, "Кошелёк не заблокирован")
+		sCtx.Assert().False(redisValue.IsKYCUnverified, "Кошелёк не имеет статуса неверифицированного KYC")
+		sCtx.Assert().False(redisValue.IsSumSubVerified, "Кошелёк не верифицирован через SumSub")
+
+		// Проверка бонусной информации
+		sCtx.Assert().Equal("00000000-0000-0000-0000-000000000000", redisValue.BonusInfo.BonusUUID, "Бонусный UUID пустой")
+
+		// Проверка массивов
+		sCtx.Assert().Empty(redisValue.BlockedAmounts, "Нет заблокированных средств")
+		sCtx.Assert().Empty(redisValue.Limits, "Нет установленных лимитов")
+		sCtx.Assert().Empty(redisValue.Deposits, "Нет записей о депозитах")
 	})
 }
 
@@ -224,8 +256,11 @@ func (s *FastRegistrationSuite) AfterAll(t provider.T) {
 	if s.natsClient != nil {
 		s.natsClient.Close()
 	}
-	if s.redisClient != nil {
-		s.redisClient.Close()
+	if s.redisPlayerClient != nil {
+		s.redisPlayerClient.Close()
+	}
+	if s.redisWalletClient != nil {
+		s.redisWalletClient.Close()
 	}
 	if s.walletDB != nil {
 		if err := s.walletDB.Close(); err != nil {

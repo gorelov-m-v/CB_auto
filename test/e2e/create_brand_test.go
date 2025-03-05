@@ -92,7 +92,7 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Alias, brandData.Alias, "Alias бренда в БД совпадает с Alias в запросе")
 		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Sort, brandData.Sort, "Sort бренда в БД совпадает с Sort в запросе")
 		sCtx.Assert().Equal(s.config.Node.ProjectID, brandData.NodeUUID, "NodeUUID бренда в БД совпадает с NodeUUID в запросе")
-		sCtx.Assert().Equal(models.StatusDisabled, brandData.Status, "Status бренда в БД равен StatusDisabled")
+		sCtx.Assert().Equal(models.StatusDisabled, models.StatusType(brandData.Status), "Status бренда в БД равен StatusDisabled")
 		sCtx.Assert().NotZero(brandData.CreatedAt, "CreatedAt бренда в БД не равен нулю")
 		sCtx.Assert().Zero(brandData.UpdatedAt, "UpdatedAt бренда в БД равен нулю для нового бренда")
 		sCtx.Assert().Equal(testData.createCapBrandResponse.Body.ID, brandData.UUID, "UUID бренда в БД совпадает с UUID в ответе")
