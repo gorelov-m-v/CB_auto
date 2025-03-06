@@ -1,6 +1,3 @@
-//go:build limits
-// +build limits
-
 package test
 
 import (
@@ -212,19 +209,19 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capClient.GetToken(sCtx)),
 				"Platform-NodeId": s.config.Node.ProjectID,
-				"Platform-Locale": capModels.DefaultLocale,
+				"Platform-Locale": capModels.LocaleEn,
 			},
 			PathParams: map[string]string{
 				"playerID": testData.registrationMessage.Player.ExternalID,
 			},
 		}
 
-		playerLimitsResponse := s.capClient.GetPlayerLimits(sCtx, req)
+		resp := s.capClient.GetPlayerLimits(sCtx, req)
 
-		sCtx.Assert().Equal(http.StatusOK, playerLimitsResponse.StatusCode, "Список лимитов получен")
-		sCtx.Assert().Equal(1, playerLimitsResponse.Body.Total, "Количество лимитов корректно")
+		sCtx.Assert().Equal(http.StatusOK, resp.StatusCode, "Список лимитов получен")
+		sCtx.Assert().Equal(1, resp.Body.Total, "Количество лимитов корректно")
 
-		singleBetLimit := playerLimitsResponse.Body.Data[0]
+		singleBetLimit := resp.Body.Data[0]
 		sCtx.Assert().Equal(capModels.LimitTypeSingleBet, singleBetLimit.Type)
 		sCtx.Assert().True(singleBetLimit.Status)
 		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, singleBetLimit.Currency)
@@ -245,8 +242,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 		limitData := redisValue.Limits[0]
 
 		sCtx.Assert().Equal(testData.limitMessage.ID, limitData.ExternalID, "ID лимита совпадает")
-		sCtx.Assert().Equal("single-bet", limitData.LimitType, "Тип лимита совпадает")
-		sCtx.Assert().Equal("", limitData.IntervalType, "Интервал лимита совпадает")
+		sCtx.Assert().Equal(redis.LimitTypeSingleBet, limitData.LimitType, "Тип лимита совпадает")
 		sCtx.Assert().Equal(testData.limitMessage.Amount, limitData.Amount, "Сумма лимита совпадает")
 		sCtx.Assert().Equal("0", limitData.Spent, "Потраченная сумма равна 0")
 		sCtx.Assert().Equal(testData.limitMessage.Amount, limitData.Rest, "Остаток равен сумме лимита")

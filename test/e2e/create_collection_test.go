@@ -118,7 +118,7 @@ func (s *CreateCollectionSuite) TestCreateCollection(t provider.T) {
 
 		sCtx.Require().NotNil(category, "Коллекция найдена в БД")
 		if category != nil {
-			sCtx.Assert().Equal(models.TypeHorizontal, category.Type, "Тип коллекции в БД совпадает")
+			sCtx.Assert().Equal(string(models.TypeHorizontal), category.Type, "Тип коллекции в БД совпадает")
 			sCtx.Assert().Equal(uint32(1), uint32(category.Sort), "Sort в БД совпадает")
 			sCtx.Assert().Equal(int16(2), int16(category.StatusID), "Status в БД совпадает")
 			sCtx.Assert().False(category.IsDefault, "IsDefault в БД совпадает")

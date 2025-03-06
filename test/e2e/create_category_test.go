@@ -122,7 +122,7 @@ func (s *CreateCategorySuite) TestCreateCategory(t provider.T) {
 
 		sCtx.Require().NotNil(category, "Категория найдена в БД")
 		{
-			sCtx.Assert().Equal(models.TypeVertical, category.Type, "Тип категории в БД совпадает")
+			sCtx.Assert().Equal(string(models.TypeVertical), category.Type, "Тип категории в БД совпадает")
 			sCtx.Assert().Equal(uint32(1), uint32(category.Sort), "Sort в БД совпадает")
 			sCtx.Assert().Equal(int16(2), int16(category.StatusID), "Status в БД совпадает")
 			sCtx.Assert().False(category.IsDefault, "IsDefault в БД совпадает")

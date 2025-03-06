@@ -91,7 +91,7 @@ func (s *CollectionPositiveSuite) TestCollectionFields(t provider.T) {
 					sCtx.Assert().Equal(tc.title, dbNames["en"])
 					sCtx.Assert().Equal(tc.title, dbNames["ru"])
 					sCtx.Assert().Equal(tc.alias, collection.Alias)
-					sCtx.Assert().Equal(models.TypeHorizontal, collection.Type)
+					sCtx.Assert().Equal(string(models.TypeHorizontal), collection.Type)
 				}
 			})
 

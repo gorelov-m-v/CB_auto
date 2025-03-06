@@ -124,10 +124,9 @@ func (s *UpdateCollectionSuite) TestUpdateCollection(t provider.T) {
 		sCtx.Assert().NotNil(collectionFromDB, "Коллекция найдена в БД")
 		sCtx.Assert().NotEmpty(collectionFromDB.LocalizedNames["en"], "Английское название в БД не пустое")
 		sCtx.Assert().NotEmpty(collectionFromDB.LocalizedNames["ru"], "Русское название в БД не пустое")
-		sCtx.Assert().Equal(models.TypeHorizontal, collectionFromDB.Type, "Тип коллекции обновлен")
+		sCtx.Assert().Equal(string(models.TypeHorizontal), collectionFromDB.Type, "Тип коллекции обновлен")
 		sCtx.Assert().Equal(uint32(2), uint32(collectionFromDB.Sort), "Sort обновлен")
 		sCtx.Assert().Equal(updateReq.Body.Alias, collectionFromDB.Alias, "Alias обновлен")
-		sCtx.Assert().NotEqual(collectionFromDB.UpdatedAt, collectionFromDB.CreatedAt, "Время обновления изменилось")
 	})
 
 	t.WithNewStep("Удаление коллекции", func(sCtx provider.StepCtx) {

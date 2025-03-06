@@ -124,7 +124,7 @@ func (s *UpdateCategorySuite) TestUpdateCategory(t provider.T) {
 		sCtx.Assert().NotNil(categoryFromDB, "Категория найдена в БД")
 		sCtx.Assert().NotEmpty(categoryFromDB.LocalizedNames["en"], "Английское название в БД не пустое")
 		sCtx.Assert().NotEmpty(categoryFromDB.LocalizedNames["ru"], "Русское название в БД не пустое")
-		sCtx.Assert().Equal(models.TypeVertical, categoryFromDB.Type, "Тип категории обновлен")
+		sCtx.Assert().Equal(string(models.TypeVertical), categoryFromDB.Type, "Тип категории обновлен")
 		sCtx.Assert().Equal(uint32(2), uint32(categoryFromDB.Sort), "Sort обновлен")
 		sCtx.Assert().Equal(updateReq.Body.Alias, categoryFromDB.Alias, "Alias обновлен")
 	})

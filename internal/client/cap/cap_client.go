@@ -26,6 +26,7 @@ type CapAPI interface {
 	GetBlockAmountList(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.BlockAmountListResponseBody]
 	GetWalletList(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetWalletListResponseBody]
 	DeleteBlockAmount(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[struct{}]
+	UpdateVerificationStatus(sCtx provider.StepCtx, req *types.Request[models.UpdateVerificationStatusRequestBody]) *types.Response[struct{}]
 
 	UpdateBrandStatus(sCtx provider.StepCtx, req *types.Request[models.UpdateBrandStatusRequestBody]) *types.Response[struct{}]
 	UpdateCapBrand(sCtx provider.StepCtx, req *types.Request[models.UpdateCapBrandRequestBody]) *types.Response[models.UpdateCapBrandResponseBody]
@@ -376,6 +377,18 @@ func (c *capClient) DeleteBlockAmount(sCtx provider.StepCtx, req *types.Request[
 				Body: fmt.Sprintf("DeleteBlockAmount failed: %v", err),
 			},
 		}
+	}
+
+	return resp
+}
+
+func (c *capClient) UpdateVerificationStatus(sCtx provider.StepCtx, req *types.Request[models.UpdateVerificationStatusRequestBody]) *types.Response[struct{}] {
+	req.Method = http.MethodPatch
+	req.Path = fmt.Sprintf("/_cap/api/v1/players/verification/%s", req.PathParams["verification_id"])
+
+	resp, err := httpClient.DoRequest[models.UpdateVerificationStatusRequestBody, struct{}](sCtx, c.client, req)
+	if err != nil {
+		log.Printf("UpdateVerificationStatus failed: %v", err)
 	}
 
 	return resp

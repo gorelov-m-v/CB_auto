@@ -6,16 +6,19 @@ type LimitType string
 type DirectionType string
 type ReasonType string
 type OperationType string
+type VerificationStatus int
+type CategoryType string
+type CategoryStatus int
 
 const (
 
 	// Type определяет типы категорий
-	TypeVertical   = "vertical"
-	TypeHorizontal = "horizontal"
-	TypeAllGames   = "allGames"
+	TypeVertical   CategoryType = "vertical"
+	TypeHorizontal CategoryType = "horizontal"
+	TypeAllGames   CategoryType = "allGames"
 
 	// CategoryStatus определяет статусы категорий
-	CategoryStatusDeleted = 2
+	CategoryStatusDeleted CategoryStatus = 2
 
 	// DefaultLocale определяет язык по умолчанию
 	DefaultLocale = "en"
@@ -39,12 +42,12 @@ const (
 	DirectionIncrease DirectionType = "INCREASE"
 	DirectionDecrease DirectionType = "DECREASE"
 
-	// ReasonType определяет причины операций
+	// ReasonType определяет причины корректировок баланса
 	ReasonMalfunction        ReasonType = "MALFUNCTION"
 	ReasonOperationalMistake ReasonType = "OPERATIONAL_MISTAKE"
 	ReasonBalanceCorrection  ReasonType = "BALANCE_CORRECTION"
 
-	// OperationType определяет типы операций
+	// OperationType определяет типы корректировок баланса
 	OperationTypeCorrection         OperationType = "CORRECTION"
 	OperationTypeDeposit            OperationType = "DEPOSIT"
 	OperationTypeWithdrawal         OperationType = "WITHDRAWAL"
@@ -53,15 +56,9 @@ const (
 	OperationTypeCashback           OperationType = "CASHBACK"
 	OperationTypeTournamentPrize    OperationType = "TOURNAMENT_PRIZE"
 	OperationTypeJackpot            OperationType = "JACKPOT"
-)
 
-const (
-	defaultSort      = 1
-	updatedSort      = 2
-	defaultStatus    = 2
-	deleteRetryCount = 3
-	categoryAliasLen = 10
-	categoryNameLen  = 20
+	//VerificationStatus определяет статусы верификации
+	VerificationStatusApproved VerificationStatus = 2
 )
 
 type AdminCheckRequestBody struct {
@@ -170,7 +167,7 @@ type CreateCapCategoryRequestBody struct {
 	Sort      int               `json:"sort"`
 	Alias     string            `json:"alias"`
 	Names     map[string]string `json:"names"`
-	Type      string            `json:"type"`
+	Type      CategoryType      `json:"type"`
 	GroupID   string            `json:"groupId"`
 	ProjectID string            `json:"projectId"`
 }
@@ -199,7 +196,7 @@ type GetCapCategoryResponseBody struct {
 	Status     StatusType        `json:"status"`
 	Sort       int               `json:"sort"`
 	IsDefault  bool              `json:"isDefault"`
-	Type       string            `json:"type"`
+	Type       CategoryType      `json:"type"`
 	PassToCms  bool              `json:"passToCms"`
 }
 
@@ -291,10 +288,16 @@ type UpdateCapCategoryRequestBody struct {
 	Alias string            `json:"alias"`
 	Names map[string]string `json:"names"`
 	Sort  int               `json:"sort"`
-	Type  string            `json:"type"`
+	Type  CategoryType      `json:"type"`
 }
 
 type UpdateCapCategoryResponseBody struct {
 	ID    string `json:"id"`
 	Alias string `json:"alias"`
+}
+
+type UpdateVerificationStatusRequestBody struct {
+	Note   string             `json:"note"`
+	Reason string             `json:"reason"`
+	Status VerificationStatus `json:"status"`
 }
