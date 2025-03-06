@@ -34,7 +34,7 @@ func (s *CreateBrandNegativeSuite) BeforeAll(t provider.T) {
 
 func (s *CreateBrandNegativeSuite) TestCreateBrandWithoutName(t provider.T) {
 	t.WithNewStep("Подготовка запроса для создания бренда без названия", func(sCtx provider.StepCtx) {
-		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
+		alias := fmt.Sprintf("test-brand-%s", utils.Get(utils.ALIAS, 20))
 		req := &clientTypes.Request[models.CreateCapBrandRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
@@ -55,7 +55,7 @@ func (s *CreateBrandNegativeSuite) TestCreateBrandWithoutName(t provider.T) {
 
 func (s *CreateBrandNegativeSuite) TestCreateBrandWithoutAlias(t provider.T) {
 	t.WithNewStep("Попытка создания бренда без alias", func(sCtx provider.StepCtx) {
-		brandName := fmt.Sprintf("Test Brand %s", utils.GenerateAlias())
+		brandName := fmt.Sprintf("Test Brand %s", utils.Get(utils.BRAND_TITLE, 20))
 		req := &clientTypes.Request[models.CreateCapBrandRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
@@ -76,7 +76,7 @@ func (s *CreateBrandNegativeSuite) TestCreateBrandWithoutAlias(t provider.T) {
 
 func (s *CreateBrandNegativeSuite) TestCreateBrandWithAliasButNoName(t provider.T) {
 	t.WithNewStep("Попытка создания бренда с alias но без названия", func(sCtx provider.StepCtx) {
-		alias := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
+		alias := fmt.Sprintf("test-brand-%s", utils.Get(utils.ALIAS, 20))
 		req := &clientTypes.Request[models.CreateCapBrandRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
@@ -97,7 +97,7 @@ func (s *CreateBrandNegativeSuite) TestCreateBrandWithAliasButNoName(t provider.
 
 func (s *CreateBrandNegativeSuite) TestCreateBrandWithNameButNoAlias(t provider.T) {
 	t.WithNewStep("Попытка создания бренда с названием но без alias", func(sCtx provider.StepCtx) {
-		brandName := fmt.Sprintf("Test Brand %s", utils.GenerateAlias())
+		brandName := fmt.Sprintf("Test Brand %s", utils.Get(utils.BRAND_TITLE, 20))
 		req := &clientTypes.Request[models.CreateCapBrandRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),

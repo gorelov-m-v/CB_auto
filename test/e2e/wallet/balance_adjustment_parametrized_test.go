@@ -209,7 +209,7 @@ func (s *ParametrizedBalanceAdjustmentSuite) TableTestBalanceAdjustment(t provid
 		testData.adjustmentRequest = &clientTypes.Request[capModels.CreateBalanceAdjustmentRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capClient.GetToken(sCtx)),
-				"Platform-Locale": capModels.LocaleEn,
+				"Platform-Locale": capModels.DefaultLocale,
 				"Platform-NodeID": s.config.Node.ProjectID,
 			},
 			PathParams: map[string]string{

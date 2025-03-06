@@ -34,8 +34,10 @@ type Response[T any] struct {
 }
 
 type ErrorResponse struct {
-	Body       string `json:"body,omitempty"`
-	StatusCode int    `json:"status_code,omitempty"`
+	Body       string              `json:"body,omitempty"`
+	StatusCode int                 `json:"status_code,omitempty"`
+	Message    string              `json:"message"`
+	Errors     map[string][]string `json:"errors"`
 }
 
 type MultipartForm struct {

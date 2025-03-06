@@ -53,8 +53,8 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithRussianName(t provider.T) 
 	}
 
 	t.WithNewStep("Подготовка запроса для создания бренда", func(sCtx provider.StepCtx) {
-		brandName := fmt.Sprintf("Тестовый бренд %s", utils.GenerateAlias())
-		alias := fmt.Sprintf("test-brand-ru-%s", utils.GenerateAlias())
+		brandName := fmt.Sprintf("Тестовый бренд %s", utils.Get(utils.BRAND_TITLE, 20))
+		alias := fmt.Sprintf("test-brand-ru-%s", utils.Get(utils.ALIAS, 20))
 		testData.createRequest = &clientTypes.Request[models.CreateCapBrandRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
@@ -85,7 +85,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithRussianName(t provider.T) 
 		sCtx.Assert().Equal(testData.createRequest.Body.Alias, brandData.Alias, "Alias бренда в БД совпадает с Alias в запросе")
 		sCtx.Assert().Equal(testData.createRequest.Body.Sort, brandData.Sort, "Sort бренда в БД совпадает с Sort в запросе")
 		sCtx.Assert().Equal(testData.createRequest.Body.Description, brandData.Description, "Description бренда в БД совпадает с Description в запросе")
-		sCtx.Assert().Equal(models.StatusDisabled, brandData.Status, "Status бренда в БД совпадает с Status в запросе")
+		sCtx.Assert().Equal(models.StatusDisabled, models.StatusType(brandData.Status), "Status бренда в БД совпадает с Status в запросе")
 		sCtx.Assert().NotZero(brandData.CreatedAt, "Время создания бренда в БД не равно нулю")
 		sCtx.Assert().Zero(brandData.UpdatedAt, "Время обновления бренда в БД равно нулю")
 
@@ -114,8 +114,8 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithEnglishName(t provider.T) 
 	}
 
 	t.WithNewStep("Создание бренда с английским названием", func(sCtx provider.StepCtx) {
-		brandName := fmt.Sprintf("Test Brand %s", utils.GenerateAlias())
-		alias := fmt.Sprintf("test-brand-en-%s", utils.GenerateAlias())
+		brandName := fmt.Sprintf("Test Brand %s", utils.Get(utils.BRAND_TITLE, 20))
+		alias := fmt.Sprintf("test-brand-en-%s", utils.Get(utils.ALIAS, 20))
 		testData.createRequest = s.createBrandRequest(sCtx, brandName, alias, map[string]string{
 			"en": brandName,
 		})
@@ -228,8 +228,8 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithDifferentAliases(t provide
 
 	for _, aliasBase := range aliases {
 		t.WithNewStep(fmt.Sprintf("Создание бренда с alias: %s", aliasBase), func(sCtx provider.StepCtx) {
-			brandName := fmt.Sprintf("Test Brand %s", utils.GenerateAlias())
-			alias := fmt.Sprintf("%s-%s", aliasBase, utils.GenerateAlias())
+			brandName := fmt.Sprintf("Test Brand %s", utils.Get(utils.BRAND_TITLE, 20))
+			alias := fmt.Sprintf("%s-%s", aliasBase, utils.Get(utils.ALIAS, 20))
 			testData.createRequest = s.createBrandRequest(sCtx, brandName, alias, map[string]string{
 				"en": brandName,
 			})
@@ -254,7 +254,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithDifferentAliases(t provide
 				sCtx.Assert().Equal(testData.createRequest.Body.Sort, brandData.Sort, "Sort бренда в БД совпадает с Sort в запросе")
 				sCtx.Assert().Equal(testData.createRequest.Body.Description, brandData.Description, "Description бренда в БД совпадает с Description в запросе")
 				sCtx.Assert().Equal(s.config.Node.ProjectID, brandData.NodeUUID, "NodeUUID бренда в БД совпадает с NodeUUID в запросе")
-				sCtx.Assert().Equal(models.StatusDisabled, brandData.Status, "Status бренда в БД совпадает с Status в запросе")
+				sCtx.Assert().Equal(models.StatusDisabled, models.StatusType(brandData.Status), "Status бренда в БД совпадает с Status в запросе")
 				sCtx.Assert().NotZero(brandData.CreatedAt, "Время создания бренда в БД не равно нулю")
 				sCtx.Assert().Zero(brandData.UpdatedAt, "Время обновления бренда в БД равно нулю")
 
@@ -274,7 +274,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithMultiLanguage(t provider.T
 	}
 
 	t.WithNewStep("Создание мультиязычного бренда", func(sCtx provider.StepCtx) {
-		suffix := utils.GenerateAlias()
+		suffix := utils.Get(utils.ALIAS, 20)
 		testData.createRequest = s.createBrandRequest(sCtx, "Multilingual Brand", fmt.Sprintf("multi-lang-%s", suffix), map[string]string{
 			"en": fmt.Sprintf("Test Brand %s", suffix),
 			"ru": fmt.Sprintf("Тестовый бренд %s", suffix),
@@ -301,7 +301,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithMultiLanguage(t provider.T
 			sCtx.Assert().Equal(testData.createRequest.Body.Sort, brandData.Sort, "Sort бренда в БД совпадает с Sort в запросе")
 			sCtx.Assert().Equal(testData.createRequest.Body.Description, brandData.Description, "Description бренда в БД совпадает с Description в запросе")
 			sCtx.Assert().Equal(s.config.Node.ProjectID, brandData.NodeUUID, "NodeUUID бренда в БД совпадает с NodeUUID в запросе")
-			sCtx.Assert().Equal(models.StatusDisabled, brandData.Status, "Status бренда в БД совпадает с Status в запросе")
+			sCtx.Assert().Equal(models.StatusDisabled, models.StatusType(brandData.Status), "Status бренда в БД совпадает с Status в запросе")
 			sCtx.Assert().NotZero(brandData.CreatedAt, "Время создания бренда в БД не равно нулю")
 			sCtx.Assert().Zero(brandData.UpdatedAt, "Время обновления бренда в БД равно нулю")
 
@@ -320,8 +320,8 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithSpecialCharacters(t provid
 	}
 
 	t.WithNewStep("Создание бренда со специальными символами", func(sCtx provider.StepCtx) {
-		brandName := fmt.Sprintf("Test Brand & Special %s", utils.GenerateAlias())
-		alias := fmt.Sprintf("test-brand-special-%s", utils.GenerateAlias())
+		brandName := fmt.Sprintf("Test Brand & Special %s", utils.Get(utils.BRAND_TITLE, 20))
+		alias := fmt.Sprintf("test-brand-special-%s", utils.Get(utils.ALIAS, 20))
 		testData.createRequest = s.createBrandRequest(sCtx, brandName, alias, map[string]string{
 			"en": brandName,
 		})
@@ -346,7 +346,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithSpecialCharacters(t provid
 			sCtx.Assert().Equal(testData.createRequest.Body.Sort, brandData.Sort, "Sort бренда в БД совпадает с Sort в запросе")
 			sCtx.Assert().Equal(testData.createRequest.Body.Description, brandData.Description, "Description бренда в БД совпадает с Description в запросе")
 			sCtx.Assert().Equal(s.config.Node.ProjectID, brandData.NodeUUID, "NodeUUID бренда в БД совпадает с NodeUUID в запросе")
-			sCtx.Assert().Equal(models.StatusDisabled, brandData.Status, "Status бренда в БД совпадает с Status в запросе")
+			sCtx.Assert().Equal(models.StatusDisabled, models.StatusType(brandData.Status), "Status бренда в БД совпадает с Status в запросе")
 			sCtx.Assert().NotZero(brandData.CreatedAt, "Время создания бренда в БД не равно нулю")
 			sCtx.Assert().Zero(brandData.UpdatedAt, "Время обновления бренда в БД равно нулю")
 

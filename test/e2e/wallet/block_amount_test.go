@@ -124,7 +124,7 @@ func (s *BlockAmountSuite) TestBlockAmount(t provider.T) {
 		testData.adjustmentRequest = &clientTypes.Request[capModels.CreateBalanceAdjustmentRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capClient.GetToken(sCtx)),
-				"Platform-Locale": models.LocaleEn,
+				"Platform-Locale": models.DefaultLocale,
 				"Platform-NodeID": s.config.Node.ProjectID,
 			},
 			PathParams: map[string]string{
@@ -149,7 +149,7 @@ func (s *BlockAmountSuite) TestBlockAmount(t provider.T) {
 		testData.blockRequest = &clientTypes.Request[capModels.CreateBlockAmountRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capClient.GetToken(sCtx)),
-				"Platform-Locale": models.LocaleEn,
+				"Platform-Locale": models.DefaultLocale,
 				"Platform-NodeID": s.config.Node.ProjectID,
 			},
 			PathParams: map[string]string{
@@ -246,7 +246,7 @@ func (s *BlockAmountSuite) TestBlockAmount(t provider.T) {
 		blockListRequest := &clientTypes.Request[any]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capClient.GetToken(sCtx)),
-				"Platform-Locale": models.LocaleEn,
+				"Platform-Locale": models.DefaultLocale,
 				"Platform-NodeID": s.config.Node.ProjectID,
 			},
 			PathParams: map[string]string{
@@ -268,7 +268,7 @@ func (s *BlockAmountSuite) TestBlockAmount(t provider.T) {
 		walletListRequest := &clientTypes.Request[any]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capClient.GetToken(sCtx)),
-				"Platform-Locale": models.LocaleEn,
+				"Platform-Locale": models.DefaultLocale,
 				"Platform-NodeID": s.config.Node.ProjectID,
 			},
 			PathParams: map[string]string{

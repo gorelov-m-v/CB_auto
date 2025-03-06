@@ -7,10 +7,21 @@ type DirectionType string
 type ReasonType string
 type OperationType string
 type VerificationStatus int
+type CategoryType string
+type CategoryStatus int
 
 const (
-	// Locale определяет язык переводов
-	LocaleEn = "en"
+
+	// Type определяет типы категорий
+	TypeVertical   CategoryType = "vertical"
+	TypeHorizontal CategoryType = "horizontal"
+	TypeAllGames   CategoryType = "allGames"
+
+	// CategoryStatus определяет статусы категорий
+	CategoryStatusDeleted CategoryStatus = 2
+
+	// DefaultLocale определяет язык по умолчанию
+	DefaultLocale = "en"
 
 	// StatusType определяет типы статусов
 	StatusEnabled  StatusType = 1
@@ -46,7 +57,7 @@ const (
 	OperationTypeTournamentPrize    OperationType = "TOURNAMENT_PRIZE"
 	OperationTypeJackpot            OperationType = "JACKPOT"
 
-	// VerificationStatus определяет статусы верификации
+	//VerificationStatus определяет статусы верификации
 	VerificationStatusApproved VerificationStatus = 2
 )
 
@@ -153,11 +164,12 @@ type PlayerLimit struct {
 }
 
 type CreateCapCategoryRequestBody struct {
-	Sort    int               `json:"sort"`
-	Alias   string            `json:"alias"`
-	Names   map[string]string `json:"names"`
-	Type    string            `json:"type"`
-	GroupID string            `json:"groupId"`
+	Sort      int               `json:"sort"`
+	Alias     string            `json:"alias"`
+	Names     map[string]string `json:"names"`
+	Type      CategoryType      `json:"type"`
+	GroupID   string            `json:"groupId"`
+	ProjectID string            `json:"projectId"`
 }
 
 type CreateCapCategoryResponseBody struct {
@@ -184,7 +196,7 @@ type GetCapCategoryResponseBody struct {
 	Status     StatusType        `json:"status"`
 	Sort       int               `json:"sort"`
 	IsDefault  bool              `json:"isDefault"`
-	Type       string            `json:"type"`
+	Type       CategoryType      `json:"type"`
 	PassToCms  bool              `json:"passToCms"`
 }
 
@@ -270,6 +282,18 @@ type GetWalletListWallet struct {
 
 type GetWalletListResponseBody struct {
 	Wallets []GetWalletListWallet `json:"wallets"`
+}
+
+type UpdateCapCategoryRequestBody struct {
+	Alias string            `json:"alias"`
+	Names map[string]string `json:"names"`
+	Sort  int               `json:"sort"`
+	Type  CategoryType      `json:"type"`
+}
+
+type UpdateCapCategoryResponseBody struct {
+	ID    string `json:"id"`
+	Alias string `json:"alias"`
 }
 
 type UpdateVerificationStatusRequestBody struct {

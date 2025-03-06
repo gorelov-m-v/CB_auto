@@ -1,10 +1,6 @@
 package test
 
 import (
-	"fmt"
-	"net/http"
-	"testing"
-
 	capAPI "CB_auto/internal/client/cap"
 	"CB_auto/internal/client/cap/models"
 	"CB_auto/internal/client/factory"
@@ -12,6 +8,9 @@ import (
 	clientTypes "CB_auto/internal/client/types"
 	"CB_auto/internal/config"
 	"CB_auto/pkg/utils"
+	"fmt"
+	"net/http"
+	"testing"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
@@ -42,7 +41,7 @@ func (s *BrandStatusSuite) TestBrandStatusManagement(t provider.T) {
 	var brandID string
 
 	t.WithNewStep("Создание тестового бренда", func(sCtx provider.StepCtx) {
-		brandName := fmt.Sprintf("test-brand-%s", utils.GenerateAlias())
+		brandName := fmt.Sprintf("test-brand-%s", utils.Get(utils.BRAND_TITLE, 20))
 		createRequest := &types.Request[models.CreateCapBrandRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
@@ -61,7 +60,6 @@ func (s *BrandStatusSuite) TestBrandStatusManagement(t provider.T) {
 		createResp := s.capService.CreateCapBrand(sCtx, createRequest)
 		sCtx.Assert().Equal(http.StatusOK, createResp.StatusCode, "Бренд должен быть успешно создан")
 		brandID = createResp.Body.ID
-
 	})
 
 	t.WithNewStep("Включение бренда", func(sCtx provider.StepCtx) {

@@ -26,6 +26,8 @@ const (
 	PERSONAL_ID       = "personal_id"
 	BRAND_TITLE       = "brandTitle"
 	ALIAS             = "alias"
+	CATEGORY_TITLE    = "category_title"
+	COLLECTION_TITLE  = "collection_title"
 )
 
 const (
@@ -46,7 +48,6 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-// Get возвращает строку согласно указанной конфигурации и длине (для дат параметр length используется как возраст).
 func Get(config string, length int) string {
 	switch config {
 	case INTEGER:
@@ -91,6 +92,10 @@ func Get(config string, length int) string {
 		return generateRandomString(length, latinChars+digits)
 	case ALIAS:
 		return generateAlias(length)
+	case CATEGORY_TITLE:
+		return generateCategoryTitle(length)
+	case COLLECTION_TITLE:
+		return generateCollectionTitle(length)
 	default:
 		return "Unknown argument to perform random string generation!"
 	}
@@ -216,10 +221,6 @@ func generatePersonalId() string {
 	return randomNumericString(6) + "-" + randomNumericString(5)
 }
 
-// generateBrandTitle генерирует строку brandTitle согласно следующим правилам:
-// - Может содержать любые символы (поддержка мультиязычности)
-// - Максимальная длина – 100 символов
-// - Не может состоять только из пробелов
 func generateBrandTitle(length int) string {
 	if length > 100 {
 		length = 100
@@ -227,7 +228,7 @@ func generateBrandTitle(length int) string {
 	if length <= 0 {
 		return ""
 	}
-	// Разрешённые символы: латинские, кириллические буквы, цифры, пробелы и базовая пунктуация
+
 	allowed := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz" +
 		"0123456789" +
 		"абвгдеёжзийклмнопрстуфхцчшщъыьэюя" +
@@ -245,11 +246,6 @@ func generateBrandTitle(length int) string {
 	return "A" + result[1:]
 }
 
-// generateAlias генерирует строку alias согласно следующим правилам:
-// - Строка без пробелов
-// - Разрешены: латинские маленькие буквы, цифры, дефис
-// - Двойной дефис запрещён
-// - Максимальная длина – 100 символов
 func generateAlias(length int) string {
 	if length > 100 {
 		length = 100
@@ -257,21 +253,27 @@ func generateAlias(length int) string {
 	if length <= 0 {
 		return ""
 	}
+
 	allowed := "abcdefghijklmnopqrstuvwxyz0123456789-"
-	allowedNoHyphen := "abcdefghijklmnopqrstuvwxyz0123456789"
 	var sb strings.Builder
 	var last byte
-	for i := 0; i < length; i++ {
-		var choices string
-		if i > 0 && last == '-' {
-			choices = allowedNoHyphen
+
+	ch := allowed[rand.Intn(len(allowed))]
+	sb.WriteByte(ch)
+	last = ch
+
+	for i := 1; i < length; i++ {
+		if last == '-' {
+			ch := allowed[:len(allowed)-1][rand.Intn(len(allowed)-1)]
+			sb.WriteByte(ch)
+			last = ch
 		} else {
-			choices = allowed
+			ch := allowed[rand.Intn(len(allowed))]
+			sb.WriteByte(ch)
+			last = ch
 		}
-		ch := choices[rand.Intn(len(choices))]
-		sb.WriteByte(ch)
-		last = ch
 	}
+
 	return sb.String()
 }
 
@@ -281,4 +283,62 @@ func generateRandomString(length int, charSet string) string {
 		b[i] = charSet[rand.Intn(len(charSet))]
 	}
 	return string(b)
+}
+
+func generateCategoryTitle(length int) string {
+	if length > 25 {
+		length = 25
+	}
+	if length <= 0 {
+		return ""
+	}
+
+	allowed := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" +
+		"0123456789" +
+		"абвгдеёжзийклмнопрстуфхцчшщъыьэюя" +
+		"АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ" +
+		" -")
+
+	result := make([]rune, length)
+	for i := range result {
+		result[i] = allowed[rand.Intn(len(allowed))]
+	}
+
+	if result[0] == ' ' {
+		result[0] = 'A'
+	}
+	if result[length-1] == ' ' {
+		result[length-1] = 'z'
+	}
+
+	return string(result)
+}
+
+func generateCollectionTitle(length int) string {
+	if length > 25 {
+		length = 25
+	}
+	if length <= 0 {
+		return ""
+	}
+
+	allowed := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" +
+		"0123456789" +
+		"абвгдеёжзийклмнопрстуфхцчшщъыьэюя" +
+		"АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ" +
+		" -")
+
+	result := make([]rune, length)
+	for i := range result {
+		result[i] = allowed[rand.Intn(len(allowed))]
+	}
+
+	if result[0] == ' ' {
+		result[0] = 'A'
+	}
+	if result[length-1] == ' ' {
+		result[length-1] = 'z'
+	}
+
+	return string(result)
 }
