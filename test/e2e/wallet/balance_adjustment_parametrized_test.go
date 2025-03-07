@@ -158,7 +158,7 @@ func (s *ParametrizedBalanceAdjustmentSuite) TableTestBalanceAdjustment(t provid
 		registrationMessage   kafka.PlayerMessage
 		walletCreatedEvent    *nats.NatsMessage[nats.WalletCreatedPayload]
 		adjustmentRequest     *clientTypes.Request[capModels.CreateBalanceAdjustmentRequestBody]
-		adjustmentResponse    *clientTypes.Response[capModels.CreateBalanceAdjustmentResponseBody]
+		adjustmentResponse    *clientTypes.Response[struct{}]
 		balanceAdjustedEvent  *nats.NatsMessage[nats.BalanceAdjustedPayload]
 		projectionAdjustEvent kafka.ProjectionSourceMessage
 	}

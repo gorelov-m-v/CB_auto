@@ -193,7 +193,7 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capClient.GetToken(sCtx)),
 				"Platform-NodeId": s.config.Node.ProjectID,
-				"Platform-Locale": capModels.LocaleEn,
+				"Platform-Locale": capModels.DefaultLocale,
 			},
 			PathParams: map[string]string{
 				"playerID": testData.registrationMessage.Player.ExternalID,

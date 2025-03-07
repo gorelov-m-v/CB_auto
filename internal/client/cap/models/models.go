@@ -237,8 +237,6 @@ type CreateBalanceAdjustmentRequestBody struct {
 	Comment       string        `json:"comment"`
 }
 
-type CreateBalanceAdjustmentResponseBody struct{}
-
 type CreateBlockAmountRequestBody struct {
 	Reason   string `json:"reason"`
 	Amount   string `json:"amount"`
