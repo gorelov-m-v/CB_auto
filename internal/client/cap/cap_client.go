@@ -21,7 +21,7 @@ type CapAPI interface {
 	UpdateBlockers(sCtx provider.StepCtx, req *types.Request[models.BlockersRequestBody]) *types.Response[struct{}]
 	GetBlockers(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetBlockersResponseBody]
 	GetPlayerLimits(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetPlayerLimitsResponseBody]
-	CreateBalanceAdjustment(ctx provider.StepCtx, req *types.Request[models.CreateBalanceAdjustmentRequestBody]) *types.Response[models.CreateBalanceAdjustmentResponseBody]
+	CreateBalanceAdjustment(ctx provider.StepCtx, req *types.Request[models.CreateBalanceAdjustmentRequestBody]) *types.Response[struct{}]
 	CreateBlockAmount(sCtx provider.StepCtx, req *types.Request[models.CreateBlockAmountRequestBody]) *types.Response[models.CreateBlockAmountResponseBody]
 	GetBlockAmountList(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.BlockAmountListResponseBody]
 	GetWalletList(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetWalletListResponseBody]
@@ -297,13 +297,13 @@ func (c *capClient) UpdateCapCategoryError(sCtx provider.StepCtx, req *types.Req
 	return resp
 }
 
-func (c *capClient) CreateBalanceAdjustment(sCtx provider.StepCtx, req *types.Request[models.CreateBalanceAdjustmentRequestBody]) *types.Response[models.CreateBalanceAdjustmentResponseBody] {
+func (c *capClient) CreateBalanceAdjustment(sCtx provider.StepCtx, req *types.Request[models.CreateBalanceAdjustmentRequestBody]) *types.Response[struct{}] {
 	req.Method = "POST"
 	req.Path = "/_cap/api/v1/wallet/{player_uuid}/create-balance-adjustment"
-	resp, err := httpClient.DoRequest[models.CreateBalanceAdjustmentRequestBody, models.CreateBalanceAdjustmentResponseBody](sCtx, c.client, req)
+	resp, err := httpClient.DoRequest[models.CreateBalanceAdjustmentRequestBody, struct{}](sCtx, c.client, req)
 	if err != nil {
 		log.Printf("CreateBalanceAdjustment failed: %v", err)
-		return &types.Response[models.CreateBalanceAdjustmentResponseBody]{
+		return &types.Response[struct{}]{
 			StatusCode: http.StatusInternalServerError,
 			Error: &types.ErrorResponse{
 				Body: fmt.Sprintf("CreateBalanceAdjustment failed: %v", err),
