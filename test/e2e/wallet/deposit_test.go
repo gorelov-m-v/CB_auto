@@ -138,7 +138,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 				Profession:       "QA",
 				IBAN:             utils.Get(utils.IBAN, 10),
 				Birthday:         "1980-01-01",
-				Country:          "LV",
+				Country:          s.config.Node.DefaultCountry,
 			},
 		}
 
@@ -174,7 +174,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 			Body: &publicModels.SetTurnoverLimitRequestBody{
 				Amount:    "100",
 				Currency:  s.config.Node.DefaultCurrency,
-				Type:      "daily",
+				Type:      publicModels.LimitPeriodDaily,
 				StartedAt: time.Now().Unix(),
 			},
 		}
