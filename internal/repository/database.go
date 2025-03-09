@@ -55,28 +55,42 @@ const (
 	Bonus  DSNType = "bonus"
 )
 
-func OpenConnector(t provider.T, config *config.MySQLConfig, dsnType DSNType) Connector {
-	dsn := config.DSNCore
+func buildDSN(common config.MySQLCommonConfig, dbName string) string {
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s",
+		common.User,
+		common.Password,
+		common.Host,
+		common.Port,
+		dbName)
+}
+
+func OpenConnector(t provider.T, cfg *config.MySQLConfig, dsnType DSNType) Connector {
+	var dbSuffix string
 	switch dsnType {
 	case Wallet:
-		dsn = config.DSNWallet
+		dbSuffix = cfg.DatabaseWallet
 	case Bonus:
-		dsn = config.DSNBonus
+		dbSuffix = cfg.DatabaseBonus
+	default:
+		dbSuffix = cfg.DatabaseCore
 	}
 
-	db, err := sqlx.Open(config.DriverName, dsn)
+	fullDBName := cfg.Common.DatabasePrefix + dbSuffix
+
+	dsn := buildDSN(cfg.Common, fullDBName)
+	db, err := sqlx.Open(cfg.Common.DriverName, dsn)
 	if err != nil {
 		t.Fatalf("Ошибка открытия соединения с БД: %v", err)
 	}
 
-	db.SetConnMaxLifetime(config.ConnMaxLifetime)
-	db.SetConnMaxIdleTime(config.ConnMaxIdleTime)
-	db.SetMaxOpenConns(config.MaxOpenConns)
-	if config.MaxIdleConns != -1 {
-		db.SetMaxIdleConns(config.MaxIdleConns)
+	db.SetConnMaxLifetime(cfg.ConnMaxLifetime)
+	db.SetConnMaxIdleTime(cfg.ConnMaxIdleTime)
+	db.SetMaxOpenConns(cfg.MaxOpenConns)
+	if cfg.MaxIdleConns != -1 {
+		db.SetMaxIdleConns(cfg.MaxIdleConns)
 	}
 
-	if err := pingDB(context.Background(), db, config.PingTimeout); err != nil {
+	if err := pingDB(context.Background(), db, cfg.PingTimeout); err != nil {
 		if err := db.Close(); err != nil {
 			log.Printf("failed to close db connection: %v", err)
 		}

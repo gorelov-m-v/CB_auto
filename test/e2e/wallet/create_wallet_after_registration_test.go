@@ -149,7 +149,7 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 			break
 		}
 
-		sCtx.Assert().Equal(int(nats.TypeReal), wallet.Type, "Тип кошелька в Redis – реальный")
+		sCtx.Assert().Equal(int(nats.TypeReal), int(wallet.Type), "Тип кошелька в Redis – реальный")
 		sCtx.Assert().Equal(int(nats.StatusEnabled), wallet.Status, "Статус кошелька в Redis – включён")
 	})
 
@@ -166,7 +166,7 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 		sCtx.Assert().True(walletFromDatabase.IsDefault, "Кошелёк помечен как \"по умолчанию\" в БД")
 		sCtx.Assert().True(walletFromDatabase.IsBasic, "Кошелёк помечен как базовый в БД")
 		sCtx.Assert().False(walletFromDatabase.IsBlocked, "Кошелёк не заблокирован в БД")
-		sCtx.Assert().Equal(int(nats.TypeReal), walletFromDatabase.WalletType, "Тип кошелька в БД – реальный")
+		sCtx.Assert().Equal(int(nats.TypeReal), int(walletFromDatabase.WalletType), "Тип кошелька в БД – реальный")
 		sCtx.Assert().Equal(int(testData.walletCreatedEvent.Sequence), walletFromDatabase.Seq, "Номер последовательности в БД совпадает с номером из ивента")
 		sCtx.Assert().True(walletFromDatabase.IsGamblingActive, "Гэмблинг активен в БД")
 		sCtx.Assert().True(walletFromDatabase.IsBettingActive, "Беттинг активен в БД")
@@ -208,43 +208,34 @@ func (s *FastRegistrationSuite) TestFastRegistration(t provider.T) {
 		sCtx.Require().NoError(err, "Значение кошелька получено из Redis")
 		sCtx.Require().NotEmpty(redisValue.WalletUUID, "Кошелек создан в Redis")
 
-		// Проверка основных данных кошелька
 		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.WalletUUID, redisValue.WalletUUID, "UUID кошелька совпадает")
 		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.PlayerUUID, redisValue.PlayerUUID, "UUID игрока совпадает")
 		sCtx.Assert().Equal("00000000-0000-0000-0000-000000000000", redisValue.PlayerBonusUUID, "Бонусный UUID пустой")
 		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.NodeUUID, redisValue.NodeUUID, "UUID ноды совпадает")
 
-		// Проверка типа и статуса
 		sCtx.Assert().Equal(int(nats.TypeReal), redisValue.Type, "Тип кошелька - реальный")
 		sCtx.Assert().Equal(int(nats.StatusEnabled), redisValue.Status, "Статус кошелька - включён")
 		sCtx.Assert().True(redisValue.Valid, "Кошелёк валидный")
 
-		// Проверка флагов активности
 		sCtx.Assert().True(redisValue.IsGamblingActive, "Гэмблинг активен")
 		sCtx.Assert().True(redisValue.IsBettingActive, "Беттинг активен")
 
-		// Проверка валюты и баланса
 		sCtx.Assert().Equal(s.config.Node.DefaultCurrency, redisValue.Currency, "Валюта совпадает")
 		sCtx.Assert().Equal("0", redisValue.Balance, "Баланс равен 0")
 		sCtx.Assert().Equal("0", redisValue.AvailableWithdrawalBalance, "Доступный для вывода баланс равен 0")
 		sCtx.Assert().Equal("0", redisValue.BalanceBefore, "Предыдущий баланс равен 0")
 
-		// Проверка дат
 		sCtx.Assert().NotZero(redisValue.CreatedAt, "Дата создания не нулевая")
 		sCtx.Assert().NotZero(redisValue.UpdatedAt, "Дата обновления не нулевая")
 		sCtx.Assert().Equal(int(testData.walletCreatedEvent.Sequence), redisValue.LastSeqNumber, "Номер последовательности верный")
 
-		// Проверка флагов
 		sCtx.Assert().True(redisValue.Default, "Кошелёк помечен как дефолтный")
 		sCtx.Assert().True(redisValue.Main, "Кошелёк помечен как основной")
 		sCtx.Assert().False(redisValue.IsBlocked, "Кошелёк не заблокирован")
 		sCtx.Assert().False(redisValue.IsKYCUnverified, "Кошелёк не имеет статуса неверифицированного KYC")
 		sCtx.Assert().False(redisValue.IsSumSubVerified, "Кошелёк не верифицирован через SumSub")
 
-		// Проверка бонусной информации
 		sCtx.Assert().Equal("00000000-0000-0000-0000-000000000000", redisValue.BonusInfo.BonusUUID, "Бонусный UUID пустой")
-
-		// Проверка массивов
 		sCtx.Assert().Empty(redisValue.BlockedAmounts, "Нет заблокированных средств")
 		sCtx.Assert().Empty(redisValue.Limits, "Нет установленных лимитов")
 		sCtx.Assert().Empty(redisValue.Deposits, "Нет записей о депозитах")
