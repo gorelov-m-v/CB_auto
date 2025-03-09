@@ -34,8 +34,10 @@ type MySQLConfig struct {
 }
 
 type KafkaConfig struct {
-	Brokers string        `json:"brokers"`
-	Timeout time.Duration `json:"timeout"`
+	Brokers     string        `json:"brokers"`
+	Timeout     time.Duration `json:"timeout"`
+	TopicPrefix string        `json:"topic_prefix"`
+	BufferSize  int           `json:"buffer_size"`
 }
 
 type NatsConfig struct {
@@ -89,21 +91,17 @@ func (k *KafkaConfig) GetTimeout() time.Duration {
 }
 
 func ReadConfig(t provider.T) *Config {
-	// Определяем путь к исходному файлу этого пакета
 	_, currentFile, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatalf("Ошибка определения пути к исходному файлу конфигурации")
 	}
-	// Корень проекта – два уровня вверх от директории пакета (например, из CB_auto/internal/config в CB_auto)
 	projectRoot := filepath.Join(filepath.Dir(currentFile), "..", "..")
 
-	// Устанавливаем путь для отчетов Allure относительно корня проекта
 	allureOutputPath := filepath.Join(projectRoot, "allure-results")
 	if err := os.Setenv("ALLURE_OUTPUT_PATH", allureOutputPath); err != nil {
 		t.Fatalf("Ошибка установки пути для отчетов Allure: %v", err)
 	}
 
-	// Формируем относительный путь к файлу конфигурации относительно корня проекта
 	configPath := filepath.Join(projectRoot, "config.json")
 	configFile, err := os.Open(configPath)
 	if err != nil {
@@ -117,7 +115,6 @@ func ReadConfig(t provider.T) *Config {
 		t.Fatalf("Ошибка декодирования конфигурации: %v", err)
 	}
 
-	// Приводим временные параметры к нужной единице измерения
 	config.MySQL.PingTimeout *= time.Nanosecond
 	config.MySQL.ConnMaxLifetime *= time.Nanosecond
 	config.MySQL.ConnMaxIdleTime *= time.Nanosecond

@@ -15,15 +15,32 @@ import (
 )
 
 type TopicType string
+type TopicPart string
 
 const (
-	BrandTopic      TopicType = "beta-09_core.gambling.v1.Brand"
-	PlayerTopic     TopicType = "beta-09_player.v1.account"
-	LimitTopic      TopicType = "beta-09_limits.v2"
-	ProjectionTopic TopicType = "beta-09_wallet.v8.projectionSource"
+	BrandTopicPart      TopicPart = "core.gambling.v1.Brand"
+	PlayerTopicPart     TopicPart = "player.v1.account"
+	LimitTopicPart      TopicPart = "limits.v2"
+	ProjectionTopicPart TopicPart = "wallet.v8.projectionSource"
 )
 
-var allTopics = []TopicType{BrandTopic, PlayerTopic, LimitTopic, ProjectionTopic}
+type Topics struct {
+	Brand      TopicType
+	Player     TopicType
+	Limit      TopicType
+	Projection TopicType
+}
+
+func NewTopics(prefix string) Topics {
+	return Topics{
+		Brand:      TopicType(prefix + string(BrandTopicPart)),
+		Player:     TopicType(prefix + string(PlayerTopicPart)),
+		Limit:      TopicType(prefix + string(LimitTopicPart)),
+		Projection: TopicType(prefix + string(ProjectionTopicPart)),
+	}
+}
+
+var TopicsConfig Topics
 
 type subscriber struct {
 	ch     chan kafka.Message
@@ -47,10 +64,48 @@ func (sub *subscriber) Close() {
 	})
 }
 
+type RingBuffer struct {
+	mu     sync.Mutex
+	buffer []kafka.Message
+	size   int
+	head   int
+	count  int
+}
+
+func NewRingBuffer(size int) *RingBuffer {
+	return &RingBuffer{
+		buffer: make([]kafka.Message, size),
+		size:   size,
+	}
+}
+
+func (rb *RingBuffer) Add(msg kafka.Message) {
+	rb.mu.Lock()
+	defer rb.mu.Unlock()
+
+	rb.buffer[rb.head] = msg
+	rb.head = (rb.head + 1) % rb.size
+	if rb.count < rb.size {
+		rb.count++
+	}
+}
+
+func (rb *RingBuffer) GetAll() []kafka.Message {
+	rb.mu.Lock()
+	defer rb.mu.Unlock()
+
+	messages := make([]kafka.Message, rb.count)
+	for i := 0; i < rb.count; i++ {
+		index := (rb.head - rb.count + i + rb.size) % rb.size
+		messages[i] = rb.buffer[index]
+	}
+	return messages
+}
+
 type Kafka struct {
 	readers          []*kafka.Reader
 	subscribers      map[TopicType][]*subscriber
-	bufferedMessages map[TopicType][]kafka.Message
+	bufferedMessages map[TopicType]*RingBuffer
 	Timeout          time.Duration
 	ctx              context.Context
 	cancel           context.CancelFunc
@@ -71,7 +126,8 @@ func GetInstance(t provider.T, cfg *config.Config) *Kafka {
 	defer instanceMu.Unlock()
 
 	once.Do(func() {
-		t.Logf("Creating singleton Kafka consumer with all topics and buffering")
+		t.Logf("Создание синглтона Kafka consumer с динамическими топиками")
+		TopicsConfig = NewTopics(cfg.Kafka.TopicPrefix)
 		instance = newConsumer(cfg)
 		instance.startReading()
 	})
@@ -99,15 +155,27 @@ func CloseInstance(t provider.T) {
 func newConsumer(cfg *config.Config) *Kafka {
 	var readers []*kafka.Reader
 	subscribers := make(map[TopicType][]*subscriber)
-	bufferedMessages := make(map[TopicType][]kafka.Message)
+	bufferedMessages := make(map[TopicType]*RingBuffer)
 
-	for _, topic := range allTopics {
-		bufferedMessages[topic] = make([]kafka.Message, 0)
+	topicList := []TopicType{
+		TopicsConfig.Brand,
+		TopicsConfig.Player,
+		TopicsConfig.Limit,
+		TopicsConfig.Projection,
 	}
 
-	for _, topicType := range allTopics {
+	bufferSize := cfg.Kafka.BufferSize
+	if bufferSize < 1 {
+		bufferSize = 500
+	}
+
+	for _, topic := range topicList {
+		bufferedMessages[topic] = NewRingBuffer(bufferSize)
+	}
+
+	for _, topicType := range topicList {
 		topic := string(topicType)
-		log.Printf("Creating Kafka reader: brokers=%v, topic=%s, groupID=%s", cfg.Kafka.Brokers, topic, cfg.Node.GroupID)
+		log.Printf("Создание Kafka reader: brokers=%v, topic=%s, groupID=%s", cfg.Kafka.Brokers, topic, cfg.Node.GroupID)
 		reader := kafka.NewReader(kafka.ReaderConfig{
 			Brokers:        []string{cfg.Kafka.Brokers},
 			Topic:          topic,
@@ -147,29 +215,29 @@ func (k *Kafka) startReading() {
 
 func (k *Kafka) readMessages(reader *kafka.Reader) {
 	defer k.wg.Done()
-	log.Printf("Started reading messages")
+	log.Printf("Начало чтения сообщений")
 	for {
 		select {
 		case <-k.ctx.Done():
-			log.Printf("Stopping message reader")
+			log.Printf("Остановка чтения сообщений")
 			return
 		default:
 			msg, err := reader.ReadMessage(k.ctx)
 			if err != nil {
 				if k.ctx.Err() != nil {
-					log.Printf("Message reading stopped: %v", err)
+					log.Printf("Чтение сообщений остановлено: %v", err)
 					return
 				}
-				log.Printf("Error reading message: %v", err)
+				log.Printf("Ошибка чтения сообщения: %v", err)
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
-			log.Printf("Received message from topic %s, partition %d, offset %d: %s",
+			log.Printf("Получено сообщение из топика %s, partition %d, offset %d: %s",
 				msg.Topic, msg.Partition, msg.Offset, string(msg.Value))
 
 			topic := TopicType(msg.Topic)
 			k.mu.Lock()
-			k.bufferedMessages[topic] = append(k.bufferedMessages[topic], msg)
+			k.bufferedMessages[topic].Add(msg)
 			subs := make([]*subscriber, len(k.subscribers[topic]))
 			copy(subs, k.subscribers[topic])
 			k.mu.Unlock()
@@ -204,7 +272,7 @@ func FindMessageByFilter[T KafkaMessage](sCtx provider.StepCtx, k *Kafka, filter
 	for {
 		select {
 		case <-ctx.Done():
-			sCtx.Logf("Таймаут при ожидании сообщения в топике %s", topic)
+			sCtx.Logf("Таймаут ожидания сообщения в топике %s", topic)
 			return empty
 		case msg, ok := <-ch:
 			if !ok {
@@ -214,7 +282,7 @@ func FindMessageByFilter[T KafkaMessage](sCtx provider.StepCtx, k *Kafka, filter
 			sCtx.Logf("Получено сообщение: %s", string(msg.Value))
 			var data T
 			if err := json.Unmarshal(msg.Value, &data); err != nil {
-				sCtx.Logf("Не удалось распарсить сообщение в тип %T: %v", data, err)
+				sCtx.Logf("Ошибка парсинга сообщения в тип %T: %v", data, err)
 				continue
 			}
 			if filter(data) {
@@ -229,9 +297,7 @@ func (k *Kafka) SubscribeToTopic(topic TopicType) chan kafka.Message {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 
-	buffered := make([]kafka.Message, len(k.bufferedMessages[topic]))
-	copy(buffered, k.bufferedMessages[topic])
-
+	buffered := k.bufferedMessages[topic].GetAll()
 	sub := newSubscriber()
 	k.subscribers[topic] = append(k.subscribers[topic], sub)
 
@@ -298,15 +364,15 @@ type KafkaMessage interface {
 }
 
 func (m PlayerMessage) GetTopic() TopicType {
-	return PlayerTopic
+	return TopicsConfig.Player
 }
 
 func (m LimitMessage) GetTopic() TopicType {
-	return LimitTopic
+	return TopicsConfig.Limit
 }
 
 func (m ProjectionSourceMessage) GetTopic() TopicType {
-	return ProjectionTopic
+	return TopicsConfig.Projection
 }
 
 func GetTopicForType[T KafkaMessage]() TopicType {
