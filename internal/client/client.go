@@ -133,10 +133,13 @@ func InitClient(t provider.T, cfg *config.Config, clientType types.ClientType) *
 	}
 }
 
-func DoRequest[T any, V any](sCtx provider.StepCtx, c *types.Client, request *types.Request[T]) (*types.Response[V], error) {
+func DoRequest[T any, V any](sCtx provider.StepCtx, c *types.Client, request *types.Request[T]) *types.Response[V] {
 	req, bodyBytes, err := makeRequest(c.ServiceURL, request)
 	if err != nil {
-		return nil, fmt.Errorf("request creation failed: %v", err)
+		log.Printf("Failed to create request: %v", err)
+		return &types.Response[V]{
+			Error: &types.ErrorResponse{Body: err.Error()},
+		}
 	}
 
 	log.Printf("Request URL: %s, Method: %s, Headers: %+v", req.URL.String(), req.Method, req.Header)
@@ -146,13 +149,19 @@ func DoRequest[T any, V any](sCtx provider.StepCtx, c *types.Client, request *ty
 
 	resp, err := c.HttpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("httpClient.Do failed: %v", err)
+		log.Printf("HTTP request failed: %v", err)
+		return &types.Response[V]{
+			Error: &types.ErrorResponse{Body: err.Error()},
+		}
 	}
 	defer resp.Body.Close()
 
 	responseBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %v", err)
+		log.Printf("Failed to read response body: %v", err)
+		return &types.Response[V]{
+			Error: &types.ErrorResponse{Body: err.Error()},
+		}
 	}
 
 	log.Printf("Response Status: %d, Headers: %+v, Body: %s", resp.StatusCode, resp.Header, string(responseBody))
@@ -163,18 +172,21 @@ func DoRequest[T any, V any](sCtx provider.StepCtx, c *types.Client, request *ty
 	}
 
 	if resp.StatusCode >= 400 {
-		response.Error = &types.ErrorResponse{Body: string(responseBody)}
-		return response, nil
+		response.Error = &types.ErrorResponse{
+			Body: string(responseBody),
+		}
+		return response
 	}
 
 	if len(responseBody) > 0 {
 		if err := json.Unmarshal(responseBody, &response.Body); err != nil {
-			return nil, fmt.Errorf("failed to decode response body: %v", err)
+			log.Printf("Failed to decode response body: %v", err)
+			response.Error = &types.ErrorResponse{Body: err.Error()}
 		}
 	}
 
 	sCtx.WithAttachments(allure.NewAttachment("HTTP request", allure.JSON, utils.CreateHttpAttachRequest(request)))
 	sCtx.WithAttachments(allure.NewAttachment("HTTP response", allure.JSON, utils.CreateHttpAttachResponse(response)))
 
-	return response, nil
+	return response
 }

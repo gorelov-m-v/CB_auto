@@ -3,23 +3,34 @@ package config
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
 
+type MySQLCommonConfig struct {
+	DriverName     string `json:"driver_name"`
+	User           string `json:"user"`
+	Password       string `json:"password"`
+	Host           string `json:"host"`
+	Port           int    `json:"port"`
+	DatabasePrefix string `json:"database_prefix"`
+}
+
 type MySQLConfig struct {
-	DriverName      string        `json:"driver_name"`
-	DSNCore         string        `json:"dsn_core"`
-	DSNWallet       string        `json:"dsn_wallet"`
-	DSNBonus        string        `json:"dsn_bonus"`
-	PingTimeout     time.Duration `json:"ping_timeout"`
-	ConnMaxLifetime time.Duration `json:"conn_max_lifetime"`
-	ConnMaxIdleTime time.Duration `json:"conn_max_idle_time"`
-	MaxOpenConns    int           `json:"max_open_conns"`
-	MaxIdleConns    int           `json:"max_idle_conns"`
-	RetryAttempts   int           `json:"retry_attempts"`
-	RetryDelay      time.Duration `json:"retry_delay"`
+	Common          MySQLCommonConfig `json:"common"`
+	DatabaseCore    string            `json:"database_core"`
+	DatabaseWallet  string            `json:"database_wallet"`
+	DatabaseBonus   string            `json:"database_bonus"`
+	PingTimeout     time.Duration     `json:"ping_timeout"`
+	ConnMaxLifetime time.Duration     `json:"conn_max_lifetime"`
+	ConnMaxIdleTime time.Duration     `json:"conn_max_idle_time"`
+	MaxOpenConns    int               `json:"max_open_conns"`
+	MaxIdleConns    int               `json:"max_idle_conns"`
+	RetryAttempts   int               `json:"retry_attempts"`
+	RetryDelay      time.Duration     `json:"retry_delay"`
 }
 
 type KafkaConfig struct {
@@ -78,11 +89,23 @@ func (k *KafkaConfig) GetTimeout() time.Duration {
 }
 
 func ReadConfig(t provider.T) *Config {
-	if err := os.Setenv("ALLURE_OUTPUT_PATH", "C:/Users/User1/GolandProjects/CB_auto/allure-results"); err != nil {
+	// Определяем путь к исходному файлу этого пакета
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatalf("Ошибка определения пути к исходному файлу конфигурации")
+	}
+	// Корень проекта – два уровня вверх от директории пакета (например, из CB_auto/internal/config в CB_auto)
+	projectRoot := filepath.Join(filepath.Dir(currentFile), "..", "..")
+
+	// Устанавливаем путь для отчетов Allure относительно корня проекта
+	allureOutputPath := filepath.Join(projectRoot, "allure-results")
+	if err := os.Setenv("ALLURE_OUTPUT_PATH", allureOutputPath); err != nil {
 		t.Fatalf("Ошибка установки пути для отчетов Allure: %v", err)
 	}
 
-	configFile, err := os.Open("C:/Users/User1/GolandProjects/CB_auto/config.json")
+	// Формируем относительный путь к файлу конфигурации относительно корня проекта
+	configPath := filepath.Join(projectRoot, "config.json")
+	configFile, err := os.Open(configPath)
 	if err != nil {
 		t.Fatalf("Ошибка открытия файла конфигурации: %v", err)
 	}
@@ -94,6 +117,7 @@ func ReadConfig(t provider.T) *Config {
 		t.Fatalf("Ошибка декодирования конфигурации: %v", err)
 	}
 
+	// Приводим временные параметры к нужной единице измерения
 	config.MySQL.PingTimeout *= time.Nanosecond
 	config.MySQL.ConnMaxLifetime *= time.Nanosecond
 	config.MySQL.ConnMaxIdleTime *= time.Nanosecond
