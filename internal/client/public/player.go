@@ -28,7 +28,7 @@ func (c *publicClient) UpdatePlayer(sCtx provider.StepCtx, req *types.Request[mo
 	return httpClient.DoRequest[models.UpdatePlayerRequestBody, models.UpdatePlayerResponseBody](sCtx, c.client, req)
 }
 
-func (c *publicClient) VerifyIdentity(sCtx provider.StepCtx, req *types.Request[models.VerifyIdentityRequestBody]) *types.Response[models.VerifyIdentityResponseBody] {
+func (c *publicClient) VerifyIdentity(sCtx provider.StepCtx, req *types.Request[models.VerifyIdentityRequestBody]) *types.Response[struct{}] {
 	req.Method = http.MethodPost
 	req.Path = "/_front_api/api/v1/player/verification/identity"
 
@@ -40,7 +40,7 @@ func (c *publicClient) VerifyIdentity(sCtx provider.StepCtx, req *types.Request[
 	if req.Body.ExpiryDate != "" {
 		req.SetFormField("expiryDate", req.Body.ExpiryDate)
 	}
-	return httpClient.DoRequest[models.VerifyIdentityRequestBody, models.VerifyIdentityResponseBody](sCtx, c.client, req)
+	return httpClient.DoRequest[models.VerifyIdentityRequestBody, struct{}](sCtx, c.client, req)
 }
 
 func (c *publicClient) GetVerificationStatus(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[[]models.VerificationStatusResponseItem] {
@@ -49,8 +49,8 @@ func (c *publicClient) GetVerificationStatus(sCtx provider.StepCtx, req *types.R
 	return httpClient.DoRequest[any, []models.VerificationStatusResponseItem](sCtx, c.client, req)
 }
 
-func (c *publicClient) RequestContactVerification(sCtx provider.StepCtx, req *types.Request[models.RequestVerificationRequestBody]) *types.Response[models.RequestVerificationResponseBody] {
+func (c *publicClient) RequestContactVerification(sCtx provider.StepCtx, req *types.Request[models.RequestVerificationRequestBody]) *types.Response[struct{}] {
 	req.Method = http.MethodPost
 	req.Path = "/_front_api/api/v1/contacts/request-verification"
-	return httpClient.DoRequest[models.RequestVerificationRequestBody, models.RequestVerificationResponseBody](sCtx, c.client, req)
+	return httpClient.DoRequest[models.RequestVerificationRequestBody, struct{}](sCtx, c.client, req)
 }
