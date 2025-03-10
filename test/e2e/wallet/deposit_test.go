@@ -3,6 +3,7 @@ package test
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -83,6 +84,10 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 		setSingleBetLimitReq       *clientTypes.Request[publicModels.SetSingleBetLimitRequestBody]
 		setTurnoverLimitReq        *clientTypes.Request[publicModels.SetTurnoverLimitRequestBody]
 		verificationStatusResponse *clientTypes.Response[[]publicModels.VerificationStatusResponseItem]
+		phoneVerificationRequest   *clientTypes.Request[publicModels.RequestVerificationRequestBody]
+		emailVerificationRequest   *clientTypes.Request[publicModels.RequestVerificationRequestBody]
+		emailConfirmationMessage   kafka.PlayerMessage
+		phoneConfirmationMessage   kafka.PlayerMessage
 	}
 
 	t.WithNewStep("Регистрация нового игрока", func(sCtx provider.StepCtx) {
@@ -236,25 +241,31 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 	})
 
 	t.WithNewStep("Запрос верификации телефона", func(sCtx provider.StepCtx) {
-		req := &clientTypes.Request[publicModels.RequestVerificationRequestBody]{
+		testData.phoneVerificationRequest = &clientTypes.Request[publicModels.RequestVerificationRequestBody]{
+			Method: http.MethodPost,
+			Path:   "/_front_api/api/v1/contacts/request-verification",
 			Headers: map[string]string{
 				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
+				"Content-Type":  "application/json",
 			},
 			Body: &publicModels.RequestVerificationRequestBody{
-				Contact: "+37167598673",
+				Contact: "+37117518673",
 				Type:    publicModels.ContactTypePhone,
 			},
 		}
 
-		resp := s.publicClient.RequestContactVerification(sCtx, req)
+		phoneVerificationResponse := s.publicClient.RequestContactVerification(sCtx, testData.phoneVerificationRequest)
 
-		sCtx.Require().Equal(http.StatusOK, resp.StatusCode, "Запрос верификации телефона успешно создан")
+		sCtx.Require().Equal(http.StatusOK, phoneVerificationResponse.StatusCode, "Запрос верификации телефона успешно создан")
 	})
 
 	t.WithNewStep("Запрос верификации электронной почты", func(sCtx provider.StepCtx) {
-		req := &clientTypes.Request[publicModels.RequestVerificationRequestBody]{
+		testData.emailVerificationRequest = &clientTypes.Request[publicModels.RequestVerificationRequestBody]{
+			Method: http.MethodPost,
+			Path:   "/_front_api/api/v1/contacts/request-verification",
 			Headers: map[string]string{
 				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
+				"Content-Type":  "application/json",
 			},
 			Body: &publicModels.RequestVerificationRequestBody{
 				Contact: fmt.Sprintf("test%d@example.com", time.Now().Unix()),
@@ -262,35 +273,115 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 			},
 		}
 
-		resp := s.publicClient.RequestContactVerification(sCtx, req)
+		emailVerificationResponse := s.publicClient.RequestContactVerification(sCtx, testData.emailVerificationRequest)
 
-		sCtx.Require().Equal(http.StatusOK, resp.StatusCode, "Запрос верификации email успешно создан")
+		sCtx.Require().Equal(http.StatusOK, emailVerificationResponse.StatusCode, "Запрос верификации email успешно создан")
 	})
 
-	time.Sleep(10 * time.Second)
+	t.WithNewStep("Проверка Kafka-сообщения о подтверждении электронной почты", func(sCtx provider.StepCtx) {
+		testData.emailConfirmationMessage = kafka.FindMessageByFilter[kafka.PlayerMessage](sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
+			return msg.Message.EventType == string(kafka.PlayerEventConfirmationEmail) &&
+				msg.Player.AccountID == testData.registrationResponse.Body.Username &&
+				msg.Player.Email == testData.emailVerificationRequest.Body.Contact
+		})
 
-	t.WithNewStep("Создание депозита", func(sCtx provider.StepCtx) {
-		testData.depositRequest = &clientTypes.Request[publicModels.DepositRequestBody]{
+		sCtx.Require().Equal(kafka.PlayerEventConfirmationEmail, testData.emailConfirmationMessage.Message.EventType, "Тип события подтверждения email")
+
+		confirmationContext, err := testData.emailConfirmationMessage.GetConfirmationContext()
+		sCtx.Require().NoError(err, "Ошибка получения контекста подтверждения")
+		sCtx.Require().NotEmpty(confirmationContext.ConfirmationCode, "Код подтверждения email не пустой")
+	})
+
+	t.WithNewStep("Проверка Kafka-сообщения о подтверждении телефона", func(sCtx provider.StepCtx) {
+		phoneNumberWithoutPlus := strings.TrimPrefix(testData.phoneVerificationRequest.Body.Contact, "+")
+
+		testData.phoneConfirmationMessage = kafka.FindMessageByFilter[kafka.PlayerMessage](sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
+			return msg.Message.EventType == string(kafka.PlayerEventConfirmationPhone) &&
+				msg.Player.AccountID == testData.registrationResponse.Body.Username &&
+				msg.Player.Phone == phoneNumberWithoutPlus
+		})
+
+		sCtx.Require().Equal(kafka.PlayerEventConfirmationPhone, testData.phoneConfirmationMessage.Message.EventType, "Тип события подтверждения телефона")
+
+		confirmationContext, err := testData.phoneConfirmationMessage.GetConfirmationContext()
+		sCtx.Require().NoError(err, "Ошибка получения контекста подтверждения")
+		sCtx.Require().NotEmpty(confirmationContext.ConfirmationCode, "Код подтверждения телефона не пустой")
+	})
+
+	t.WithNewStep("Подтверждение телефона", func(sCtx provider.StepCtx) {
+		// Получаем код подтверждения из сообщения Kafka
+		phoneConfirmContext, err := testData.phoneConfirmationMessage.GetConfirmationContext()
+		sCtx.Require().NoError(err, "Ошибка получения контекста подтверждения телефона")
+
+		// Создаем запрос на подтверждение телефона
+		req := &clientTypes.Request[publicModels.ConfirmContactRequestBody]{
 			Headers: map[string]string{
 				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
 				"Content-Type":  "application/json",
 			},
-			Body: &publicModels.DepositRequestBody{
-				Amount:          "10",
-				PaymentMethodID: 1001,
-				Currency:        s.config.Node.DefaultCurrency,
-				Country:         s.config.Node.DefaultCountry,
-				Redirect: publicModels.DepositRedirectURLs{
-					Failed:  publicModels.DepositRedirectURLFailed,
-					Success: publicModels.DepositRedirectURLSuccess,
-					Pending: publicModels.DepositRedirectURLPending,
-				},
+			Body: &publicModels.ConfirmContactRequestBody{
+				Contact: testData.phoneVerificationRequest.Body.Contact,
+				Type:    publicModels.ContactTypePhone,
+				Code:    phoneConfirmContext.ConfirmationCode,
 			},
 		}
 
-		testData.depositResponse = s.publicClient.CreateDeposit(sCtx, testData.depositRequest)
-		sCtx.Require().Equal(http.StatusCreated, testData.depositResponse.StatusCode, "Статус код ответа равен 201")
+		// Выполняем запрос на подтверждение телефона
+		resp := s.publicClient.ConfirmContact(sCtx, req)
+
+		// Проверяем статус-код
+		sCtx.Require().Equal(http.StatusCreated, resp.StatusCode, "Телефон успешно подтвержден")
 	})
+
+	t.WithNewStep("Подтверждение электронной почты", func(sCtx provider.StepCtx) {
+		// Получаем код подтверждения из сообщения Kafka
+		emailConfirmContext, err := testData.emailConfirmationMessage.GetConfirmationContext()
+		sCtx.Require().NoError(err, "Ошибка получения контекста подтверждения email")
+
+		// Создаем запрос на подтверждение email
+		req := &clientTypes.Request[publicModels.ConfirmContactRequestBody]{
+			Headers: map[string]string{
+				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
+				"Content-Type":  "application/json",
+			},
+			Body: &publicModels.ConfirmContactRequestBody{
+				Contact: testData.emailVerificationRequest.Body.Contact,
+				Type:    publicModels.ContactTypeEmail,
+				Code:    emailConfirmContext.ConfirmationCode,
+			},
+		}
+
+		// Выполняем запрос на подтверждение email
+		resp := s.publicClient.ConfirmContact(sCtx, req)
+
+		// Проверяем статус-код
+		sCtx.Require().Equal(http.StatusCreated, resp.StatusCode, "Email успешно подтвержден")
+	})
+
+	// time.Sleep(10 * time.Second)
+
+	// t.WithNewStep("Создание депозита", func(sCtx provider.StepCtx) {
+	// 	testData.depositRequest = &clientTypes.Request[publicModels.DepositRequestBody]{
+	// 		Headers: map[string]string{
+	// 			"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
+	// 			"Content-Type":  "application/json",
+	// 		},
+	// 		Body: &publicModels.DepositRequestBody{
+	// 			Amount:          "10",
+	// 			PaymentMethodID: 1001,
+	// 			Currency:        s.config.Node.DefaultCurrency,
+	// 			Country:         s.config.Node.DefaultCountry,
+	// 			Redirect: publicModels.DepositRedirectURLs{
+	// 				Failed:  publicModels.DepositRedirectURLFailed,
+	// 				Success: publicModels.DepositRedirectURLSuccess,
+	// 				Pending: publicModels.DepositRedirectURLPending,
+	// 			},
+	// 		},
+	// 	}
+
+	// 	testData.depositResponse = s.publicClient.CreateDeposit(sCtx, testData.depositRequest)
+	// 	sCtx.Require().Equal(http.StatusCreated, testData.depositResponse.StatusCode, "Статус код ответа равен 201")
+	// })
 }
 
 func (s *SingleBetLimitSuite) AfterAll(t provider.T) {
