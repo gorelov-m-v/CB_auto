@@ -54,3 +54,9 @@ func (c *publicClient) RequestContactVerification(sCtx provider.StepCtx, req *ty
 	req.Path = "/_front_api/api/v1/contacts/request-verification"
 	return httpClient.DoRequest[models.RequestVerificationRequestBody, struct{}](sCtx, c.client, req)
 }
+
+func (c *publicClient) ConfirmContact(sCtx provider.StepCtx, req *types.Request[models.ConfirmContactRequestBody]) *types.Response[struct{}] {
+	req.Method = http.MethodPost
+	req.Path = "/_front_api/api/v1/contacts"
+	return httpClient.DoRequest[models.ConfirmContactRequestBody, struct{}](sCtx, c.client, req)
+}

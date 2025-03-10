@@ -113,3 +113,9 @@ type RequestVerificationRequestBody struct {
 	Contact string      `json:"contact"`
 	Type    ContactType `json:"type"`
 }
+
+type ConfirmContactRequestBody struct {
+	Contact string      `json:"contact"`
+	Type    ContactType `json:"type"`
+	Code    string      `json:"code"`
+}

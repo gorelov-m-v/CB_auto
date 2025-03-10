@@ -2,6 +2,41 @@ package kafka
 
 import (
 	"encoding/json"
+	"errors"
+)
+
+type LimitEventType string
+type LimitType string
+type IntervalType string
+type ProjectionEventType string
+type PlayerEventType string
+
+const (
+	// Event Types
+	LimitEventCreated LimitEventType = "created"
+	LimitEventUpdated LimitEventType = "updated"
+	LimitEventDeleted LimitEventType = "deleted"
+
+	// Limit Types
+	LimitTypeSingleBet     LimitType = "single-bet"
+	LimitTypeCasinoLoss    LimitType = "casino-loss"
+	LimitTypeTurnoverFunds LimitType = "turnover-of-funds"
+
+	// Interval Types
+	IntervalTypeDaily   IntervalType = "daily"
+	IntervalTypeWeekly  IntervalType = "weekly"
+	IntervalTypeMonthly IntervalType = "monthly"
+
+	// Projection Event Types
+	ProjectionEventBalanceAdjusted    ProjectionEventType = "balance_adjusted"
+	ProjectionEventLimitChanged       ProjectionEventType = "limit_changed_v2"
+	ProjectionEventBlockAmountStarted ProjectionEventType = "block_amount_started"
+	ProjectionEventBlockAmountRevoked ProjectionEventType = "block_amount_revoked"
+
+	// Player Event Types
+	PlayerEventSignUpFast        PlayerEventType = "player.signUpFast"
+	PlayerEventConfirmationPhone PlayerEventType = "player.confirmationPhone"
+	PlayerEventConfirmationEmail PlayerEventType = "player.confirmationEmail"
 )
 
 type Brand struct {
@@ -31,6 +66,9 @@ type PlayerMessage struct {
 		AccountID      string `json:"accountId,omitempty"`
 		Country        string `json:"country,omitempty"`
 		Currency       string `json:"currency,omitempty"`
+		Phone          string `json:"phone,omitempty"`
+		Email          string `json:"email,omitempty"`
+		Locale         string `json:"locale,omitempty"`
 		CreatedAt      int64  `json:"createdAt,omitempty"`
 	} `json:"player"`
 	Context json.RawMessage `json:"context"`
@@ -50,34 +88,6 @@ type LimitMessage struct {
 	ExpiresAt    int64  `json:"expiresAt"`
 	EventType    string `json:"eventType"`
 }
-
-const (
-	// Event Types
-	LimitEventCreated = "created"
-	LimitEventUpdated = "updated"
-	LimitEventDeleted = "deleted"
-
-	// Limit Types
-	LimitTypeSingleBet     = "single-bet"
-	LimitTypeCasinoLoss    = "casino-loss"
-	LimitTypeTurnoverFunds = "turnover-of-funds"
-
-	// Interval Types
-	IntervalTypeDaily   = "daily"
-	IntervalTypeWeekly  = "weekly"
-	IntervalTypeMonthly = "monthly"
-)
-
-const (
-	ProjectionEventBalanceAdjusted    = "balance_adjusted"
-	ProjectionEventLimitChanged       = "limit_changed_v2"
-	ProjectionEventBlockAmountStarted = "block_amount_started"
-	ProjectionEventBlockAmountRevoked = "block_amount_revoked"
-)
-
-const (
-	PlayerEventSignUpFast = "player.signUpFast"
-)
 
 type ProjectionSourceMessage struct {
 	Type              string `json:"type"`
@@ -139,4 +149,22 @@ type ProjectionPayloadBlockAmountRevoked struct {
 
 func (m *ProjectionSourceMessage) UnmarshalPayloadTo(payload interface{}) error {
 	return json.Unmarshal([]byte(m.Payload), payload)
+}
+
+type ConfirmationContext struct {
+	ConfirmationCode string `json:"confirmationCode"`
+}
+
+func (m *PlayerMessage) GetConfirmationContext() (*ConfirmationContext, error) {
+	if len(m.Context) == 0 {
+		return nil, errors.New("empty context")
+	}
+
+	var ctx ConfirmationContext
+	err := json.Unmarshal(m.Context, &ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ctx, nil
 }
