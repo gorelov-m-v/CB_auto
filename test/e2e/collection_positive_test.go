@@ -81,7 +81,7 @@ func (s *CollectionPositiveSuite) TestCollectionFields(t provider.T) {
 			})
 
 			t.WithNewStep("Проверка созданной коллекции", func(sCtx provider.StepCtx) {
-				collection := s.categoryRepo.GetCategory(sCtx, map[string]interface{}{
+				collection := s.categoryRepo.GetCategoryWithRetry(sCtx, map[string]interface{}{
 					"uuid": collectionID,
 				})
 
