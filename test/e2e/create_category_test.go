@@ -14,7 +14,7 @@ import (
 	"CB_auto/internal/repository/category"
 	"CB_auto/pkg/utils"
 
-	_ "github.com/go-sql-driver/mysql" // Драйвер MySQL
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
 )
@@ -116,7 +116,7 @@ func (s *CreateCategorySuite) TestCreateCategory(t provider.T) {
 	})
 
 	t.WithNewStep("Проверка категории в БД", func(sCtx provider.StepCtx) {
-		category := s.categoryRepo.GetCategory(sCtx, map[string]interface{}{
+		category := s.categoryRepo.GetCategoryWithRetry(sCtx, map[string]interface{}{
 			"uuid": categoryID,
 		})
 

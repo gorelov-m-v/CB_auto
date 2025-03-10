@@ -154,7 +154,7 @@ func (s *ParametrizedUpdateBlockersSuite) TableTestBlockers(t provider.T, param 
 	})
 
 	t.WithNewAsyncStep("Проверка блокировок в БД.", func(sCtx provider.StepCtx) {
-		walletFromDatabase := s.walletRepo.GetWallet(sCtx, map[string]interface{}{
+		walletFromDatabase := s.walletRepo.GetOneWithRetry(sCtx, map[string]interface{}{
 			"player_uuid":        testData.registrationMessage.Player.ExternalID,
 			"is_gambling_active": param.GamblingEnabled,
 			"is_betting_active":  param.BettingEnabled,

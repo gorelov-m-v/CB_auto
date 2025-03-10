@@ -81,7 +81,7 @@ func (s *CategoryPositiveSuite) TestCategoryFields(t provider.T) {
 			})
 
 			t.WithNewStep("Проверка созданной категории", func(sCtx provider.StepCtx) {
-				category := s.categoryRepo.GetCategory(sCtx, map[string]interface{}{
+				category := s.categoryRepo.GetCategoryWithRetry(sCtx, map[string]interface{}{
 					"uuid": categoryID,
 				})
 

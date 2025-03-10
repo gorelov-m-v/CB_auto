@@ -77,7 +77,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithRussianName(t provider.T) 
 	})
 
 	t.WithNewStep("Проверка создания бренда в БД", func(sCtx provider.StepCtx) {
-		brandData := s.brandRepo.GetBrand(sCtx, map[string]interface{}{
+		brandData := s.brandRepo.GetBrandWithRetry(sCtx, map[string]interface{}{
 			"uuid": testData.createCapBrandResponse.ID,
 		})
 
@@ -127,7 +127,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithEnglishName(t provider.T) 
 		s.attachRequestResponse(sCtx, testData.createRequest, createResp)
 
 		err := repository.ExecuteWithRetry(sCtx, &s.config.MySQL, func(ctx context.Context) error {
-			brandData := s.brandRepo.GetBrand(sCtx, map[string]interface{}{
+			brandData := s.brandRepo.GetBrandWithRetry(sCtx, map[string]interface{}{
 				"uuid": testData.createCapBrandResponse.ID,
 			})
 			if brandData == nil {
@@ -163,7 +163,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithMinMaxNames(t provider.T) 
 
 		var brandFromDB *brand.Brand
 		for i := 0; i < 3; i++ {
-			brandFromDB = s.brandRepo.GetBrand(sCtx, map[string]interface{}{
+			brandFromDB = s.brandRepo.GetBrandWithRetry(sCtx, map[string]interface{}{
 				"uuid": testData.createCapBrandResponse.ID,
 			})
 			if brandFromDB != nil {
@@ -197,7 +197,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithMinMaxNames(t provider.T) 
 
 		var brandFromDB *brand.Brand
 		for i := 0; i < 3; i++ {
-			brandFromDB = s.brandRepo.GetBrand(sCtx, map[string]interface{}{
+			brandFromDB = s.brandRepo.GetBrandWithRetry(sCtx, map[string]interface{}{
 				"uuid": testData.createCapBrandResponse.ID,
 			})
 			if brandFromDB != nil {
@@ -241,7 +241,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithDifferentAliases(t provide
 			s.attachRequestResponse(sCtx, testData.createRequest, createResp)
 
 			err := repository.ExecuteWithRetry(sCtx, &s.config.MySQL, func(ctx context.Context) error {
-				brandData := s.brandRepo.GetBrand(sCtx, map[string]interface{}{
+				brandData := s.brandRepo.GetBrandWithRetry(sCtx, map[string]interface{}{
 					"uuid": testData.createCapBrandResponse.ID,
 				})
 
@@ -288,7 +288,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithMultiLanguage(t provider.T
 		s.attachRequestResponse(sCtx, testData.createRequest, createResp)
 
 		err := repository.ExecuteWithRetry(sCtx, &s.config.MySQL, func(ctx context.Context) error {
-			brandData := s.brandRepo.GetBrand(sCtx, map[string]interface{}{
+			brandData := s.brandRepo.GetBrandWithRetry(sCtx, map[string]interface{}{
 				"uuid": testData.createCapBrandResponse.ID,
 			})
 
@@ -333,7 +333,7 @@ func (s *CreateBrandPositiveSuite) TestCreateBrandWithSpecialCharacters(t provid
 		s.attachRequestResponse(sCtx, testData.createRequest, createResp)
 
 		err := repository.ExecuteWithRetry(sCtx, &s.config.MySQL, func(ctx context.Context) error {
-			brandData := s.brandRepo.GetBrand(sCtx, map[string]interface{}{
+			brandData := s.brandRepo.GetBrandWithRetry(sCtx, map[string]interface{}{
 				"uuid": testData.createCapBrandResponse.ID,
 			})
 
