@@ -48,7 +48,7 @@ var allowedFields = map[string]bool{
 	"author_creation": true,
 }
 
-func (r *Repository) fetchLabel(sCtx provider.StepCtx, filters map[string]interface{}) (*Label, error) {
+func (r *Repository) fetchLabel(sCtx provider.StepCtx, filters map[string]interface{}, withRetry bool) (*Label, error) {
 	if err := r.db.Ping(); err != nil {
 		log.Printf("Ошибка подключения к БД: %v", err)
 	}
@@ -76,13 +76,16 @@ func (r *Repository) fetchLabel(sCtx provider.StepCtx, filters map[string]interf
 			conditions = append(conditions, fmt.Sprintf("%s = ?", key))
 			args = append(args, value)
 		}
-		query += " WHERE " + strings.Join(conditions, " AND ")
+		if len(conditions) > 0 {
+			query += " WHERE " + strings.Join(conditions, " AND ")
+		}
 	}
 	log.Printf("Executing query: %s with args: %v", query, args)
 	log.Printf("Using database: %v", r.db.Stats())
 
 	var label Label
-	err := repository.ExecuteWithRetry(sCtx, r.cfg, func(ctx context.Context) error {
+
+	execQuery := func(ctx context.Context) error {
 		return r.db.QueryRowContext(ctx, query, args...).Scan(
 			&label.ID,
 			&label.UUID,
@@ -95,7 +98,14 @@ func (r *Repository) fetchLabel(sCtx provider.StepCtx, filters map[string]interf
 			&label.AuthorEditing,
 			&label.Description,
 		)
-	})
+	}
+
+	var err error
+	if withRetry {
+		err = repository.ExecuteWithRetry(sCtx, r.cfg, execQuery)
+	} else {
+		err = execQuery(context.Background())
+	}
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Printf("Нет данных лейбла, возвращаем nil: %v", err)
@@ -110,7 +120,7 @@ func (r *Repository) fetchLabel(sCtx provider.StepCtx, filters map[string]interf
 }
 
 func (r *Repository) GetLabelWithRetry(sCtx provider.StepCtx, filters map[string]interface{}) *Label {
-	label, err := r.fetchLabel(sCtx, filters)
+	label, err := r.fetchLabel(sCtx, filters, true)
 	if err != nil {
 		log.Printf("Ошибка при получении данных лейбла: %v", err)
 	}
@@ -118,5 +128,5 @@ func (r *Repository) GetLabelWithRetry(sCtx provider.StepCtx, filters map[string
 }
 
 func (r *Repository) GetLabel(sCtx provider.StepCtx, filters map[string]interface{}) (*Label, error) {
-	return r.fetchLabel(sCtx, filters)
+	return r.fetchLabel(sCtx, filters, false)
 }
