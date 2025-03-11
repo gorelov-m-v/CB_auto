@@ -72,14 +72,14 @@ var allowedFields = map[string]bool{
 	"is_betting_active":  true,
 }
 
-func (r *Repository) GetWallet(sCtx provider.StepCtx, filters map[string]interface{}) *Wallet {
+// fetchWallet объединяет общую логику для формирования запроса, его выполнения и обработки результата.
+func (r *Repository) fetchWallet(sCtx provider.StepCtx, filters map[string]interface{}) (*Wallet, error) {
+	// Проверка подключения к БД
 	if err := r.db.Ping(); err != nil {
 		log.Printf("Ошибка подключения к БД: %v", err)
 	}
 
-	var conditions []string
-	var args []interface{}
-
+	// Формирование запроса
 	query := `SELECT 
 		uuid,
 		player_uuid,
@@ -102,7 +102,8 @@ func (r *Repository) GetWallet(sCtx provider.StepCtx, filters map[string]interfa
 		available_withdrawal,
 		is_kyc_verified
 	FROM wallet`
-
+	var conditions []string
+	var args []interface{}
 	if len(filters) > 0 {
 		for key, value := range filters {
 			if !allowedFields[key] {
@@ -111,12 +112,12 @@ func (r *Repository) GetWallet(sCtx provider.StepCtx, filters map[string]interfa
 			conditions = append(conditions, fmt.Sprintf("%s = ?", key))
 			args = append(args, value)
 		}
-		query += ` WHERE ` + strings.Join(conditions, " AND ")
+		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
-
 	log.Printf("Executing query: %s with args: %v", query, args)
 	log.Printf("Using database: %v", r.db.Stats())
 
+	// Выполнение запроса с ретраями
 	var wallet Wallet
 	err := repository.ExecuteWithRetry(sCtx, r.cfg, func(ctx context.Context) error {
 		return r.db.QueryRowContext(ctx, query, args...).Scan(
@@ -143,10 +144,31 @@ func (r *Repository) GetWallet(sCtx provider.StepCtx, filters map[string]interfa
 		)
 	})
 	if err != nil {
+		return nil, err
+	}
+	sCtx.WithAttachments(allure.NewAttachment("Wallet DB Data", allure.JSON, utils.CreatePrettyJSON(wallet)))
+	return &wallet, nil
+}
+
+// GetOneWithRetry переименовывает исходный метод и возвращает кошелёк, даже если произошла ошибка.
+func (r *Repository) GetOneWithRetry(sCtx provider.StepCtx, filters map[string]interface{}) *Wallet {
+	wallet, err := r.fetchWallet(sCtx, filters)
+	if err != nil {
 		log.Printf("Ошибка при получении данных кошелька: %v", err)
 	}
+	return wallet
+}
 
-	sCtx.WithAttachments(allure.NewAttachment("Wallet DB Data", allure.JSON, utils.CreatePrettyJSON(wallet)))
-
-	return &wallet
+// GetOne возвращает кошелёк и ошибку. Если строк в БД не найдено, то возвращается (nil, nil).
+func (r *Repository) GetOne(sCtx provider.StepCtx, filters map[string]interface{}) (*Wallet, error) {
+	wallet, err := r.fetchWallet(sCtx, filters)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Printf("Нет данных кошелька, возвращаем nil: %v", err)
+			return nil, nil
+		}
+		log.Printf("Ошибка при получении данных кошелька: %v", err)
+		return nil, err
+	}
+	return wallet, nil
 }

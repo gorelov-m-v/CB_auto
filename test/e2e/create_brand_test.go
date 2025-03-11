@@ -85,7 +85,7 @@ func (s *CreateBrandSuite) TestGetBrandByFilters(t provider.T) {
 		filters := map[string]interface{}{
 			"uuid": testData.createCapBrandResponse.Body.ID,
 		}
-		brandData := s.brandRepo.GetBrand(sCtx, filters)
+		brandData := s.brandRepo.GetBrandWithRetry(sCtx, filters)
 
 		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Names, brandData.LocalizedNames, "Names бренда в БД совпадают с Names в запросе")
 		sCtx.Assert().Equal(testData.createCapBrandRequest.Body.Description, brandData.Description, "Description бренда в БД совпадает с Description в запросе")

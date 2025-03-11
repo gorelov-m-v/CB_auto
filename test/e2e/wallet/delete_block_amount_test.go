@@ -98,7 +98,7 @@ func (s *DeleteBlockAmountSuite) TestBlockAmount(t provider.T) {
 
 	t.WithNewStep("Получение сообщения о регистрации из топика player.v1.account.", func(sCtx provider.StepCtx) {
 		testData.registrationMessage = kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
-			return msg.Message.EventType == kafka.PlayerEventSignUpFast &&
+			return msg.Message.EventType == string(kafka.PlayerEventSignUpFast) &&
 				msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
 
@@ -208,7 +208,7 @@ func (s *DeleteBlockAmountSuite) TestBlockAmount(t provider.T) {
 
 	t.WithNewAsyncStep("Проверка отправки события отмены блокировки в Kafka projection source", func(sCtx provider.StepCtx) {
 		projectionRevokeEvent := kafka.FindMessageByFilter[kafka.ProjectionSourceMessage](sCtx, s.kafka, func(msg kafka.ProjectionSourceMessage) bool {
-			return msg.Type == kafka.ProjectionEventBlockAmountRevoked &&
+			return msg.Type == string(kafka.ProjectionEventBlockAmountRevoked) &&
 				msg.PlayerUUID == testData.registrationMessage.Player.ExternalID &&
 				msg.WalletUUID == testData.walletCreatedEvent.Payload.WalletUUID
 		})

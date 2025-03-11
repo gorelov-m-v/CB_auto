@@ -85,7 +85,7 @@ func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 	})
 
 	t.WithNewAsyncStep("Проверка наличия бренда в БД.", func(sCtx provider.StepCtx) {
-		brandFromDB := s.brandRepo.GetBrand(sCtx, map[string]interface{}{
+		brandFromDB := s.brandRepo.GetBrandWithRetry(sCtx, map[string]interface{}{
 			"uuid": testData.createBrandResponse.Body.ID,
 		})
 
@@ -108,7 +108,7 @@ func (s *DeleteBrandSuite) TestDeleteBrand(t provider.T) {
 	})
 
 	t.WithNewAsyncStep("Проверка удаления бренда в БД.", func(sCtx provider.StepCtx) {
-		brandFromDB := s.brandRepo.GetBrand(sCtx, map[string]interface{}{
+		brandFromDB := s.brandRepo.GetBrandWithRetry(sCtx, map[string]interface{}{
 			"uuid":   testData.createBrandResponse.Body.ID,
 			"status": BrandStatusDeleted,
 		})

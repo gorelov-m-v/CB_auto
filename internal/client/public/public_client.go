@@ -16,6 +16,7 @@ type PublicAPI interface {
 	VerifyIdentity(sCtx provider.StepCtx, req *types.Request[models.VerifyIdentityRequestBody]) *types.Response[struct{}]
 	GetVerificationStatus(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[[]models.VerificationStatusResponseItem]
 	RequestContactVerification(sCtx provider.StepCtx, req *types.Request[models.RequestVerificationRequestBody]) *types.Response[struct{}]
+	ConfirmContact(sCtx provider.StepCtx, req *types.Request[models.ConfirmContactRequestBody]) *types.Response[struct{}]
 
 	// Wallet методы
 	GetWallets(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetWalletsResponseBody]

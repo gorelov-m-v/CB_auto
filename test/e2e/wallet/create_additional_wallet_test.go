@@ -92,7 +92,7 @@ func (s *CreateWalletSuite) TestCreateWallet(t provider.T) {
 
 	t.WithNewStep("Получение сообщения о регистрации из топика player.v1.account.", func(sCtx provider.StepCtx) {
 		testData.registrationMessage = kafka.FindMessageByFilter[kafka.PlayerMessage](sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
-			return msg.Message.EventType == kafka.PlayerEventSignUpFast &&
+			return msg.Message.EventType == string(kafka.PlayerEventSignUpFast) &&
 				msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
 
@@ -169,7 +169,7 @@ func (s *CreateWalletSuite) TestCreateWallet(t provider.T) {
 	})
 
 	t.WithNewStep("Проверка создания кошелька в БД.", func(sCtx provider.StepCtx) {
-		walletFromDatabase := s.walletRepo.GetWallet(sCtx, map[string]interface{}{"uuid": testData.walletCreatedEvent.Payload.WalletUUID})
+		walletFromDatabase := s.walletRepo.GetOneWithRetry(sCtx, map[string]interface{}{"uuid": testData.walletCreatedEvent.Payload.WalletUUID})
 
 		sCtx.Assert().Equal(testData.walletCreatedEvent.Payload.WalletUUID, walletFromDatabase.UUID, "UUID кошелька в БД совпадает с UUID из ивента `wallet_created`")
 		sCtx.Assert().Equal("USD", walletFromDatabase.Currency, "Валюта в БД совпадает с валютой из ивента `wallet_created`")

@@ -1,15 +1,16 @@
 package category
 
 import (
-	"CB_auto/internal/config"
-	"CB_auto/internal/repository"
-	"CB_auto/pkg/utils"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
+
+	"CB_auto/internal/config"
+	"CB_auto/internal/repository"
+	"CB_auto/pkg/utils"
 
 	"github.com/ozontech/allure-go/pkg/allure"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
@@ -44,17 +45,16 @@ func NewRepository(db *sql.DB, mysqlConfig *config.MySQLConfig) *Repository {
 }
 
 var allowedFields = map[string]bool{
-
 	"uuid":      true,
 	"alias":     true,
 	"status_id": true,
 	"type":      true,
 }
 
-func (r *Repository) GetCategory(sCtx provider.StepCtx, filters map[string]interface{}) *Category {
-
-	conditions := []string{}
-	args := []interface{}{}
+func (r *Repository) fetchCategory(sCtx provider.StepCtx, filters map[string]interface{}) (*Category, error) {
+	if err := r.db.Ping(); err != nil {
+		log.Printf("Ошибка подключения к БД: %v", err)
+	}
 
 	query := `SELECT 
 		id,
@@ -71,12 +71,13 @@ func (r *Repository) GetCategory(sCtx provider.StepCtx, filters map[string]inter
 		type,
 		cms
 	FROM game_category`
+	var conditions []string
+	var args []interface{}
 
 	if len(filters) > 0 {
 		for key, value := range filters {
 			if !allowedFields[key] {
 				log.Printf("Недопустимое поле для фильтрации: %s", key)
-
 				continue
 			}
 			conditions = append(conditions, fmt.Sprintf("%s = ?", key))
@@ -84,9 +85,10 @@ func (r *Repository) GetCategory(sCtx provider.StepCtx, filters map[string]inter
 		}
 		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
+	log.Printf("Executing query: %s with args: %v", query, args)
+	log.Printf("Using database: %v", r.db.Stats())
 
 	var category Category
-
 	var localizedNamesRaw []byte
 
 	err := repository.ExecuteWithRetry(sCtx, r.cfg, func(ctx context.Context) error {
@@ -106,17 +108,36 @@ func (r *Repository) GetCategory(sCtx provider.StepCtx, filters map[string]inter
 			&category.CMS,
 		)
 	})
-
 	if err != nil {
-		log.Printf("Ошибка при получении данных категории: %v", err)
-		return nil
+		return nil, err
 	}
 
 	if err := json.Unmarshal(localizedNamesRaw, &category.LocalizedNames); err != nil {
 		log.Printf("Ошибка декодирования JSON: %v", err)
-		return nil
+		return nil, err
 	}
 
 	sCtx.WithAttachments(allure.NewAttachment("Category DB Data", allure.JSON, utils.CreatePrettyJSON(category)))
-	return &category
+	return &category, nil
+}
+
+func (r *Repository) GetCategoryWithRetry(sCtx provider.StepCtx, filters map[string]interface{}) *Category {
+	category, err := r.fetchCategory(sCtx, filters)
+	if err != nil {
+		log.Printf("Ошибка при получении данных категории: %v", err)
+	}
+	return category
+}
+
+func (r *Repository) GetCategory(sCtx provider.StepCtx, filters map[string]interface{}) (*Category, error) {
+	category, err := r.fetchCategory(sCtx, filters)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Printf("Нет данных категории, возвращаем nil: %v", err)
+			return nil, nil
+		}
+		log.Printf("Ошибка при получении данных категории: %v", err)
+		return nil, err
+	}
+	return category, nil
 }

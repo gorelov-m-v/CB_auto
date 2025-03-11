@@ -108,7 +108,7 @@ func (s *CreateLabelSuite) TestCreateLabel(t provider.T) {
 	})
 
 	t.WithNewStep("Проверка лейбла в базе данных", func(sCtx provider.StepCtx) {
-		dbLabel := s.labelRepo.GetLabel(sCtx, map[string]interface{}{"uuid": testData.createLabelResponse.Body.UUID})
+		dbLabel := s.labelRepo.GetLabelWithRetry(sCtx, map[string]interface{}{"uuid": testData.createLabelResponse.Body.UUID})
 
 		sCtx.Require().NotNil(dbLabel, "Лейбл найден в базе данных")
 		sCtx.Assert().Equal(testData.createLabelRequest.Body.Color, dbLabel.Color, "Цвет лейбла совпадает")
