@@ -47,7 +47,7 @@ var allowedFields = map[string]bool{
 	"status": true,
 }
 
-func (r *Repository) fetchBrand(sCtx provider.StepCtx, filters map[string]interface{}) (*Brand, error) {
+func (r *Repository) fetchBrand(sCtx provider.StepCtx, filters map[string]interface{}, withRetry bool) (*Brand, error) {
 	if err := r.db.Ping(); err != nil {
 		log.Printf("Ошибка подключения к БД: %v", err)
 	}
@@ -75,7 +75,9 @@ func (r *Repository) fetchBrand(sCtx provider.StepCtx, filters map[string]interf
 			conditions = append(conditions, fmt.Sprintf("%s = ?", key))
 			args = append(args, value)
 		}
-		query += " WHERE " + strings.Join(conditions, " AND ")
+		if len(conditions) > 0 {
+			query += " WHERE " + strings.Join(conditions, " AND ")
+		}
 	}
 	log.Printf("Executing query: %s with args: %v", query, args)
 	log.Printf("Using database: %v", r.db.Stats())
@@ -86,7 +88,7 @@ func (r *Repository) fetchBrand(sCtx provider.StepCtx, filters map[string]interf
 	var nodeUUIDStr string
 	var localizedNamesRaw []byte
 
-	err := repository.ExecuteWithRetry(sCtx, r.cfg, func(ctx context.Context) error {
+	execQuery := func(ctx context.Context) error {
 		return r.db.QueryRowContext(ctx, query, args...).Scan(
 			&brand.UUID,
 			&brand.Alias,
@@ -98,7 +100,14 @@ func (r *Repository) fetchBrand(sCtx provider.StepCtx, filters map[string]interf
 			&createdAtUnix,
 			&updatedAtUnix,
 		)
-	})
+	}
+
+	var err error
+	if withRetry {
+		err = repository.ExecuteWithRetry(sCtx, r.cfg, execQuery)
+	} else {
+		err = execQuery(context.Background())
+	}
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Printf("Нет данных бренда, возвращаем nil: %v", err)
@@ -124,7 +133,7 @@ func (r *Repository) fetchBrand(sCtx provider.StepCtx, filters map[string]interf
 }
 
 func (r *Repository) GetBrandWithRetry(sCtx provider.StepCtx, filters map[string]interface{}) *Brand {
-	brand, err := r.fetchBrand(sCtx, filters)
+	brand, err := r.fetchBrand(sCtx, filters, true)
 	if err != nil {
 		log.Printf("Ошибка при получении данных бренда: %v", err)
 	}
@@ -132,7 +141,7 @@ func (r *Repository) GetBrandWithRetry(sCtx provider.StepCtx, filters map[string
 }
 
 func (r *Repository) GetBrand(sCtx provider.StepCtx, filters map[string]interface{}) (*Brand, error) {
-	brand, err := r.fetchBrand(sCtx, filters)
+	brand, err := r.fetchBrand(sCtx, filters, false)
 	if err != nil {
 		return nil, err
 	}

@@ -51,7 +51,7 @@ var allowedFields = map[string]bool{
 	"type":      true,
 }
 
-func (r *Repository) fetchCategory(sCtx provider.StepCtx, filters map[string]interface{}) (*Category, error) {
+func (r *Repository) fetchCategory(sCtx provider.StepCtx, filters map[string]interface{}, withRetry bool) (*Category, error) {
 	if err := r.db.Ping(); err != nil {
 		log.Printf("Ошибка подключения к БД: %v", err)
 	}
@@ -83,7 +83,9 @@ func (r *Repository) fetchCategory(sCtx provider.StepCtx, filters map[string]int
 			conditions = append(conditions, fmt.Sprintf("%s = ?", key))
 			args = append(args, value)
 		}
-		query += " WHERE " + strings.Join(conditions, " AND ")
+		if len(conditions) > 0 {
+			query += " WHERE " + strings.Join(conditions, " AND ")
+		}
 	}
 	log.Printf("Executing query: %s with args: %v", query, args)
 	log.Printf("Using database: %v", r.db.Stats())
@@ -91,7 +93,7 @@ func (r *Repository) fetchCategory(sCtx provider.StepCtx, filters map[string]int
 	var category Category
 	var localizedNamesRaw []byte
 
-	err := repository.ExecuteWithRetry(sCtx, r.cfg, func(ctx context.Context) error {
+	execQuery := func(ctx context.Context) error {
 		return r.db.QueryRowContext(ctx, query, args...).Scan(
 			&category.ID,
 			&category.Alias,
@@ -107,7 +109,14 @@ func (r *Repository) fetchCategory(sCtx provider.StepCtx, filters map[string]int
 			&category.Type,
 			&category.CMS,
 		)
-	})
+	}
+
+	var err error
+	if withRetry {
+		err = repository.ExecuteWithRetry(sCtx, r.cfg, execQuery)
+	} else {
+		err = execQuery(context.Background())
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +131,7 @@ func (r *Repository) fetchCategory(sCtx provider.StepCtx, filters map[string]int
 }
 
 func (r *Repository) GetCategoryWithRetry(sCtx provider.StepCtx, filters map[string]interface{}) *Category {
-	category, err := r.fetchCategory(sCtx, filters)
+	category, err := r.fetchCategory(sCtx, filters, true)
 	if err != nil {
 		log.Printf("Ошибка при получении данных категории: %v", err)
 	}
@@ -130,7 +139,7 @@ func (r *Repository) GetCategoryWithRetry(sCtx provider.StepCtx, filters map[str
 }
 
 func (r *Repository) GetCategory(sCtx provider.StepCtx, filters map[string]interface{}) (*Category, error) {
-	category, err := r.fetchCategory(sCtx, filters)
+	category, err := r.fetchCategory(sCtx, filters, false)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Printf("Нет данных категории, возвращаем nil: %v", err)

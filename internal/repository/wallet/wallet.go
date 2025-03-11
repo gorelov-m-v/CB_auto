@@ -19,7 +19,6 @@ import (
 type WalletType int
 
 const (
-	// WalletType определяет типы кошельков
 	WalletTypeReal  WalletType = 1
 	WalletTypeBonus WalletType = 2
 )
@@ -72,14 +71,11 @@ var allowedFields = map[string]bool{
 	"is_betting_active":  true,
 }
 
-// fetchWallet объединяет общую логику для формирования запроса, его выполнения и обработки результата.
 func (r *Repository) fetchWallet(sCtx provider.StepCtx, filters map[string]interface{}) (*Wallet, error) {
-	// Проверка подключения к БД
 	if err := r.db.Ping(); err != nil {
 		log.Printf("Ошибка подключения к БД: %v", err)
 	}
 
-	// Формирование запроса
 	query := `SELECT 
 		uuid,
 		player_uuid,
@@ -117,7 +113,6 @@ func (r *Repository) fetchWallet(sCtx provider.StepCtx, filters map[string]inter
 	log.Printf("Executing query: %s with args: %v", query, args)
 	log.Printf("Using database: %v", r.db.Stats())
 
-	// Выполнение запроса с ретраями
 	var wallet Wallet
 	err := repository.ExecuteWithRetry(sCtx, r.cfg, func(ctx context.Context) error {
 		return r.db.QueryRowContext(ctx, query, args...).Scan(
@@ -150,7 +145,6 @@ func (r *Repository) fetchWallet(sCtx provider.StepCtx, filters map[string]inter
 	return &wallet, nil
 }
 
-// GetOneWithRetry переименовывает исходный метод и возвращает кошелёк, даже если произошла ошибка.
 func (r *Repository) GetOneWithRetry(sCtx provider.StepCtx, filters map[string]interface{}) *Wallet {
 	wallet, err := r.fetchWallet(sCtx, filters)
 	if err != nil {
@@ -159,7 +153,6 @@ func (r *Repository) GetOneWithRetry(sCtx provider.StepCtx, filters map[string]i
 	return wallet
 }
 
-// GetOne возвращает кошелёк и ошибку. Если строк в БД не найдено, то возвращается (nil, nil).
 func (r *Repository) GetOne(sCtx provider.StepCtx, filters map[string]interface{}) (*Wallet, error) {
 	wallet, err := r.fetchWallet(sCtx, filters)
 	if err != nil {
