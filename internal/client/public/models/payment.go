@@ -1,6 +1,10 @@
 package models
 
+type PaymentMetod int
+
 const (
+	Fake PaymentMetod = 1001
+
 	DepositRedirectURLFailed  = "https://beta-09.b2bdev.pro/en/account/deposit/failed"
 	DepositRedirectURLSuccess = "https://beta-09.b2bdev.pro/en/account/deposit/success"
 	DepositRedirectURLPending = "https://beta-09.b2bdev.pro/en/account/deposit/pending"
