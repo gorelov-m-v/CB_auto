@@ -90,7 +90,7 @@ func (s *DeleteCollectionSuite) TestDeleteCollection(t provider.T) {
 	})
 
 	t.WithNewStep("Проверка наличия коллекции в БД", func(sCtx provider.StepCtx) {
-		collectionFromDB := s.collectionRepo.GetCategoryWithRetry(sCtx, map[string]interface{}{
+		collectionFromDB, _ := s.collectionRepo.GetCategory(sCtx, map[string]interface{}{
 			"uuid": collectionID,
 		})
 
