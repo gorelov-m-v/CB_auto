@@ -13,10 +13,17 @@ import (
 	clientTypes "CB_auto/internal/client/types"
 	"CB_auto/internal/config"
 	"CB_auto/internal/transport/kafka"
+	"CB_auto/internal/transport/redis"
 	"CB_auto/pkg/utils"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
+
+// PlayerData содержит информацию об игроке и его кошельке
+type PlayerData struct {
+	Auth       *clientTypes.Response[publicModels.TokenCheckResponseBody]
+	WalletData redis.WalletFullData
+}
 
 func CreateVerifiedPlayer(
 	sCtx provider.StepCtx,
@@ -24,7 +31,12 @@ func CreateVerifiedPlayer(
 	capClient capAPI.CapAPI,
 	kafkaClient *kafka.Kafka,
 	config *config.Config,
-) *clientTypes.Response[publicModels.TokenCheckResponseBody] {
+	redisPlayerClient *redis.RedisClient,
+	redisWalletClient *redis.RedisClient,
+) PlayerData {
+	var (
+		registrationMessage kafka.PlayerMessage
+	)
 
 	// Шаг 1: Регистрация игрока
 	registerReq := &clientTypes.Request[publicModels.FastRegistrationRequestBody]{
@@ -38,7 +50,7 @@ func CreateVerifiedPlayer(
 	sCtx.Require().Equal(http.StatusOK, registrationResponse.StatusCode, "Успешная регистрация")
 
 	// Шаг 2: Получение Kafka-сообщения о регистрации
-	registrationMessage := kafka.FindMessageByFilter[kafka.PlayerMessage](sCtx, kafkaClient, func(msg kafka.PlayerMessage) bool {
+	registrationMessage = kafka.FindMessageByFilter(sCtx, kafkaClient, func(msg kafka.PlayerMessage) bool {
 		return msg.Message.EventType == string(kafka.PlayerEventSignUpFast) &&
 			msg.Player.AccountID == registrationResponse.Body.Username
 	})
@@ -155,14 +167,14 @@ func CreateVerifiedPlayer(
 
 	// Шаг 10: Получение сообщения о подтверждении телефона
 	phoneNumberWithoutPlus := strings.TrimPrefix(phoneReq.Body.Contact, "+")
-	phoneConfirmMsg := kafka.FindMessageByFilter[kafka.PlayerMessage](sCtx, kafkaClient, func(msg kafka.PlayerMessage) bool {
+	phoneConfirmMsg := kafka.FindMessageByFilter(sCtx, kafkaClient, func(msg kafka.PlayerMessage) bool {
 		return msg.Message.EventType == string(kafka.PlayerEventConfirmationPhone) &&
 			msg.Player.AccountID == registrationResponse.Body.Username &&
 			msg.Player.Phone == phoneNumberWithoutPlus
 	})
 
 	// Шаг 11: Получение сообщения о подтверждении email
-	emailConfirmMsg := kafka.FindMessageByFilter[kafka.PlayerMessage](sCtx, kafkaClient, func(msg kafka.PlayerMessage) bool {
+	emailConfirmMsg := kafka.FindMessageByFilter(sCtx, kafkaClient, func(msg kafka.PlayerMessage) bool {
 		return msg.Message.EventType == string(kafka.PlayerEventConfirmationEmail) &&
 			msg.Player.AccountID == registrationResponse.Body.Username &&
 			msg.Player.Email == emailReq.Body.Contact
@@ -205,7 +217,6 @@ func CreateVerifiedPlayer(
 	sCtx.Require().Equal(http.StatusCreated, confirmEmailResp.StatusCode, "Подтверждение email")
 
 	// Шаг 14: Установка лимита на одиночную ставку
-
 	setSingleBetLimitReq := &clientTypes.Request[publicModels.SetSingleBetLimitRequestBody]{
 		Headers: map[string]string{
 			"Authorization": fmt.Sprintf("Bearer %s", authorizationResponse.Body.Token),
@@ -235,6 +246,27 @@ func CreateVerifiedPlayer(
 	turnoverLimitResp := publicClient.SetTurnoverLimit(sCtx, setTurnoverLimitReq)
 	sCtx.Require().Equal(http.StatusCreated, turnoverLimitResp.StatusCode, "Установка лимита на оборот средств")
 
-	// Возвращаем информацию для авторизации
-	return authorizationResponse
+	// Шаг 16: Проверка данных кошелька в Redis
+	var wallets redis.WalletsMap
+	err = redisPlayerClient.GetWithRetry(sCtx, registrationMessage.Player.ExternalID, &wallets)
+	sCtx.Require().NoError(err, "Значение кошелька получено из Redis")
+
+	// Получаем UUID кошелька
+	var walletUUID string
+	for _, w := range wallets {
+		walletUUID = w.WalletUUID
+		break
+	}
+	sCtx.Require().NotEmpty(walletUUID, "UUID кошелька в Redis не пустой")
+
+	// Получаем полные данные кошелька
+	var walletFullData redis.WalletFullData
+	err = redisWalletClient.GetWithRetry(sCtx, walletUUID, &walletFullData)
+	sCtx.Require().NoError(err, "Полные данные кошелька получены из Redis")
+
+	// Возвращаем информацию для авторизации и данные кошелька
+	return PlayerData{
+		Auth:       authorizationResponse,
+		WalletData: walletFullData,
+	}
 }

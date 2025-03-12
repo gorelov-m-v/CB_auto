@@ -3,7 +3,6 @@ package test
 import (
 	"fmt"
 	"net/http"
-	"testing"
 
 	capAPI "CB_auto/internal/client/cap"
 	capModels "CB_auto/internal/client/cap/models"
@@ -30,14 +29,11 @@ type SingleBetLimitSuite struct {
 	kafka        *kafka.Kafka
 	natsClient   *nats.NatsClient
 	capClient    capAPI.CapAPI
-	database     *repository.Connector
 	walletRepo   *wallet.Repository
 	redisClient  *redis.RedisClient
 }
 
 func (s *SingleBetLimitSuite) BeforeAll(t provider.T) {
-	t.Epic("Лимиты")
-
 	t.WithNewStep("Чтение конфигурационного файла", func(sCtx provider.StepCtx) {
 		s.config = config.ReadConfig(t)
 	})
@@ -68,8 +64,10 @@ func (s *SingleBetLimitSuite) BeforeAll(t provider.T) {
 }
 
 func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
+	t.Epic("Лимиты")
 	t.Feature("single-bet лимит")
 	t.Title("Проверка создания single-bet лимита в Kafka, NATS, Redis, MySQL, Public API, CAP API")
+	t.Tags("wallet", "limits")
 
 	var testData struct {
 		registrationResponse   *clientTypes.Response[publicModels.FastRegistrationResponseBody]
@@ -96,7 +94,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 	})
 
 	t.WithNewStep("Проверка Kafka-сообщения о регистрации игрока", func(sCtx provider.StepCtx) {
-		testData.registrationMessage = kafka.FindMessageByFilter[kafka.PlayerMessage](sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
+		testData.registrationMessage = kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
 			return msg.Message.EventType == string(kafka.PlayerEventSignUpFast) &&
 				msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
@@ -148,7 +146,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 	})
 
 	t.WithNewStep("Проверка Kafka-сообщения о создании лимита", func(sCtx provider.StepCtx) {
-		testData.limitMessage = kafka.FindMessageByFilter[kafka.LimitMessage](sCtx, s.kafka, func(msg kafka.LimitMessage) bool {
+		testData.limitMessage = kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.LimitMessage) bool {
 			return msg.EventType == string(kafka.LimitEventCreated) &&
 				msg.LimitType == string(kafka.LimitTypeSingleBet) &&
 				msg.PlayerID == testData.registrationMessage.Player.ExternalID &&
@@ -253,7 +251,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 	})
 
 	t.WithNewStep("Проверка отправки события лимита в Kafka projection source", func(sCtx provider.StepCtx) {
-		projectionMessage := kafka.FindMessageByFilter[kafka.ProjectionSourceMessage](sCtx, s.kafka, func(msg kafka.ProjectionSourceMessage) bool {
+		projectionMessage := kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.ProjectionSourceMessage) bool {
 			return msg.Type == string(kafka.ProjectionEventLimitChanged) &&
 				msg.PlayerUUID == testData.registrationMessage.Player.ExternalID &&
 				msg.WalletUUID == testData.dbWallet.UUID
@@ -268,7 +266,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 		sCtx.Require().GreaterOrEqual(len(limitsPayload.Limits), 1, "В payload есть хотя бы один лимит")
 
 		limit := limitsPayload.Limits[0]
-		sCtx.Assert().Equal(kafka.LimitEventCreated, limitsPayload.EventType, "Тип события в payload корректен")
+		sCtx.Assert().Equal(string(kafka.LimitEventCreated), limitsPayload.EventType, "Тип события в payload корректен")
 		sCtx.Assert().Equal(testData.limitMessage.ID, limit.ExternalID, "ID лимита совпадает")
 		sCtx.Assert().Equal(testData.limitMessage.Amount, limit.Amount, "Сумма лимита совпадает")
 		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, limit.CurrencyCode, "Валюта лимита совпадает")
@@ -282,9 +280,4 @@ func (s *SingleBetLimitSuite) AfterAll(t provider.T) {
 	if s.natsClient != nil {
 		s.natsClient.Close()
 	}
-}
-
-func TestSingleBetLimitSuite(t *testing.T) {
-	t.Parallel()
-	suite.RunSuite(t, new(SingleBetLimitSuite))
 }
