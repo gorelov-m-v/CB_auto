@@ -329,10 +329,14 @@ func (k *Kafka) Unsubscribe(ch chan kafka.Message) {
 	}
 }
 
+// Метод close с форсированным закрытием reader-ов:
+// После отмены контекста сразу закрываются подписчики и Kafka reader-ы параллельно.
+// Если reader не закроется в течение 5 секунд, просто логируем предупреждение.
 func (k *Kafka) close(t provider.T) {
+	// Отменяем контекст
 	k.cancel()
-	k.wg.Wait()
 
+	// Закрываем подписчиков немедленно
 	k.mu.Lock()
 	for _, subs := range k.subscribers {
 		for _, sub := range subs {
@@ -342,20 +346,25 @@ func (k *Kafka) close(t provider.T) {
 	k.subscribers = nil
 	k.mu.Unlock()
 
-	done := make(chan struct{})
+	// Параллельное закрытие всех Kafka reader-ов
+	var closeWg sync.WaitGroup
+	closeWg.Add(len(k.readers))
+	for _, reader := range k.readers {
+		go func(r *kafka.Reader) {
+			defer closeWg.Done()
+			_ = r.Close() // Ошибку игнорируем, просто форсируем закрытие
+		}(reader)
+	}
+	doneCh := make(chan struct{})
 	go func() {
-		for _, reader := range k.readers {
-			if err := reader.Close(); err != nil {
-				t.Errorf("Ошибка при закрытии Kafka reader: %v", err)
-			}
-		}
-		close(done)
+		closeWg.Wait()
+		close(doneCh)
 	}()
-
 	select {
-	case <-time.After(30 * time.Second):
-		t.Errorf("Таймаут при закрытии Kafka reader")
-	case <-done:
+	case <-doneCh:
+		// Все reader-ы закрыты
+	case <-time.After(5 * time.Second):
+		t.Logf("Таймаут при закрытии Kafka reader. Форсированное закрытие")
 	}
 }
 

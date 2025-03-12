@@ -1,6 +1,3 @@
-//go:build limits
-// +build limits
-
 package test
 
 import (
@@ -100,7 +97,7 @@ func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
 
 	t.WithNewStep("Проверка Kafka-сообщения о регистрации игрока", func(sCtx provider.StepCtx) {
 		testData.registrationMessage = kafka.FindMessageByFilter[kafka.PlayerMessage](sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
-			return msg.Message.EventType == kafka.PlayerEventSignUpFast &&
+			return msg.Message.EventType == string(kafka.PlayerEventSignUpFast) &&
 				msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
 
@@ -116,7 +113,7 @@ func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
 			"currency":    testData.registrationMessage.Player.Currency,
 		}
 
-		testData.dbWallet = s.walletRepo.GetWallet(sCtx, walletFilter)
+		testData.dbWallet = s.walletRepo.GetOneWithRetry(sCtx, walletFilter)
 
 		sCtx.Require().NotNil(testData.dbWallet, "Базовый кошелек найден в базе данных")
 	})
@@ -154,8 +151,8 @@ func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
 
 	t.WithNewStep("Получение сообщения из Kafka о создании лимита на оборот средств", func(sCtx provider.StepCtx) {
 		testData.limitMessage = kafka.FindMessageByFilter[kafka.LimitMessage](sCtx, s.kafka, func(msg kafka.LimitMessage) bool {
-			return msg.EventType == kafka.LimitEventCreated &&
-				msg.LimitType == kafka.LimitTypeTurnoverFunds &&
+			return msg.EventType == string(kafka.LimitEventCreated) &&
+				msg.LimitType == string(kafka.LimitTypeTurnoverFunds) &&
 				msg.PlayerID == testData.registrationMessage.Player.ExternalID &&
 				msg.Amount == testData.setTurnoverLimitReq.Body.Amount &&
 				msg.CurrencyCode == testData.setTurnoverLimitReq.Body.Currency
@@ -267,7 +264,7 @@ func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
 
 	t.WithNewStep("Проверка отправки события лимита в Kafka projection source", func(sCtx provider.StepCtx) {
 		projectionMessage := kafka.FindMessageByFilter[kafka.ProjectionSourceMessage](sCtx, s.kafka, func(msg kafka.ProjectionSourceMessage) bool {
-			return msg.Type == kafka.ProjectionEventLimitChanged &&
+			return msg.Type == string(kafka.ProjectionEventLimitChanged) &&
 				msg.PlayerUUID == testData.registrationMessage.Player.ExternalID &&
 				msg.WalletUUID == testData.dbWallet.UUID
 		})

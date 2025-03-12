@@ -1,6 +1,3 @@
-//go:build limits
-// +build limits
-
 package test
 
 import (
@@ -100,7 +97,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 
 	t.WithNewStep("Проверка Kafka-сообщения о регистрации игрока", func(sCtx provider.StepCtx) {
 		testData.registrationMessage = kafka.FindMessageByFilter[kafka.PlayerMessage](sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
-			return msg.Message.EventType == kafka.PlayerEventSignUpFast &&
+			return msg.Message.EventType == string(kafka.PlayerEventSignUpFast) &&
 				msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
 
@@ -116,7 +113,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 			"currency":    testData.registrationMessage.Player.Currency,
 		}
 
-		testData.dbWallet = s.walletRepo.GetWallet(sCtx, walletFilter)
+		testData.dbWallet = s.walletRepo.GetOneWithRetry(sCtx, walletFilter)
 
 		sCtx.Require().NotNil(testData.dbWallet, "Базовый кошелек найден в базе данных")
 	})
@@ -152,8 +149,8 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 
 	t.WithNewStep("Проверка Kafka-сообщения о создании лимита", func(sCtx provider.StepCtx) {
 		testData.limitMessage = kafka.FindMessageByFilter[kafka.LimitMessage](sCtx, s.kafka, func(msg kafka.LimitMessage) bool {
-			return msg.EventType == kafka.LimitEventCreated &&
-				msg.LimitType == kafka.LimitTypeSingleBet &&
+			return msg.EventType == string(kafka.LimitEventCreated) &&
+				msg.LimitType == string(kafka.LimitTypeSingleBet) &&
 				msg.PlayerID == testData.registrationMessage.Player.ExternalID &&
 				msg.Amount == testData.setSingleBetLimitReq.Body.Amount &&
 				msg.CurrencyCode == s.config.Node.DefaultCurrency
@@ -257,7 +254,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 
 	t.WithNewStep("Проверка отправки события лимита в Kafka projection source", func(sCtx provider.StepCtx) {
 		projectionMessage := kafka.FindMessageByFilter[kafka.ProjectionSourceMessage](sCtx, s.kafka, func(msg kafka.ProjectionSourceMessage) bool {
-			return msg.Type == kafka.ProjectionEventLimitChanged &&
+			return msg.Type == string(kafka.ProjectionEventLimitChanged) &&
 				msg.PlayerUUID == testData.registrationMessage.Player.ExternalID &&
 				msg.WalletUUID == testData.dbWallet.UUID
 		})

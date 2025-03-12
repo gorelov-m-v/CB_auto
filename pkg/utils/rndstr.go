@@ -28,6 +28,7 @@ const (
 	ALIAS             = "alias"
 	CATEGORY_TITLE    = "category_title"
 	COLLECTION_TITLE  = "collection_title"
+	PHONE             = "phone"
 )
 
 const (
@@ -39,7 +40,7 @@ const (
 	NON_HEX_CHARS    = "ghijklmnopqrstuvwxyz"
 )
 
-var (
+const (
 	latinChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 	digits     = "0123456789"
 )
@@ -48,7 +49,14 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-func Get(config string, length int) string {
+func Get(config string, lengths ...int) string {
+	var length int
+	if len(lengths) > 0 {
+		length = lengths[0]
+	} else {
+		length = 10
+	}
+
 	switch config {
 	case INTEGER:
 		return randomNumericString(length)
@@ -96,6 +104,8 @@ func Get(config string, length int) string {
 		return generateCategoryTitle(length)
 	case COLLECTION_TITLE:
 		return generateCollectionTitle(length)
+	case PHONE:
+		return generateTelephoneNumber()
 	default:
 		return "Unknown argument to perform random string generation!"
 	}
@@ -341,4 +351,9 @@ func generateCollectionTitle(length int) string {
 	}
 
 	return string(result)
+}
+
+func generateTelephoneNumber() string {
+	countryCode := "371"
+	return "+" + countryCode + randomNumericString(8)
 }
