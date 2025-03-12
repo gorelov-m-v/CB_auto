@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -17,7 +18,6 @@ import (
 	_ "github.com/go-sql-driver/mysql" // Импорт драйвера MySQL
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
-	"github.com/stretchr/testify/require"
 )
 
 type UpdateGameSuite struct {
@@ -26,6 +26,7 @@ type UpdateGameSuite struct {
 	capService capAPI.CapAPI
 	database   *repository.Connector
 	gameRepo   *game.Repository
+	walletDB   *repository.Connector
 }
 
 func (s *UpdateGameSuite) BeforeAll(t provider.T) {
@@ -41,6 +42,10 @@ func (s *UpdateGameSuite) BeforeAll(t provider.T) {
 		connector := repository.OpenConnector(t, &s.config.MySQL, repository.Core)
 		s.database = &connector
 		s.gameRepo = game.NewRepository(s.database.DB(), &s.config.MySQL)
+
+		// Подключение к БД wallet для получения игры с free spins
+		walletConnector := repository.OpenConnector(t, &s.config.MySQL, repository.Wallet)
+		s.walletDB = &walletConnector
 	})
 }
 
@@ -48,50 +53,59 @@ func (s *UpdateGameSuite) AfterAll(t provider.T) {
 	if s.database != nil {
 		_ = s.database.Close()
 	}
+	if s.walletDB != nil {
+		_ = s.walletDB.Close()
+	}
 }
 
 func (s *UpdateGameSuite) TestUpdateGame(t provider.T) {
-	gameID := "366a3ad8-7f21-4051-b398-44b54b8a8dff"
-	nodeID := "4c59ecfb-9571-4d2e-8e8b-4558636049fc"
+	var gameID string
 
-	// Шаг 1: Проверка существования игры и соответствия ID
-	t.WithNewStep("Проверка существования игры в БД и соответствия ID", func(sCtx provider.StepCtx) {
-		// Получаем игру из БД
-		gameFromDB := s.gameRepo.GetGame(sCtx, map[string]interface{}{
-			"uuid": gameID,
-		})
-		require.NotNil(sCtx, gameFromDB, "Игра найдена в БД")
-		sCtx.Assert().Equal(gameID, gameFromDB.UUID, "UUID игры в БД соответствует ожидаемому")
+	t.WithNewStep("Получение ID игры с free spins из БД", func(sCtx provider.StepCtx) {
+		query := "SELECT uuid FROM `beta-09_core`.`game` WHERE has_free_spins = 1 LIMIT 1"
+		err := s.database.DB().QueryRowContext(context.Background(), query).Scan(&gameID)
+		sCtx.Require().NoError(err, "Ошибка при получении ID игры с free spins")
+		sCtx.Require().NotEmpty(gameID, "ID игры получен")
+	})
 
-		// Получаем игру через API
-		req := &clientTypes.Request[struct{}]{
+	// Генерируем новый alias и название
+	newAlias := "updated_game_" + utils.Get(utils.ALIAS, 10)
+	newName := "Updated Game " + utils.Get(utils.GAME_TITLE, 20)
+
+	t.WithNewStep("Обновление alias и названия игры", func(sCtx provider.StepCtx) {
+		updateReq := &clientTypes.Request[models.UpdateCapGamesRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
-				"Platform-NodeId": nodeID,
+				"Platform-NodeId": s.config.Node.ProjectID,
 			},
 			PathParams: map[string]string{
 				"id": gameID,
 			},
+			Body: &models.UpdateCapGamesRequestBody{
+				Alias: newAlias,
+				Name:  newName,
+			},
 		}
 
-		resp := s.capService.GetGames(sCtx, req)
-		sCtx.Assert().Equal(http.StatusOK, resp.StatusCode, "Игра успешно получена через API")
-		sCtx.Assert().Equal(gameID, resp.Body.ID, "ID игры в ответе API соответствует ожидаемому")
-
-		// Проверяем соответствие данных из БД и API
-		sCtx.Assert().Equal(gameFromDB.Alias, resp.Body.Alias, "Alias игры в БД соответствует Alias в API")
-		sCtx.Assert().Equal(gameFromDB.Name, resp.Body.Name, "Name игры в БД соответствует Name в API")
+		updateResp := s.capService.UpdateGames(sCtx, updateReq)
+		sCtx.Assert().Equal(http.StatusOK, updateResp.StatusCode)
+		sCtx.Assert().Equal(gameID, updateResp.Body.ID)
 	})
 
-	// Шаг 2: Изменение названия игры
-	newName := "Обновленное Название Игры " + utils.Get(utils.LETTERS, 5)
+	t.WithNewStep("Проверка обновления alias и названия в БД и API", func(sCtx provider.StepCtx) {
+		// Проверка в БД
+		gameFromDB := s.gameRepo.GetGame(sCtx, map[string]interface{}{
+			"uuid": gameID,
+		})
+		sCtx.Assert().NotNil(gameFromDB)
+		sCtx.Assert().Equal(newAlias, gameFromDB.Alias)
+		sCtx.Assert().Equal(newName, gameFromDB.Name)
 
-	t.WithNewStep("Изменение названия игры", func(sCtx provider.StepCtx) {
-		// Получаем текущие данные игры для сохранения остальных полей
+		// Проверка через API
 		getReq := &clientTypes.Request[struct{}]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
-				"Platform-NodeId": nodeID,
+				"Platform-NodeId": s.config.Node.ProjectID,
 			},
 			PathParams: map[string]string{
 				"id": gameID,
@@ -99,59 +113,10 @@ func (s *UpdateGameSuite) TestUpdateGame(t provider.T) {
 		}
 
 		getResp := s.capService.GetGames(sCtx, getReq)
-		sCtx.Assert().Equal(http.StatusOK, getResp.StatusCode, "Игра успешно получена через API")
-
-		// Сохраняем текущий alias
-		currentAlias := getResp.Body.Alias
-
-		// Обновляем название игры
-		updateBody := models.UpdateCapGamesRequestBody{
-			Alias: currentAlias, // Сохраняем текущий alias
-			Name:  newName,      // Обновляем название
-			// Не указываем Image и RuleResource, так как они пустые
-		}
-
-		updateReq := &clientTypes.Request[models.UpdateCapGamesRequestBody]{
-			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
-				"Platform-NodeId": nodeID,
-			},
-			PathParams: map[string]string{
-				"id": gameID,
-			},
-			Body: &updateBody,
-		}
-
-		updateResp := s.capService.UpdateGames(sCtx, updateReq)
-		sCtx.Assert().Equal(http.StatusOK, updateResp.StatusCode, "Игра успешно обновлена")
-		sCtx.Assert().Equal(gameID, updateResp.Body.ID, "ID игры в ответе API соответствует ожидаемому")
-	})
-
-	// Шаг 3: Проверка изменения названия
-	t.WithNewStep("Проверка изменения названия игры", func(sCtx provider.StepCtx) {
-		// Получаем обновленную игру из БД
-		gameFromDB := s.gameRepo.GetGame(sCtx, map[string]interface{}{
-			"uuid": gameID,
-		})
-		require.NotNil(sCtx, gameFromDB, "Игра найдена в БД после обновления")
-
-		// Получаем обновленную игру через API
-		req := &clientTypes.Request[struct{}]{
-			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
-				"Platform-NodeId": nodeID,
-			},
-			PathParams: map[string]string{
-				"id": gameID,
-			},
-		}
-
-		resp := s.capService.GetGames(sCtx, req)
-		sCtx.Assert().Equal(http.StatusOK, resp.StatusCode, "Игра успешно получена через API после обновления")
-
-		// Проверяем, что название изменилось и совпадает в БД и API
-		sCtx.Assert().Equal(newName, resp.Body.Name, "Название игры в API обновлено")
-		sCtx.Assert().Equal(gameFromDB.Name, resp.Body.Name, "Название игры в БД соответствует названию в API после обновления")
+		sCtx.Assert().Equal(http.StatusOK, getResp.StatusCode)
+		sCtx.Assert().Equal(gameID, getResp.Body.ID)
+		sCtx.Assert().Equal(newAlias, getResp.Body.Alias)
+		sCtx.Assert().Equal(newName, getResp.Body.Name)
 	})
 }
 

@@ -117,7 +117,7 @@ func (s *UpdateCollectionSuite) TestUpdateCollection(t provider.T) {
 	})
 
 	t.WithNewStep("Проверка обновленной коллекции в БД", func(sCtx provider.StepCtx) {
-		collectionFromDB := s.collectionRepo.GetCategoryWithRetry(sCtx, map[string]interface{}{
+		collectionFromDB, _ := s.collectionRepo.GetCategory(sCtx, map[string]interface{}{
 			"uuid": collectionID,
 		})
 
@@ -143,7 +143,7 @@ func (s *UpdateCollectionSuite) TestUpdateCollection(t provider.T) {
 		deleteResp := s.capService.DeleteCapCategory(sCtx, deleteReq)
 		sCtx.Assert().Equal(http.StatusNoContent, deleteResp.StatusCode, "Категория успешно удалена")
 
-		collectionFromDB := s.collectionRepo.GetCategoryWithRetry(sCtx, map[string]interface{}{
+		collectionFromDB, _ := s.collectionRepo.GetCategory(sCtx, map[string]interface{}{
 			"uuid": collectionID,
 		})
 		sCtx.Assert().Nil(collectionFromDB, "Категория удалена из БД")
