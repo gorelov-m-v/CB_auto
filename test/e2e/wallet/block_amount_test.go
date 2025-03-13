@@ -84,9 +84,6 @@ func (s *BlockAmountSuite) TestBlockAmount(t provider.T) {
 
 	t.WithNewStep("Регистрация пользователя.", func(sCtx provider.StepCtx) {
 		req := &clientTypes.Request[publicModels.FastRegistrationRequestBody]{
-			Headers: map[string]string{
-				"Content-Type": "application/json",
-			},
 			Body: &publicModels.FastRegistrationRequestBody{
 				Country:  s.config.Node.DefaultCountry,
 				Currency: s.config.Node.DefaultCurrency,
