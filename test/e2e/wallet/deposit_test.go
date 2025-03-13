@@ -75,6 +75,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 
 	var testData struct {
 		authorizationResponse *clientTypes.Response[publicModels.TokenCheckResponseBody]
+		walletAggregate       redis.WalletFullData
 	}
 
 	t.WithNewStep("Создание и верификация игрока", func(sCtx provider.StepCtx) {
@@ -88,6 +89,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 			s.redisWalletClient,
 		)
 		testData.authorizationResponse = playerData.Auth
+		testData.walletAggregate = playerData.WalletData
 	})
 
 	t.WithNewStep("Создание депозита", func(sCtx provider.StepCtx) {
