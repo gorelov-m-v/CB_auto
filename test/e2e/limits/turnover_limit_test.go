@@ -26,10 +26,10 @@ func (s *TurnoverLimitSuite) SetShared(sc *SharedConnections) {
 	s.Shared = sc
 }
 
-func (s *TurnoverLimitSuite) TestTurnoverLimit(t provider.T) {
+func (s *TurnoverLimitSuite) TestTurnoverLimitCreate(t provider.T) {
 	t.Epic("Лимиты")
 	t.Feature("turnover-of-funds лимит")
-	t.Title("Проверка создания лимита на оборот средств в Kafka, NATS, Redis, MySQL, Public API")
+	t.Title("Проверка создания лимита на оборот средств")
 	t.Tags("wallet", "limits")
 
 	var testData struct {

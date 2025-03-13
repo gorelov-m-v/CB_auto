@@ -19,7 +19,6 @@ import (
 	"github.com/ozontech/allure-go/pkg/framework/suite"
 )
 
-// SharedConnections хранит общий набор соединений для всех тестов.
 type SharedConnections struct {
 	Config       *config.Config
 	PublicClient public.PublicAPI
@@ -30,14 +29,6 @@ type SharedConnections struct {
 	NatsClient   *nats.NatsClient
 }
 
-// SharedSuite — интерфейс для дочерних сьютов, которым можно передать общие соединения.
-// Он расширяет suite.TestSuite, чтобы удовлетворять требованиям s.RunSuite.
-type SharedSuite interface {
-	suite.TestSuite
-	SetShared(*SharedConnections)
-}
-
-// AllLimitsSuite – родительский сьют, в котором создаются и закрываются все общие соединения.
 type AllLimitsSuite struct {
 	suite.Suite
 	shared *SharedConnections
@@ -65,38 +56,34 @@ func (s *AllLimitsSuite) BeforeAll(t provider.T) {
 	})
 }
 
+func (s *AllLimitsSuite) TestCasinoLossLimit(t provider.T) {
+	t.Parallel()
+	casinoSuite := new(CasinoLossLimitSuite)
+	casinoSuite.SetShared(s.shared)
+	s.RunSuite(t, casinoSuite)
+}
+
+func (s *AllLimitsSuite) TestSingleBetLimit(t provider.T) {
+	t.Parallel()
+	singleBetSuite := new(SingleBetLimitSuite)
+	singleBetSuite.SetShared(s.shared)
+	s.RunSuite(t, singleBetSuite)
+}
+
+func (s *AllLimitsSuite) TestTurnoverLimit(t provider.T) {
+	t.Parallel()
+	turnoverSuite := new(TurnoverLimitSuite)
+	turnoverSuite.SetShared(s.shared)
+	s.RunSuite(t, turnoverSuite)
+}
+
 func (s *AllLimitsSuite) AfterAll(t provider.T) {
 	t.WithNewStep("Закрытие общего набора соединений", func(sCtx provider.StepCtx) {
 		kafka.CloseInstance(t)
 		if s.shared.NatsClient != nil {
 			s.shared.NatsClient.Close()
 		}
-		// При необходимости можно закрыть и другие соединения (Redis, БД и т.д.)
 	})
-}
-
-// runSharedTest передаёт общие соединения дочернему сьюту и запускает его.
-func (s *AllLimitsSuite) runSharedTest(t provider.T, child SharedSuite) {
-	child.SetShared(s.shared)
-	s.RunSuite(t, child)
-}
-
-func (s *AllLimitsSuite) TestCasinoLossLimit(t provider.T) {
-	t.Parallel()
-	var suite CasinoLossLimitSuite
-	s.runSharedTest(t, &suite)
-}
-
-// func (s *AllLimitsSuite) TestSingleBetLimit(t provider.T) {
-// 	t.Parallel()
-// 	var suite SingleBetLimitSuite
-// 	s.runSharedTest(t, &suite)
-// }
-
-func (s *AllLimitsSuite) TestTurnoverLimit(t provider.T) {
-	t.Parallel()
-	var suite TurnoverLimitSuite
-	s.runSharedTest(t, &suite)
 }
 
 func TestAllLimits(t *testing.T) {

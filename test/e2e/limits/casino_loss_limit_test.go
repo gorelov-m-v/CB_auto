@@ -5,18 +5,19 @@ import (
 	"net/http"
 	"time"
 
+	capModels "CB_auto/internal/client/cap/models"
 	publicModels "CB_auto/internal/client/public/models"
 	clientTypes "CB_auto/internal/client/types"
 	"CB_auto/internal/repository/wallet"
 	"CB_auto/internal/transport/kafka"
 	"CB_auto/internal/transport/nats"
+	"CB_auto/internal/transport/redis"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
 )
 
-// CasinoLossLimitSuite использует общее соединение через поле Shared.
 type CasinoLossLimitSuite struct {
 	suite.Suite
 	Shared *SharedConnections
@@ -26,10 +27,10 @@ func (s *CasinoLossLimitSuite) SetShared(sc *SharedConnections) {
 	s.Shared = sc
 }
 
-func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
+func (s *CasinoLossLimitSuite) TestCasinoLossLimitCreate(t provider.T) {
 	t.Epic("Лимиты")
 	t.Feature("casino-loss лимит")
-	t.Title("Проверка создания casino-loss лимита в Kafka, NATS, Redis, MySQL, Public API, CAP API")
+	t.Title("Проверка создания лимита на проигрыш")
 	t.Tags("wallet", "limits")
 
 	var testData struct {
@@ -43,8 +44,8 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
 	}
 
 	t.WithNewStep("Регистрация нового игрока", func(sCtx provider.StepCtx) {
-		req := &clientTypes.Request[publicModels.FastRegistrationResponseBody]{
-			Body: &publicModels.FastRegistrationResponseBody{
+		req := &clientTypes.Request[publicModels.FastRegistrationRequestBody]{
+			Body: &publicModels.FastRegistrationRequestBody{
 				Country:  s.Shared.Config.Node.DefaultCountry,
 				Currency: s.Shared.Config.Node.DefaultCurrency,
 			},
@@ -54,7 +55,7 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
 	})
 
 	t.WithNewStep("Проверка Kafka-сообщения о регистрации игрока", func(sCtx provider.StepCtx) {
-		testData.registrationMessage = kafka.FindMessageByFilter[kafka.PlayerMessage](sCtx, s.Shared.Kafka, func(msg kafka.PlayerMessage) bool {
+		testData.registrationMessage = kafka.FindMessageByFilter(sCtx, s.Shared.Kafka, func(msg kafka.PlayerMessage) bool {
 			return msg.Message.EventType == string(kafka.PlayerEventSignUpFast) &&
 				msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
@@ -74,8 +75,8 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
 	})
 
 	t.WithNewStep("Получение токена авторизации", func(sCtx provider.StepCtx) {
-		req := &clientTypes.Request[publicModels.TokenCheckResponseBody]{
-			Body: &publicModels.TokenCheckResponseBody{
+		req := &clientTypes.Request[publicModels.TokenCheckRequestBody]{
+			Body: &publicModels.TokenCheckRequestBody{
 				Username: testData.registrationResponse.Body.Username,
 				Password: testData.registrationResponse.Body.Password,
 			},
@@ -155,5 +156,68 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimit(t provider.T) {
 		sCtx.Assert().Equal(testData.limitMessage.IntervalType, limit.IntervalType, "Тип интервала совпадает")
 		sCtx.Assert().Equal(nats.LimitTypeCasinoLoss, limit.LimitType, "Тип лимита совпадает")
 		sCtx.Assert().Equal(eventType, casinoLossEvent.Payload.EventType, "Тип события совпадает")
+	})
+
+	t.WithNewAsyncStep("Проверка CAP API для лимита на проигрыш", func(sCtx provider.StepCtx) {
+		req := &clientTypes.Request[any]{
+			Headers: map[string]string{
+				"Authorization":   fmt.Sprintf("Bearer %s", s.Shared.CapClient.GetToken(sCtx)),
+				"Platform-NodeId": s.Shared.Config.Node.ProjectID,
+				"Platform-Locale": capModels.DefaultLocale,
+			},
+			PathParams: map[string]string{
+				"playerID": testData.registrationMessage.Player.ExternalID,
+			},
+		}
+		resp := s.Shared.CapClient.GetPlayerLimits(sCtx, req)
+		sCtx.Assert().Equal(http.StatusOK, resp.StatusCode, "Список лимитов получен")
+		sCtx.Assert().Equal(1, resp.Body.Total, "Количество лимитов корректно")
+		casinoLossLimit := resp.Body.Data[0]
+		sCtx.Assert().Equal(capModels.LimitTypeCasinoLoss, casinoLossLimit.Type)
+		sCtx.Assert().True(casinoLossLimit.Status)
+		sCtx.Assert().Equal(capModels.LimitPeriodDaily, casinoLossLimit.Period)
+		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, casinoLossLimit.Currency)
+		sCtx.Assert().Equal(testData.limitMessage.Amount, casinoLossLimit.Rest)
+		sCtx.Assert().Equal(testData.limitMessage.Amount, casinoLossLimit.Amount)
+		sCtx.Assert().InDelta(testData.limitMessage.StartedAt, casinoLossLimit.StartedAt, 10)
+		sCtx.Assert().InDelta(testData.limitMessage.ExpiresAt, casinoLossLimit.ExpiresAt, 10)
+		sCtx.Assert().Zero(casinoLossLimit.DeactivatedAt)
+	})
+
+	t.WithNewStep("Проверка данных кошелька в Redis", func(sCtx provider.StepCtx) {
+		var redisValue redis.WalletFullData
+		err := s.Shared.RedisClient.GetWithRetry(sCtx, testData.dbWallet.UUID, &redisValue)
+		sCtx.Require().NoError(err, "Значение кошелька получено из Redis")
+		sCtx.Require().NotEmpty(redisValue.Limits, "Должен быть хотя бы один лимит")
+		limitData := redisValue.Limits[0]
+		sCtx.Assert().Equal(testData.limitMessage.ID, limitData.ExternalID, "ID лимита совпадает")
+		sCtx.Assert().Equal(redis.LimitTypeCasinoLoss, limitData.LimitType, "Тип лимита совпадает")
+		sCtx.Assert().Equal(testData.limitMessage.Amount, limitData.Amount, "Сумма лимита совпадает")
+		sCtx.Assert().Equal("0", limitData.Spent, "Потраченная сумма равна 0")
+		sCtx.Assert().Equal(testData.limitMessage.Amount, limitData.Rest, "Остаток равен сумме лимита")
+		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, limitData.CurrencyCode, "Валюта лимита совпадает")
+		sCtx.Assert().InDelta(testData.limitMessage.StartedAt, limitData.StartedAt, 10, "Время начала лимита")
+		sCtx.Assert().InDelta(testData.limitMessage.ExpiresAt, limitData.ExpiresAt, 10, "Время окончания лимита")
+		sCtx.Assert().True(limitData.Status, "Лимит активен")
+	})
+
+	t.WithNewStep("Проверка отправки события лимита в Kafka projection source", func(sCtx provider.StepCtx) {
+		projectionMessage := kafka.FindMessageByFilter(sCtx, s.Shared.Kafka, func(msg kafka.ProjectionSourceMessage) bool {
+			return msg.Type == string(kafka.ProjectionEventLimitChanged) &&
+				msg.PlayerUUID == testData.registrationMessage.Player.ExternalID &&
+				msg.WalletUUID == testData.dbWallet.UUID
+		})
+		sCtx.Require().NotEmpty(projectionMessage.Type, "Сообщение limit_changed_v2 найдено в топике projection source")
+		var limitsPayload kafka.ProjectionPayloadLimits
+		err := projectionMessage.UnmarshalPayloadTo(&limitsPayload)
+		sCtx.Require().NoError(err, "Payload успешно распакован")
+		sCtx.Require().GreaterOrEqual(len(limitsPayload.Limits), 1, "В payload есть хотя бы один лимит")
+		limit := limitsPayload.Limits[0]
+		sCtx.Assert().Equal(string(kafka.LimitEventCreated), limitsPayload.EventType, "Тип события в payload корректен")
+		sCtx.Assert().Equal(testData.limitMessage.ID, limit.ExternalID, "ID лимита совпадает")
+		sCtx.Assert().Equal(testData.limitMessage.Amount, limit.Amount, "Сумма лимита совпадает")
+		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, limit.CurrencyCode, "Валюта лимита совпадает")
+		sCtx.Assert().Equal(testData.limitMessage.LimitType, limit.LimitType, "Тип лимита совпадает")
+		sCtx.Assert().True(limit.Status, "Лимит активен")
 	})
 }
