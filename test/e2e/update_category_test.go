@@ -117,7 +117,7 @@ func (s *UpdateCategorySuite) TestUpdateCategory(t provider.T) {
 	})
 
 	t.WithNewStep("Проверка обновленной категории в БД", func(sCtx provider.StepCtx) {
-		categoryFromDB := s.categoryRepo.GetCategoryWithRetry(sCtx, map[string]interface{}{
+		categoryFromDB, _ := s.categoryRepo.GetCategory(sCtx, map[string]interface{}{
 			"uuid": categoryID,
 		})
 
@@ -146,7 +146,7 @@ func (s *UpdateCategorySuite) TestUpdateCategory(t provider.T) {
 	})
 
 	t.WithNewStep("Проверка удаления категории в БД", func(sCtx provider.StepCtx) {
-		categoryFromDB := s.categoryRepo.GetCategoryWithRetry(sCtx, map[string]interface{}{
+		categoryFromDB, _ := s.categoryRepo.GetCategory(sCtx, map[string]interface{}{
 			"uuid": categoryID,
 		})
 		sCtx.Assert().Nil(categoryFromDB, "Категория удалена из БД")

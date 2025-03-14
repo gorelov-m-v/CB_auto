@@ -116,7 +116,7 @@ func (s *CreateCategorySuite) TestCreateCategory(t provider.T) {
 	})
 
 	t.WithNewStep("Проверка категории в БД", func(sCtx provider.StepCtx) {
-		category := s.categoryRepo.GetCategoryWithRetry(sCtx, map[string]interface{}{
+		category, _ := s.categoryRepo.GetCategory(sCtx, map[string]interface{}{
 			"uuid": categoryID,
 		})
 
