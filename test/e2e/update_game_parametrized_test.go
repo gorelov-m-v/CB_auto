@@ -22,19 +22,6 @@ import (
 	"github.com/ozontech/allure-go/pkg/framework/suite"
 )
 
-const (
-	// Типы полей для обновления
-	FieldAlias = "alias"
-	FieldName  = "name"
-
-	// Префиксы для генерации значений
-	AliasPrefix = "updated_game_"
-	NamePrefix  = "Updated Game "
-
-	// Значения для запросов к БД
-	HasFreeSpinsValue = 1
-)
-
 type UpdateGameParam struct {
 	Alias       string
 	Name        string
@@ -70,16 +57,51 @@ func (s *ParametrizedUpdateGameSuite) BeforeAll(t provider.T) {
 		s.kafka = kafka.GetInstance(t, s.config)
 	})
 
+	// Все параметры, включая новые кейсы
 	s.ParamUpdateGame = []UpdateGameParam{
 		{
-			Alias:       fmt.Sprintf("%s%s", AliasPrefix, utils.Get(utils.ALIAS, 10)),
-			Name:        fmt.Sprintf("%s%s", NamePrefix, utils.Get(utils.GAME_TITLE, 10)),
-			Description: "Обновление алиаса игры",
+			Alias:       utils.Get(utils.ALIAS, 2),
+			Name:        utils.Get(utils.GAME_TITLE, 2),
+			Description: "Обновление алиаса и названия игры (граничное минимальное значение)",
 		},
 		{
-			Alias:       fmt.Sprintf("%s%s", AliasPrefix, utils.Get(utils.ALIAS, 10)),
-			Name:        fmt.Sprintf("%s%s", NamePrefix, utils.Get(utils.GAME_TITLE, 10)),
+			Alias:       utils.Get(utils.ALIAS, 100),
+			Name:        utils.Get(utils.GAME_TITLE, 255),
+			Description: "Обновление алиаса и названия игры (граничное максимальное значение)",
+		},
+		{
+			Alias:       utils.Get(utils.ALIAS, 99),
+			Name:        utils.Get(utils.GAME_TITLE, 254),
+			Description: "Обновление алиаса и названия игры (максимальное значение)",
+		},
+		{
+			Alias:       utils.Get(utils.ALIAS, 100),
+			Name:        utils.Get(utils.GAME_TITLE, 255),
 			Description: "Обновление названия игры",
+		},
+		{
+			Alias:       utils.Get(utils.ALIAS, 2),
+			Description: "Обновление только Alias игры (минимальное значение)",
+		},
+		{
+			Name:        utils.Get(utils.GAME_TITLE, 2),
+			Description: "Обновление только Name игры (минимальное значение)",
+		},
+		{
+			Name:        utils.Get(utils.GAME_TITLE, 255),
+			Description: "Обновление только Name игры (максимальное значение)",
+		},
+		{
+			Alias:       utils.Get(utils.ALIAS, 100),
+			Description: "Обновление только Alias игры (граничное максимальное значение)",
+		},
+		{
+			Name:        utils.Get(utils.GAME_TITLE, 254),
+			Description: "Обновление только Name игры (граничное максимальное значение)",
+		},
+		{
+			Alias:       utils.Get(utils.ALIAS, 99),
+			Description: "Обновление только Alias игры (граничное максимальное значение)",
 		},
 	}
 }
@@ -89,84 +111,103 @@ func (s *ParametrizedUpdateGameSuite) TestAll(t provider.T) {
 		t.Run(param.Description, func(t provider.T) {
 			t.Epic("Games")
 			t.Feature("Обновление игры")
-			t.Title(fmt.Sprintf("Проверка обновления поля %s", param.Description))
+			t.Title(fmt.Sprintf("Проверка обновления: %s", param.Description))
 			t.Tags("Games", "Update")
 
-			var gameID string
-			// var newValue string
-			// var getResp *clientTypes.Response[models.GetCapGamesResponseBody]
+			var testData struct {
+				gameID string
+			}
 
 			t.WithNewStep("Получение ID игры с free spins из БД", func(sCtx provider.StepCtx) {
 				game := s.gameRepo.GetGame(sCtx, map[string]interface{}{
-					"has_free_spins": HasFreeSpinsValue,
+					"has_free_spins": 1,
 				})
 				sCtx.Require().NotNil(game, "Игра найдена")
-				gameID = game.UUID
-				sCtx.Require().NotEmpty(gameID, "ID игры получен")
+				testData.gameID = game.UUID
+				sCtx.Require().NotEmpty(testData.gameID, "ID игры получен")
 			})
 
-			t.WithNewStep(fmt.Sprintf("Обновление %s игры", param.Alias), func(sCtx provider.StepCtx) {
-				updateReq := &clientTypes.Request[models.UpdateCapGamesRequestBody]{
+			t.WithNewStep(fmt.Sprintf("Обновление игры: %s", param.Description), func(sCtx provider.StepCtx) {
+				body := &models.UpdateCapGamesRequestBody{}
+				if param.Alias != "" {
+					body.Alias = param.Alias
+				}
+				if param.Name != "" {
+					body.Name = param.Name
+				}
 
+				req := &clientTypes.Request[models.UpdateCapGamesRequestBody]{
 					Headers: map[string]string{
 						"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 						"Platform-NodeId": s.config.Node.ProjectID,
 					},
 					PathParams: map[string]string{
-						"id": gameID,
+						"id": testData.gameID,
 					},
-					Body: &models.UpdateCapGamesRequestBody{
-						Alias: param.Alias,
-						Name:  param.Name,
-					},
+					Body: body,
 				}
 
-				updateResp := s.capService.UpdateGames(sCtx, updateReq)
-				sCtx.Require().Equal(http.StatusOK, updateResp.StatusCode)
-				sCtx.Require().Equal(gameID, updateResp.Body.ID)
+				resp := s.capService.UpdateGames(sCtx, req)
+				sCtx.Require().Equal(http.StatusOK, resp.StatusCode)
+				sCtx.Require().Equal(testData.gameID, resp.Body.ID)
 			})
 
-			t.WithNewAsyncStep(fmt.Sprintf("Проверка обновления %s в БД и API", param.Description), func(sCtx provider.StepCtx) {
-				// Проверка в БД
+			t.WithNewAsyncStep(fmt.Sprintf("Проверка обновления %s в БД", param.Description), func(sCtx provider.StepCtx) {
 				gameFromDB := s.gameRepo.GetGame(sCtx, map[string]interface{}{
-					"uuid": gameID,
+					"uuid": testData.gameID,
 				})
 				sCtx.Assert().NotNil(gameFromDB)
-				sCtx.Assert().Equal(param.Alias, gameFromDB.Alias)
-				sCtx.Assert().Equal(param.Name, gameFromDB.Name)
+
+				if param.Alias != "" {
+					sCtx.Assert().Equal(param.Alias, gameFromDB.Alias, "Alias совпадает в БД")
+				}
+				if param.Name != "" {
+					sCtx.Assert().Equal(param.Name, gameFromDB.Name, "Name совпадает в БД")
+				}
 			})
 
-			t.WithNewAsyncStep("Проверка обновления %s в API", func(sCtx provider.StepCtx) {
+			t.WithNewAsyncStep(fmt.Sprintf("Проверка обновления %s в API", param.Description), func(sCtx provider.StepCtx) {
 				getReq := &clientTypes.Request[struct{}]{
 					Headers: map[string]string{
 						"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
 						"Platform-NodeId": s.config.Node.ProjectID,
 					},
 					PathParams: map[string]string{
-						"id": gameID,
+						"id": testData.gameID,
 					},
 				}
 
 				getResp := s.capService.GetGames(sCtx, getReq)
 				sCtx.Assert().Equal(http.StatusOK, getResp.StatusCode)
-				sCtx.Assert().Equal(gameID, getResp.Body.ID)
-				sCtx.Assert().Equal(param.Alias, getResp.Body.Alias)
-				sCtx.Assert().Equal(param.Name, getResp.Body.Name)
+				sCtx.Assert().Equal(testData.gameID, getResp.Body.ID)
+
+				if param.Alias != "" {
+					sCtx.Assert().Equal(param.Alias, getResp.Body.Alias, "Alias совпадает в API")
+				}
+				if param.Name != "" {
+					sCtx.Assert().Equal(param.Name, getResp.Body.Name, "Name совпадает в API")
+				}
 			})
 
-			t.WithNewAsyncStep("Проверка события обновления игры в Kafka", func(sCtx provider.StepCtx) {
-
-				// Ищем сообщение с нужным ID и обновленным значением
+			t.WithNewAsyncStep(fmt.Sprintf("Проверка события Kafka для %s", param.Description), func(sCtx provider.StepCtx) {
 				gameMessage := kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.GameMessage) bool {
-					return msg.ID == gameID &&
-						msg.Alias == param.Alias &&
-						msg.Name == param.Name
+					match := msg.ID == testData.gameID
+					if param.Alias != "" {
+						match = match && msg.Alias == param.Alias
+					}
+					if param.Name != "" {
+						match = match && msg.Name == param.Name
+					}
+					return match
 				})
 
 				sCtx.Assert().NotEmpty(gameMessage, "Сообщение об обновлении игры найдено в Kafka")
-				sCtx.Assert().Equal(param.Alias, gameMessage.Alias, "Alias игры в Kafka совпадает с API")
-				sCtx.Assert().Equal(param.Name, gameMessage.Name, "Название игры в Kafka совпадает с API")
-
+				if param.Alias != "" {
+					sCtx.Assert().Equal(param.Alias, gameMessage.Alias, "Alias совпадает в Kafka")
+				}
+				if param.Name != "" {
+					sCtx.Assert().Equal(param.Name, gameMessage.Name, "Name совпадает в Kafka")
+				}
 			})
 		})
 	}

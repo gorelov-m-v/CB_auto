@@ -29,6 +29,7 @@ const (
 	CATEGORY_TITLE    = "category_title"
 	COLLECTION_TITLE  = "collection_title"
 	GAME_TITLE        = "game_title"
+	PHONE             = "phone"
 )
 
 const (
@@ -40,7 +41,7 @@ const (
 	NON_HEX_CHARS    = "ghijklmnopqrstuvwxyz"
 )
 
-var (
+const (
 	latinChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 	digits     = "0123456789"
 )
@@ -49,7 +50,14 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-func Get(config string, length int) string {
+func Get(config string, lengths ...int) string {
+	var length int
+	if len(lengths) > 0 {
+		length = lengths[0]
+	} else {
+		length = 10
+	}
+
 	switch config {
 	case INTEGER:
 		return randomNumericString(length)
@@ -99,6 +107,8 @@ func Get(config string, length int) string {
 		return generateCollectionTitle(length)
 	case GAME_TITLE:
 		return generateGameTitle(length)
+	case PHONE:
+		return generateTelephoneNumber()
 	default:
 		return "Unknown argument to perform random string generation!"
 	}
@@ -354,11 +364,7 @@ func generateGameTitle(length int) string {
 		length = 255
 	}
 
-	allowed := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" +
-		"0123456789" +
-		"абвгдеёжзийклмнопрстуфхцчшщъыьэюя" +
-		"АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ" +
-		" -")
+	allowed := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -")
 
 	result := make([]rune, length)
 	for i := range result {
@@ -373,4 +379,9 @@ func generateGameTitle(length int) string {
 	}
 
 	return string(result)
+}
+
+func generateTelephoneNumber() string {
+	countryCode := "371"
+	return "+" + countryCode + randomNumericString(8)
 }

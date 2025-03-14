@@ -151,7 +151,7 @@ func (s *ParametrizedBalanceAdjustmentSuite) TableTestBalanceAdjustment(t provid
 	t.Epic("Wallet")
 	t.Feature("Корректировка баланса")
 	t.Title(fmt.Sprintf("Проверка корректировки баланса игрока: %s", param.Description))
-	t.Tags("Wallet", "BalanceAdjustment")
+	t.Tags("wallet", "cap")
 
 	var testData struct {
 		registrationResponse  *clientTypes.Response[publicModels.FastRegistrationResponseBody]
@@ -165,9 +165,6 @@ func (s *ParametrizedBalanceAdjustmentSuite) TableTestBalanceAdjustment(t provid
 
 	t.WithNewStep("Регистрация пользователя.", func(sCtx provider.StepCtx) {
 		req := &clientTypes.Request[publicModels.FastRegistrationRequestBody]{
-			Headers: map[string]string{
-				"Content-Type": "application/json",
-			},
 			Body: &publicModels.FastRegistrationRequestBody{
 				Country:  s.config.Node.DefaultCountry,
 				Currency: s.config.Node.DefaultCurrency,
@@ -209,7 +206,6 @@ func (s *ParametrizedBalanceAdjustmentSuite) TableTestBalanceAdjustment(t provid
 		testData.adjustmentRequest = &clientTypes.Request[capModels.CreateBalanceAdjustmentRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capClient.GetToken(sCtx)),
-				"Platform-Locale": capModels.DefaultLocale,
 				"Platform-NodeID": s.config.Node.ProjectID,
 			},
 			PathParams: map[string]string{
@@ -281,7 +277,7 @@ func (s *ParametrizedBalanceAdjustmentSuite) TableTestBalanceAdjustment(t provid
 	})
 
 	t.WithNewAsyncStep("Проверка отправки события корректировки баланса в Kafka projection source", func(sCtx provider.StepCtx) {
-		testData.projectionAdjustEvent = kafka.FindMessageByFilter[kafka.ProjectionSourceMessage](
+		testData.projectionAdjustEvent = kafka.FindMessageByFilter(
 			sCtx, s.kafka, func(msg kafka.ProjectionSourceMessage) bool {
 				return msg.Type == string(kafka.ProjectionEventBalanceAdjusted) &&
 					msg.PlayerUUID == testData.registrationMessage.Player.ExternalID &&

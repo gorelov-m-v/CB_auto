@@ -91,7 +91,7 @@ func (s *CreateWalletSuite) TestCreateWallet(t provider.T) {
 	})
 
 	t.WithNewStep("Получение сообщения о регистрации из топика player.v1.account.", func(sCtx provider.StepCtx) {
-		testData.registrationMessage = kafka.FindMessageByFilter[kafka.PlayerMessage](sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
+		testData.registrationMessage = kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
 			return msg.Message.EventType == string(kafka.PlayerEventSignUpFast) &&
 				msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
@@ -101,9 +101,6 @@ func (s *CreateWalletSuite) TestCreateWallet(t provider.T) {
 
 	t.WithNewStep("Получение токена авторизации.", func(sCtx provider.StepCtx) {
 		req := &clientTypes.Request[models.TokenCheckRequestBody]{
-			Headers: map[string]string{
-				"Content-Type": "application/json",
-			},
 			Body: &models.TokenCheckRequestBody{
 				Username: testData.registrationResponse.Body.Username,
 				Password: testData.registrationResponse.Body.Password,
@@ -119,9 +116,7 @@ func (s *CreateWalletSuite) TestCreateWallet(t provider.T) {
 	t.WithNewStep("Создание дополнительного кошелька.", func(sCtx provider.StepCtx) {
 		req := &clientTypes.Request[models.CreateWalletRequestBody]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", testData.authResponse.Body.Token),
-				"Platform-Locale": "en",
-				"Content-Type":    "application/json",
+				"Authorization": fmt.Sprintf("Bearer %s", testData.authResponse.Body.Token),
 			},
 			Body: &models.CreateWalletRequestBody{
 				Currency: "USD",
@@ -181,8 +176,7 @@ func (s *CreateWalletSuite) TestCreateWallet(t provider.T) {
 	t.WithNewStep("Проверка получения списка кошельков.", func(sCtx provider.StepCtx) {
 		req := &clientTypes.Request[any]{
 			Headers: map[string]string{
-				"Authorization":   fmt.Sprintf("Bearer %s", testData.authResponse.Body.Token),
-				"Platform-Locale": "en",
+				"Authorization": fmt.Sprintf("Bearer %s", testData.authResponse.Body.Token),
 			},
 		}
 		resp := s.publicService.GetWallets(sCtx, req)
