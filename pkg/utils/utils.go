@@ -54,7 +54,18 @@ func CreateHttpAttachResponse[V any](resp *clientTypes.Response[V]) []byte {
 		}
 	}
 	if resp.Error != nil {
-		sb.WriteString(fmt.Sprintf("Error: %s\n", resp.Error.Body))
+		sb.WriteString("Error:\n")
+		sb.WriteString(fmt.Sprintf("  StatusCode: %d\n", resp.Error.StatusCode))
+		if resp.Error.Message != "" {
+			sb.WriteString(fmt.Sprintf("  Message: %s\n", resp.Error.Message))
+		}
+		if len(resp.Error.Errors) > 0 {
+			sb.WriteString("  Validation Errors:\n")
+			for field, errMsgs := range resp.Error.Errors {
+				sb.WriteString(fmt.Sprintf("    %s: %s\n", field, strings.Join(errMsgs, ", ")))
+			}
+		}
+		sb.WriteString(fmt.Sprintf("  Body: %s\n", resp.Error.Body))
 	} else {
 		b, err := json.MarshalIndent(resp.Body, "", "  ")
 		if err != nil {

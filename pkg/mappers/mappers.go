@@ -27,7 +27,7 @@ var (
 
 	natsDirectionToCapDirection = map[int]models.DirectionType{
 		1: models.DirectionIncrease,
-		2: models.DirectionDecrease,
+		0: models.DirectionDecrease,
 	}
 
 	natsLimitEventTypeToCapEventType = map[string]string{
@@ -89,10 +89,11 @@ func MapDirectionFromNats(direction int) models.DirectionType {
 }
 
 func MapDirectionToNats(direction models.DirectionType) int {
-	for k, v := range natsDirectionToCapDirection {
-		if v == direction {
-			return k
-		}
+	switch direction {
+	case models.DirectionIncrease:
+		return 1
+	case models.DirectionDecrease:
+		return 0
 	}
 	return 1
 }
@@ -192,7 +193,7 @@ func MapCapModelToNatsBalanceAdjustment(capModel models.CreateBalanceAdjustmentR
 		Amount:        strconv.FormatFloat(capModel.Amount, 'f', 2, 64),
 		Reason:        mapReasonToNats(capModel.Reason),
 		OperationType: mapOperationTypeToNats(capModel.OperationType),
-		Direction:     mapDirectionToNats(capModel.Direction),
+		Direction:     MapDirectionToNats(capModel.Direction),
 		Comment:       capModel.Comment,
 	}
 }
@@ -213,13 +214,4 @@ func mapOperationTypeToNats(opType models.OperationType) int {
 		}
 	}
 	return 0
-}
-
-func mapDirectionToNats(direction models.DirectionType) int {
-	for k, v := range natsDirectionToCapDirection {
-		if v == direction {
-			return k
-		}
-	}
-	return 1
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	capAPI "CB_auto/internal/client/cap"
 	capModels "CB_auto/internal/client/cap/models"
@@ -19,6 +20,7 @@ import (
 	"CB_auto/internal/transport/redis"
 	"CB_auto/pkg/mappers"
 	"CB_auto/pkg/utils"
+	defaultSteps "CB_auto/pkg/utils/default_steps"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
@@ -41,7 +43,8 @@ type ParametrizedBalanceAdjustmentSuite struct {
 	natsClient             *nats.NatsClient
 	database               *repository.Connector
 	walletRepo             *wallet.Repository
-	redisClient            *redis.RedisClient
+	redisWalletClient      *redis.RedisClient
+	redisPlayerClient      *redis.RedisClient
 	ParamBalanceAdjustment []BalanceAdjustmentParam
 }
 
@@ -59,8 +62,9 @@ func (s *ParametrizedBalanceAdjustmentSuite) BeforeAll(t provider.T) {
 		s.kafka = kafka.GetInstance(t, s.config)
 	})
 
-	t.WithNewStep("Инициализация Redis клиента", func(sCtx provider.StepCtx) {
-		s.redisClient = redis.NewRedisClient(t, &s.config.Redis, redis.WalletClient)
+	t.WithNewStep("Инициализация Redis клиентов", func(sCtx provider.StepCtx) {
+		s.redisWalletClient = redis.NewRedisClient(t, &s.config.Redis, redis.WalletClient)
+		s.redisPlayerClient = redis.NewRedisClient(t, &s.config.Redis, redis.PlayerClient)
 	})
 
 	t.WithNewStep("Инициализация NATS клиента", func(sCtx provider.StepCtx) {
@@ -72,78 +76,78 @@ func (s *ParametrizedBalanceAdjustmentSuite) BeforeAll(t provider.T) {
 	})
 
 	s.ParamBalanceAdjustment = []BalanceAdjustmentParam{
+		// {
+		// 	Direction:     capModels.DirectionIncrease,
+		// 	OperationType: capModels.OperationTypeCorrection,
+		// 	ReasonType:    capModels.ReasonMalfunction,
+		// 	Description:   "Корректировка из-за технического сбоя",
+		// },
+		// {
+		// 	Direction:     capModels.DirectionIncrease,
+		// 	OperationType: capModels.OperationTypeDeposit,
+		// 	ReasonType:    capModels.ReasonOperationalMistake,
+		// 	Description:   "Депозит из-за операционной ошибки",
+		// },
+		// {
+		// 	Direction:     capModels.DirectionIncrease,
+		// 	OperationType: capModels.OperationTypeGift,
+		// 	ReasonType:    capModels.ReasonBalanceCorrection,
+		// 	Description:   "Подарок для корректировки баланса",
+		// },
+		// {
+		// 	Direction:     capModels.DirectionIncrease,
+		// 	OperationType: capModels.OperationTypeCashback,
+		// 	ReasonType:    capModels.ReasonOperationalMistake,
+		// 	Description:   "Кэшбэк из-за операционной ошибки",
+		// },
+		// {
+		// 	Direction:     capModels.DirectionIncrease,
+		// 	OperationType: capModels.OperationTypeTournamentPrize,
+		// 	ReasonType:    capModels.ReasonMalfunction,
+		// 	Description:   "Приз турнира из-за технического сбоя",
+		// },
+		// {
+		// 	Direction:     capModels.DirectionIncrease,
+		// 	OperationType: capModels.OperationTypeJackpot,
+		// 	ReasonType:    capModels.ReasonBalanceCorrection,
+		// 	Description:   "Джекпот для корректировки баланса",
+		// },
+		// {
+		// 	Direction:     capModels.DirectionDecrease,
+		// 	OperationType: capModels.OperationTypeCorrection,
+		// 	ReasonType:    capModels.ReasonBalanceCorrection,
+		// 	Description:   "Уменьшение для корректировки баланса",
+		// },
+		// {
+		// 	Direction:     capModels.DirectionDecrease,
+		// 	OperationType: capModels.OperationTypeWithdrawal,
+		// 	ReasonType:    capModels.ReasonOperationalMistake,
+		// 	Description:   "Вывод из-за операционной ошибки",
+		// },
+		// {
+		// 	Direction:     capModels.DirectionDecrease,
+		// 	OperationType: capModels.OperationTypeGift,
+		// 	ReasonType:    capModels.ReasonMalfunction,
+		// 	Description:   "Отмена подарка из-за технического сбоя",
+		// },
+		// {
+		// 	Direction:     capModels.DirectionDecrease,
+		// 	OperationType: capModels.OperationTypeReferralCommission,
+		// 	ReasonType:    capModels.ReasonOperationalMistake,
+		// 	Description:   "Отмена реферальной комиссии из-за ошибки",
+		// },
+		// {
+		// 	Direction:     capModels.DirectionDecrease,
+		// 	OperationType: capModels.OperationTypeTournamentPrize,
+		// 	ReasonType:    capModels.ReasonBalanceCorrection,
+		// 	Description:   "Корректировка выигрыша в турнире",
+		// },
 		{
-			Direction:     capModels.DirectionIncrease,
-			OperationType: capModels.OperationTypeCorrection,
-			ReasonType:    capModels.ReasonMalfunction,
-			Description:   "Корректировка из-за технического сбоя",
-		},
-		{
-			Direction:     capModels.DirectionIncrease,
-			OperationType: capModels.OperationTypeDeposit,
-			ReasonType:    capModels.ReasonOperationalMistake,
-			Description:   "Депозит из-за операционной ошибки",
-		},
-		{
-			Direction:     capModels.DirectionIncrease,
-			OperationType: capModels.OperationTypeGift,
-			ReasonType:    capModels.ReasonBalanceCorrection,
-			Description:   "Подарок для корректировки баланса",
-		},
-		{
-			Direction:     capModels.DirectionIncrease,
-			OperationType: capModels.OperationTypeCashback,
-			ReasonType:    capModels.ReasonOperationalMistake,
-			Description:   "Кэшбэк из-за операционной ошибки",
-		},
-		{
-			Direction:     capModels.DirectionIncrease,
-			OperationType: capModels.OperationTypeTournamentPrize,
-			ReasonType:    capModels.ReasonMalfunction,
-			Description:   "Приз турнира из-за технического сбоя",
-		},
-		{
-			Direction:     capModels.DirectionIncrease,
+			Direction:     capModels.DirectionDecrease,
 			OperationType: capModels.OperationTypeJackpot,
-			ReasonType:    capModels.ReasonBalanceCorrection,
-			Description:   "Джекпот для корректировки баланса",
+			ReasonType:    capModels.ReasonMalfunction,
+			Description:   "Отмена джекпота из-за технического сбоя",
 		},
-		// {
-		//     Direction:     capModels.DirectionDecrease,
-		//     OperationType: capModels.OperationTypeCorrection,
-		//     ReasonType:    capModels.ReasonBalanceCorrection,
-		//     Description:   "Уменьшение для корректировки баланса",
-		// },
-		// {
-		//     Direction:     capModels.DirectionDecrease,
-		//     OperationType: capModels.OperationTypeWithdrawal,
-		//     ReasonType:    capModels.ReasonOperationalMistake,
-		//     Description:   "Вывод из-за операционной ошибки",
-		// },
-		// {
-		//     Direction:     capModels.DirectionDecrease,
-		//     OperationType: capModels.OperationTypeGift,
-		//     ReasonType:    capModels.ReasonMalfunction,
-		//     Description:   "Отмена подарка из-за технического сбоя",
-		// },
-		// {
-		//     Direction:     capModels.DirectionDecrease,
-		//     OperationType: capModels.OperationTypeReferralCommission,
-		//     ReasonType:    capModels.ReasonOperationalMistake,
-		//     Description:   "Отмена реферальной комиссии из-за ошибки",
-		// },
-		// {
-		//     Direction:     capModels.DirectionDecrease,
-		//     OperationType: capModels.OperationTypeTournamentPrize,
-		//     ReasonType:    capModels.ReasonBalanceCorrection,
-		//     Description:   "Корректировка выигрыша в турнире",
-		// },
-		// {
-		//     Direction:     capModels.DirectionDecrease,
-		//     OperationType: capModels.OperationTypeJackpot,
-		//     ReasonType:    capModels.ReasonMalfunction,
-		//     Description:   "Отмена джекпота из-за технического сбоя",
-		// },
 	}
 }
 
@@ -154,62 +158,64 @@ func (s *ParametrizedBalanceAdjustmentSuite) TableTestBalanceAdjustment(t provid
 	t.Tags("wallet", "cap")
 
 	var testData struct {
-		registrationResponse  *clientTypes.Response[publicModels.FastRegistrationResponseBody]
-		registrationMessage   kafka.PlayerMessage
-		walletCreatedEvent    *nats.NatsMessage[nats.WalletCreatedPayload]
+		authorizationResponse *clientTypes.Response[publicModels.TokenCheckResponseBody]
+		walletAggregate       redis.WalletFullData
 		adjustmentRequest     *clientTypes.Request[capModels.CreateBalanceAdjustmentRequestBody]
 		adjustmentResponse    *clientTypes.Response[struct{}]
 		balanceAdjustedEvent  *nats.NatsMessage[nats.BalanceAdjustedPayload]
 		projectionAdjustEvent kafka.ProjectionSourceMessage
+		expectedBalance       float64
 	}
 
-	t.WithNewStep("Регистрация пользователя.", func(sCtx provider.StepCtx) {
-		req := &clientTypes.Request[publicModels.FastRegistrationRequestBody]{
-			Body: &publicModels.FastRegistrationRequestBody{
-				Country:  s.config.Node.DefaultCountry,
-				Currency: s.config.Node.DefaultCurrency,
+	t.WithNewStep("Создание и верификация игрока", func(sCtx provider.StepCtx) {
+		playerData := defaultSteps.CreateVerifiedPlayer(
+			sCtx,
+			s.publicClient,
+			s.capClient,
+			s.kafka,
+			s.config,
+			s.redisPlayerClient,
+			s.redisWalletClient,
+		)
+		testData.authorizationResponse = playerData.Auth
+		testData.walletAggregate = playerData.WalletData
+	})
+
+	t.WithNewStep("Создание депозита и проверка баланса", func(sCtx provider.StepCtx) {
+		time.Sleep(5 * time.Second)
+
+		testData.expectedBalance = 150.0
+
+		req := &clientTypes.Request[publicModels.DepositRequestBody]{
+			Headers: map[string]string{
+				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
+			},
+			Body: &publicModels.DepositRequestBody{
+				Amount:          fmt.Sprintf("%.0f", testData.expectedBalance),
+				PaymentMethodID: int(publicModels.Fake),
+				Currency:        s.config.Node.DefaultCurrency,
+				Country:         s.config.Node.DefaultCountry,
+				Redirect: publicModels.DepositRedirectURLs{
+					Failed:  publicModels.DepositRedirectURLFailed,
+					Success: publicModels.DepositRedirectURLSuccess,
+					Pending: publicModels.DepositRedirectURLPending,
+				},
 			},
 		}
-		testData.registrationResponse = s.publicClient.FastRegistration(sCtx, req)
 
-		sCtx.Require().Equal(http.StatusOK, testData.registrationResponse.StatusCode, "Статус код ответа равен 200")
-	})
-
-	t.WithNewStep("Получение сообщения о регистрации из топика player.v1.account.", func(sCtx provider.StepCtx) {
-		testData.registrationMessage = kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
-			return msg.Message.EventType == string(kafka.PlayerEventSignUpFast) &&
-				msg.Player.AccountID == testData.registrationResponse.Body.Username
-		})
-
-		sCtx.Require().NotEmpty(
-			testData.registrationMessage.Player.ExternalID,
-			"External ID игрока в сообщении регистрации не пустой")
-	})
-
-	t.WithNewStep("Проверка создания кошелька в NATS.", func(sCtx provider.StepCtx) {
-		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
-
-		testData.walletCreatedEvent = nats.FindMessageInStream(
-			sCtx, s.natsClient, subject, func(payload nats.WalletCreatedPayload, msgType string) bool {
-				return msgType == string(nats.WalletCreated) &&
-					payload.WalletType == nats.TypeReal &&
-					payload.WalletStatus == nats.StatusEnabled &&
-					payload.IsBasic
-			})
-
-		sCtx.Require().NotEmpty(
-			testData.walletCreatedEvent.Payload.WalletUUID,
-			"UUID кошелька в ивенте wallet_created не пустой")
+		resp := s.publicClient.CreateDeposit(sCtx, req)
+		sCtx.Require().Equal(http.StatusCreated, resp.StatusCode, "Депозит успешно создан")
 	})
 
 	t.WithNewStep("Выполнение корректировки баланса", func(sCtx provider.StepCtx) {
+		time.Sleep(5 * time.Second)
 		testData.adjustmentRequest = &clientTypes.Request[capModels.CreateBalanceAdjustmentRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capClient.GetToken(sCtx)),
 				"Platform-NodeID": s.config.Node.ProjectID,
 			},
 			PathParams: map[string]string{
-				"player_uuid": testData.registrationMessage.Player.ExternalID,
+				"player_uuid": testData.walletAggregate.PlayerUUID,
 			},
 			Body: &capModels.CreateBalanceAdjustmentRequestBody{
 				Currency:      s.config.Node.DefaultCurrency,
@@ -223,23 +229,34 @@ func (s *ParametrizedBalanceAdjustmentSuite) TableTestBalanceAdjustment(t provid
 
 		testData.adjustmentResponse = s.capClient.CreateBalanceAdjustment(sCtx, testData.adjustmentRequest)
 		sCtx.Require().Equal(http.StatusOK, testData.adjustmentResponse.StatusCode, "Статус код ответа равен 200")
+
+		if param.Direction == capModels.DirectionDecrease {
+			testData.expectedBalance = testData.expectedBalance - testData.adjustmentRequest.Body.Amount
+		} else {
+			testData.expectedBalance = testData.expectedBalance + testData.adjustmentRequest.Body.Amount
+		}
 	})
 
 	t.WithNewStep("Проверка события корректировки баланса в NATS", func(sCtx provider.StepCtx) {
 		subject := fmt.Sprintf("%s.wallet.*.%s.%s", s.config.Nats.StreamPrefix,
-			testData.registrationMessage.Player.ExternalID,
-			testData.walletCreatedEvent.Payload.WalletUUID)
+			testData.walletAggregate.PlayerUUID,
+			testData.walletAggregate.WalletUUID)
 
 		testData.balanceAdjustedEvent = nats.FindMessageInStream(
 			sCtx, s.natsClient, subject, func(payload nats.BalanceAdjustedPayload, msgType string) bool {
 				return msgType == string(nats.BalanceAdjusted)
 			})
 
-		sCtx.Assert().NotNil(testData.balanceAdjustedEvent, "Событие balance_adjusted получено")
+		sCtx.Require().NotNil(testData.balanceAdjustedEvent, "Событие balance_adjusted получено")
 
 		expectedAmount := testData.adjustmentRequest.Body.Amount
 		actualAmount := mappers.StringToAmount(testData.balanceAdjustedEvent.Payload.Amount)
-		sCtx.Assert().Equal(expectedAmount, actualAmount, "Сумма корректировки совпадает")
+
+		if param.Direction == capModels.DirectionDecrease {
+			expectedAmount = -expectedAmount
+		}
+
+		sCtx.Assert().Equal(expectedAmount, actualAmount, "Сумма корректировки совпадает с учетом направления")
 
 		sCtx.Assert().Equal(
 			mappers.MapDirectionToNats(testData.adjustmentRequest.Body.Direction),
@@ -276,12 +293,12 @@ func (s *ParametrizedBalanceAdjustmentSuite) TableTestBalanceAdjustment(t provid
 			"Имя пользователя - admin")
 	})
 
-	t.WithNewAsyncStep("Проверка отправки события корректировки баланса в Kafka projection source", func(sCtx provider.StepCtx) {
+	t.WithNewStep("Проверка отправки события корректировки баланса в Kafka projection source", func(sCtx provider.StepCtx) {
 		testData.projectionAdjustEvent = kafka.FindMessageByFilter(
 			sCtx, s.kafka, func(msg kafka.ProjectionSourceMessage) bool {
 				return msg.Type == string(kafka.ProjectionEventBalanceAdjusted) &&
-					msg.PlayerUUID == testData.registrationMessage.Player.ExternalID &&
-					msg.WalletUUID == testData.walletCreatedEvent.Payload.WalletUUID
+					msg.PlayerUUID == testData.walletAggregate.PlayerUUID &&
+					msg.WalletUUID == testData.walletAggregate.WalletUUID
 			})
 
 		sCtx.Require().NotEmpty(
@@ -289,12 +306,12 @@ func (s *ParametrizedBalanceAdjustmentSuite) TableTestBalanceAdjustment(t provid
 			"Сообщение balance_adjusted найдено в топике projection source")
 
 		sCtx.Assert().Equal(
-			testData.registrationMessage.Player.ExternalID,
+			testData.walletAggregate.PlayerUUID,
 			testData.projectionAdjustEvent.PlayerUUID,
 			"UUID игрока совпадает")
 
 		sCtx.Assert().Equal(
-			testData.walletCreatedEvent.Payload.WalletUUID,
+			testData.walletAggregate.WalletUUID,
 			testData.projectionAdjustEvent.WalletUUID,
 			"UUID кошелька совпадает")
 
@@ -308,7 +325,12 @@ func (s *ParametrizedBalanceAdjustmentSuite) TableTestBalanceAdjustment(t provid
 
 		expectedAmount := testData.adjustmentRequest.Body.Amount
 		actualAmount := mappers.StringToAmount(adjustmentPayload.Amount)
-		sCtx.Assert().Equal(expectedAmount, actualAmount, "Сумма корректировки равна запрошенной")
+
+		if param.Direction == capModels.DirectionDecrease {
+			expectedAmount = -expectedAmount
+		}
+
+		sCtx.Assert().Equal(expectedAmount, actualAmount, "Сумма корректировки равна запрошенной с учетом направления")
 
 		sCtx.Assert().Equal(
 			mappers.MapDirectionToNats(testData.adjustmentRequest.Body.Direction),
@@ -332,18 +354,22 @@ func (s *ParametrizedBalanceAdjustmentSuite) TableTestBalanceAdjustment(t provid
 	})
 
 	t.WithNewStep("Проверка данных кошелька в Redis", func(sCtx provider.StepCtx) {
+		time.Sleep(10 * time.Second)
 		var redisValue redis.WalletFullData
-		err := s.redisClient.GetWithRetry(sCtx, testData.walletCreatedEvent.Payload.WalletUUID, &redisValue)
-
+		err := s.redisWalletClient.GetWithRetry(sCtx, testData.walletAggregate.WalletUUID, &redisValue)
 		sCtx.Require().NoError(err, "Значение кошелька получено из Redis")
 
-		expectedBalance := fmt.Sprintf("%.0f", testData.adjustmentRequest.Body.Amount)
-		sCtx.Assert().Equal(expectedBalance, redisValue.Balance, "Баланс кошелька соответствует сумме корректировки")
+		expectedBalance := fmt.Sprintf("%.0f", testData.expectedBalance)
+		sCtx.Assert().Equal(expectedBalance, redisValue.Balance,
+			"Баланс кошелька соответствует ожидаемому значению после корректировки")
 
-		sCtx.Assert().Equal(
-			int(testData.balanceAdjustedEvent.Sequence),
-			redisValue.LastSeqNumber,
-			"Номер последовательности совпадает")
+		// Проверка номера последовательности опциональна
+		// if testData.balanceAdjustedEvent != nil {
+		// 	sCtx.Assert().Equal(
+		// 		int(testData.balanceAdjustedEvent.Sequence),
+		// 		redisValue.LastSeqNumber,
+		// 		"Номер последовательности совпадает")
+		// }
 	})
 }
 

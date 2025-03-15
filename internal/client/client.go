@@ -173,8 +173,27 @@ func DoRequest[T any, V any](sCtx provider.StepCtx, c *types.Client, request *ty
 
 	if resp.StatusCode >= 400 {
 		response.Error = &types.ErrorResponse{
-			Body: string(responseBody),
+			Body:       string(responseBody),
+			StatusCode: resp.StatusCode,
 		}
+
+		// Попытка разобрать ответ как JSON ошибку, если это возможно
+		var errorObj struct {
+			Message string              `json:"message"`
+			Errors  map[string][]string `json:"errors"`
+		}
+		if err := json.Unmarshal(responseBody, &errorObj); err == nil {
+			response.Error.Message = errorObj.Message
+			response.Error.Errors = errorObj.Errors
+		}
+
+		// Создаем и прикрепляем аттачменты для запроса и ответа
+		reqAttachment := allure.NewAttachment("HTTP request", allure.JSON, utils.CreateHttpAttachRequest(request))
+		respAttachment := allure.NewAttachment("HTTP error response", allure.JSON, utils.CreateHttpAttachResponse(response))
+
+		sCtx.WithAttachments(reqAttachment)
+		sCtx.WithAttachments(respAttachment)
+
 		return response
 	}
 
