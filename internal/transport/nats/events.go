@@ -14,6 +14,7 @@ const (
 	BalanceAdjusted    EventType = "balance_adjusted"
 	BlockAmountStarted EventType = "block_amount_started"
 	BlockAmountRevoked EventType = "block_amount_revoked"
+	DepositedMoney     EventType = "deposited_money"
 )
 
 const (
@@ -142,4 +143,13 @@ type BlockAmountRevokedPayload struct {
 	UserUUID string `json:"user_uuid"`
 	UserName string `json:"user_name"`
 	NodeUUID string `json:"node_uuid"`
+}
+
+type DepositedMoneyPayload struct {
+	UUID         string `json:"uuid"`
+	CurrencyCode string `json:"currency_code"`
+	Amount       string `json:"amount"`
+	Status       int    `json:"status"`
+	NodeUUID     string `json:"node_uuid"`
+	BonusID      string `json:"bonus_id"`
 }

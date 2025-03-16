@@ -192,7 +192,7 @@ func newConsumer(cfg *config.Config) *Kafka {
 		readers:          readers,
 		subscribers:      subscribers,
 		bufferedMessages: bufferedMessages,
-		Timeout:          30 * time.Second,
+		Timeout:          120 * time.Second,
 		ctx:              ctx,
 		cancel:           cancel,
 	}
@@ -329,14 +329,9 @@ func (k *Kafka) Unsubscribe(ch chan kafka.Message) {
 	}
 }
 
-// Метод close с форсированным закрытием reader-ов:
-// После отмены контекста сразу закрываются подписчики и Kafka reader-ы параллельно.
-// Если reader не закроется в течение 5 секунд, просто логируем предупреждение.
 func (k *Kafka) close(t provider.T) {
-	// Отменяем контекст
 	k.cancel()
 
-	// Закрываем подписчиков немедленно
 	k.mu.Lock()
 	for _, subs := range k.subscribers {
 		for _, sub := range subs {
@@ -346,13 +341,12 @@ func (k *Kafka) close(t provider.T) {
 	k.subscribers = nil
 	k.mu.Unlock()
 
-	// Параллельное закрытие всех Kafka reader-ов
 	var closeWg sync.WaitGroup
 	closeWg.Add(len(k.readers))
 	for _, reader := range k.readers {
 		go func(r *kafka.Reader) {
 			defer closeWg.Done()
-			_ = r.Close() // Ошибку игнорируем, просто форсируем закрытие
+			_ = r.Close()
 		}(reader)
 	}
 	doneCh := make(chan struct{})
@@ -362,7 +356,6 @@ func (k *Kafka) close(t provider.T) {
 	}()
 	select {
 	case <-doneCh:
-		// Все reader-ы закрыты
 	case <-time.After(5 * time.Second):
 		t.Logf("Таймаут при закрытии Kafka reader. Форсированное закрытие")
 	}
