@@ -13,6 +13,7 @@ import (
 	clientTypes "CB_auto/internal/client/types"
 	"CB_auto/internal/config"
 	"CB_auto/internal/transport/kafka"
+	"CB_auto/internal/transport/nats"
 	"CB_auto/internal/transport/redis"
 	"CB_auto/pkg/utils"
 
@@ -33,10 +34,18 @@ func CreateVerifiedPlayer(
 	config *config.Config,
 	redisPlayerClient *redis.RedisClient,
 	redisWalletClient *redis.RedisClient,
+	natsClient *nats.NatsClient,
+	depositAmount float64,
 ) PlayerData {
-	var (
+	// Внутренняя структура для хранения оперативных данных при создании игрока
+	type operationalData struct {
 		registrationMessage kafka.PlayerMessage
-	)
+		walletUUID          string
+		depositEvent        *nats.NatsMessage[nats.DepositedMoneyPayload]
+	}
+
+	// Инициализация операционных данных
+	opData := operationalData{}
 
 	// Шаг 1: Регистрация игрока
 	registerReq := &clientTypes.Request[publicModels.FastRegistrationRequestBody]{
@@ -50,11 +59,11 @@ func CreateVerifiedPlayer(
 	sCtx.Require().Equal(http.StatusOK, registrationResponse.StatusCode, "Успешная регистрация")
 
 	// Шаг 2: Получение Kafka-сообщения о регистрации
-	registrationMessage = kafka.FindMessageByFilter(sCtx, kafkaClient, func(msg kafka.PlayerMessage) bool {
+	opData.registrationMessage = kafka.FindMessageByFilter(sCtx, kafkaClient, func(msg kafka.PlayerMessage) bool {
 		return msg.Message.EventType == string(kafka.PlayerEventSignUpFast) &&
 			msg.Player.AccountID == registrationResponse.Body.Username
 	})
-	sCtx.Require().NotEmpty(registrationMessage.Player.ID, "ID игрока не пустой")
+	sCtx.Require().NotEmpty(opData.registrationMessage.Player.ID, "ID игрока не пустой")
 
 	// Шаг 3: Авторизация
 	authReq := &clientTypes.Request[publicModels.TokenCheckRequestBody]{
@@ -248,25 +257,76 @@ func CreateVerifiedPlayer(
 
 	// Шаг 16: Проверка данных кошелька в Redis
 	var wallets redis.WalletsMap
-	err = redisPlayerClient.GetWithRetry(sCtx, registrationMessage.Player.ExternalID, &wallets)
+	err = redisPlayerClient.GetWithRetry(sCtx, opData.registrationMessage.Player.ExternalID, &wallets)
 	sCtx.Require().NoError(err, "Значение кошелька получено из Redis")
 
 	// Получаем UUID кошелька
-	var walletUUID string
 	for _, w := range wallets {
-		walletUUID = w.WalletUUID
+		opData.walletUUID = w.WalletUUID
 		break
 	}
-	sCtx.Require().NotEmpty(walletUUID, "UUID кошелька в Redis не пустой")
+	sCtx.Require().NotEmpty(opData.walletUUID, "UUID кошелька в Redis не пустой")
 
 	// Получаем полные данные кошелька
 	var walletFullData redis.WalletFullData
-	err = redisWalletClient.GetWithRetry(sCtx, walletUUID, &walletFullData)
+	err = redisWalletClient.GetWithRetry(sCtx, opData.walletUUID, &walletFullData)
 	sCtx.Require().NoError(err, "Полные данные кошелька получены из Redis")
 
-	// Возвращаем информацию для авторизации и данные кошелька
-	return PlayerData{
+	// Создаем результат
+	playerData := PlayerData{
 		Auth:       authorizationResponse,
 		WalletData: walletFullData,
 	}
+
+	// Шаг 17: Создание депозита (если сумма > 0)
+	if depositAmount > 0 {
+		time.Sleep(5 * time.Second)
+
+		req := &clientTypes.Request[publicModels.DepositRequestBody]{
+			Headers: map[string]string{
+				"Authorization": fmt.Sprintf("Bearer %s", authorizationResponse.Body.Token),
+			},
+			Body: &publicModels.DepositRequestBody{
+				Amount:          fmt.Sprintf("%.0f", depositAmount),
+				PaymentMethodID: int(publicModels.Fake),
+				Currency:        config.Node.DefaultCurrency,
+				Country:         config.Node.DefaultCountry,
+				Redirect: publicModels.DepositRedirectURLs{
+					Failed:  publicModels.DepositRedirectURLFailed,
+					Success: publicModels.DepositRedirectURLSuccess,
+					Pending: publicModels.DepositRedirectURLPending,
+				},
+			},
+		}
+
+		resp := publicClient.CreateDeposit(sCtx, req)
+		sCtx.Require().Equal(http.StatusCreated, resp.StatusCode, "Депозит успешно создан")
+
+		// Шаг 18: Получение события депозита из NATS
+		subject := fmt.Sprintf("%s.wallet.*.%s.%s", config.Nats.StreamPrefix,
+			walletFullData.PlayerUUID,
+			walletFullData.WalletUUID)
+
+		sCtx.Logf("Ожидание события депозита в NATS для: %s", subject)
+		opData.depositEvent = nats.FindMessageInStream(
+			sCtx, natsClient, subject, func(payload nats.DepositedMoneyPayload, msgType string) bool {
+				return msgType == string(nats.DepositedMoney) &&
+					payload.Amount == fmt.Sprintf("%.0f", depositAmount) &&
+					payload.CurrencyCode == config.Node.DefaultCurrency
+			})
+
+		// Получаем обновленные данные кошелька
+		var updatedWalletData redis.WalletFullData
+		err := redisWalletClient.GetWithSeqCheck(
+			sCtx,
+			opData.walletUUID,
+			&updatedWalletData,
+			int(opData.depositEvent.Sequence))
+		sCtx.Require().NoError(err, "Получены обновленные данные кошелька из Redis")
+
+		playerData.WalletData = updatedWalletData
+	}
+
+	// Возвращаем информацию для авторизации и данные кошелька
+	return playerData
 }

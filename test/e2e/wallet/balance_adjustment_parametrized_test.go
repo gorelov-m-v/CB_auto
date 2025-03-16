@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
-	"time"
 
 	capAPI "CB_auto/internal/client/cap"
 	capModels "CB_auto/internal/client/cap/models"
@@ -167,7 +166,8 @@ func (s *ParametrizedBalanceAdjustmentSuite) TableTestBalanceAdjustment(t provid
 		expectedBalance       float64
 	}
 
-	t.WithNewStep("Создание и верификация игрока", func(sCtx provider.StepCtx) {
+	t.WithNewStep("Создание игрока с депозитом", func(sCtx provider.StepCtx) {
+		depositAmount := 150.0
 		playerData := defaultSteps.CreateVerifiedPlayer(
 			sCtx,
 			s.publicClient,
@@ -176,39 +176,15 @@ func (s *ParametrizedBalanceAdjustmentSuite) TableTestBalanceAdjustment(t provid
 			s.config,
 			s.redisPlayerClient,
 			s.redisWalletClient,
+			s.natsClient,
+			depositAmount,
 		)
 		testData.authorizationResponse = playerData.Auth
 		testData.walletAggregate = playerData.WalletData
-	})
-
-	t.WithNewStep("Создание депозита и проверка баланса", func(sCtx provider.StepCtx) {
-		time.Sleep(5 * time.Second)
-
-		testData.expectedBalance = 150.0
-
-		req := &clientTypes.Request[publicModels.DepositRequestBody]{
-			Headers: map[string]string{
-				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
-			},
-			Body: &publicModels.DepositRequestBody{
-				Amount:          fmt.Sprintf("%.0f", testData.expectedBalance),
-				PaymentMethodID: int(publicModels.Fake),
-				Currency:        s.config.Node.DefaultCurrency,
-				Country:         s.config.Node.DefaultCountry,
-				Redirect: publicModels.DepositRedirectURLs{
-					Failed:  publicModels.DepositRedirectURLFailed,
-					Success: publicModels.DepositRedirectURLSuccess,
-					Pending: publicModels.DepositRedirectURLPending,
-				},
-			},
-		}
-
-		resp := s.publicClient.CreateDeposit(sCtx, req)
-		sCtx.Require().Equal(http.StatusCreated, resp.StatusCode, "Депозит успешно создан")
+		testData.expectedBalance = depositAmount
 	})
 
 	t.WithNewStep("Выполнение корректировки баланса", func(sCtx provider.StepCtx) {
-		time.Sleep(5 * time.Second)
 		testData.adjustmentRequest = &clientTypes.Request[capModels.CreateBalanceAdjustmentRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capClient.GetToken(sCtx)),
@@ -354,9 +330,12 @@ func (s *ParametrizedBalanceAdjustmentSuite) TableTestBalanceAdjustment(t provid
 	})
 
 	t.WithNewStep("Проверка данных кошелька в Redis", func(sCtx provider.StepCtx) {
-		time.Sleep(10 * time.Second)
 		var redisValue redis.WalletFullData
-		err := s.redisWalletClient.GetWithRetry(sCtx, testData.walletAggregate.WalletUUID, &redisValue)
+		err := s.redisWalletClient.GetWithSeqCheck(
+			sCtx,
+			testData.walletAggregate.WalletUUID,
+			&redisValue,
+			int(testData.balanceAdjustedEvent.Sequence))
 		sCtx.Require().NoError(err, "Значение кошелька получено из Redis")
 
 		expectedBalance := fmt.Sprintf("%.0f", testData.expectedBalance)

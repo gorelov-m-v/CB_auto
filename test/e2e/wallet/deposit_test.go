@@ -79,6 +79,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 	}
 
 	t.WithNewStep("Создание и верификация игрока", func(sCtx provider.StepCtx) {
+		depositAmount := 150.0
 		playerData := defaultSteps.CreateVerifiedPlayer(
 			sCtx,
 			s.publicClient,
@@ -87,6 +88,8 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 			s.config,
 			s.redisPlayerClient,
 			s.redisWalletClient,
+			s.natsClient,
+			depositAmount,
 		)
 		testData.authorizationResponse = playerData.Auth
 		testData.walletAggregate = playerData.WalletData
