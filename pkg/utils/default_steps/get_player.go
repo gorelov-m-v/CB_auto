@@ -20,7 +20,6 @@ import (
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 )
 
-// PlayerData содержит информацию об игроке и его кошельке
 type PlayerData struct {
 	Auth       *clientTypes.Response[publicModels.TokenCheckResponseBody]
 	WalletData redis.WalletFullData
@@ -38,294 +37,325 @@ func CreateVerifiedPlayer(
 	depositAmount float64,
 ) PlayerData {
 	// Внутренняя структура для хранения оперативных данных при создании игрока
-	type operationalData struct {
-		registrationMessage kafka.PlayerMessage
-		walletUUID          string
-		depositEvent        *nats.NatsMessage[nats.DepositedMoneyPayload]
+	var registrationData struct {
+		registrationMessage      kafka.PlayerMessage
+		depositEvent             *nats.NatsMessage[nats.DepositedMoneyPayload]
+		registrationResponse     *clientTypes.Response[publicModels.FastRegistrationResponseBody]
+		authorizationResponse    *clientTypes.Response[publicModels.TokenCheckResponseBody]
+		verifications            *clientTypes.Response[[]publicModels.VerificationStatusResponseItem]
+		phoneVerificationRequest *clientTypes.Request[publicModels.RequestVerificationRequestBody]
+		emailVerificationRequest *clientTypes.Request[publicModels.RequestVerificationRequestBody]
+		phoneConfirmMsg          kafka.PlayerMessage
+		emailConfirmMsg          kafka.PlayerMessage
+		wallets                  redis.WalletsMap
+		depositeEvent            *nats.NatsMessage[nats.DepositedMoneyPayload]
 	}
 
-	// Инициализация операционных данных
-	opData := operationalData{}
+	playerData := PlayerData{}
 
 	// Шаг 1: Регистрация игрока
-	registerReq := &clientTypes.Request[publicModels.FastRegistrationRequestBody]{
-		Body: &publicModels.FastRegistrationRequestBody{
-			Country:  config.Node.DefaultCountry,
-			Currency: config.Node.DefaultCurrency,
-		},
-	}
-
-	registrationResponse := publicClient.FastRegistration(sCtx, registerReq)
-	sCtx.Require().Equal(http.StatusOK, registrationResponse.StatusCode, "Успешная регистрация")
-
-	// Шаг 2: Получение Kafka-сообщения о регистрации
-	opData.registrationMessage = kafka.FindMessageByFilter(sCtx, kafkaClient, func(msg kafka.PlayerMessage) bool {
-		return msg.Message.EventType == string(kafka.PlayerEventSignUpFast) &&
-			msg.Player.AccountID == registrationResponse.Body.Username
-	})
-	sCtx.Require().NotEmpty(opData.registrationMessage.Player.ID, "ID игрока не пустой")
-
-	// Шаг 3: Авторизация
-	authReq := &clientTypes.Request[publicModels.TokenCheckRequestBody]{
-		Body: &publicModels.TokenCheckRequestBody{
-			Username: registrationResponse.Body.Username,
-			Password: registrationResponse.Body.Password,
-		},
-	}
-
-	authorizationResponse := publicClient.TokenCheck(sCtx, authReq)
-	sCtx.Require().Equal(http.StatusOK, authorizationResponse.StatusCode, "Успешная авторизация")
-
-	// Шаг 4: Обновление данных игрока
-	updateReq := &clientTypes.Request[publicModels.UpdatePlayerRequestBody]{
-		Headers: map[string]string{
-			"Authorization":   fmt.Sprintf("Bearer %s", authorizationResponse.Body.Token),
-			"Content-Type":    "application/json",
-			"Platform-Locale": "en",
-		},
-		Body: &publicModels.UpdatePlayerRequestBody{
-			FirstName:        "Test",
-			LastName:         "Test",
-			Gender:           1,
-			City:             "TestCity",
-			Postcode:         "12345",
-			PermanentAddress: "Test Address",
-			PersonalID:       utils.Get(utils.PERSONAL_ID),
-			Profession:       "QA",
-			IBAN:             utils.Get(utils.IBAN),
-			Birthday:         "1980-01-01",
-			Country:          config.Node.DefaultCountry,
-		},
-	}
-
-	updateResponse := publicClient.UpdatePlayer(sCtx, updateReq)
-	sCtx.Require().Equal(http.StatusOK, updateResponse.StatusCode, "Обновление данных игрока")
-
-	// Шаг 5: Верификация идентичности
-	verifyReq := &clientTypes.Request[publicModels.VerifyIdentityRequestBody]{
-		Headers: map[string]string{
-			"Authorization": fmt.Sprintf("Bearer %s", authorizationResponse.Body.Token),
-		},
-		Body: &publicModels.VerifyIdentityRequestBody{
-			Number:     "305003277",
-			Type:       publicModels.VerificationTypeIdentity,
-			IssuedDate: "1421463275.791",
-			ExpiryDate: "1921463275.791",
-		},
-	}
-
-	verifyResponse := publicClient.VerifyIdentity(sCtx, verifyReq)
-	sCtx.Require().Equal(http.StatusCreated, verifyResponse.StatusCode, "Верификация идентичности")
-
-	// Шаг 6: Получение статуса верификации
-	statusReq := &clientTypes.Request[any]{
-		Headers: map[string]string{
-			"Authorization": fmt.Sprintf("Bearer %s", authorizationResponse.Body.Token),
-		},
-	}
-
-	verificationStatus := publicClient.GetVerificationStatus(sCtx, statusReq)
-	sCtx.Require().Equal(http.StatusOK, verificationStatus.StatusCode, "Получение статуса верификации")
-
-	// Шаг 7: Обновление статуса верификации
-	updateStatusReq := &clientTypes.Request[capModels.UpdateVerificationStatusRequestBody]{
-		Headers: map[string]string{
-			"Authorization":   fmt.Sprintf("Bearer %s", capClient.GetToken(sCtx)),
-			"Platform-NodeID": config.Node.ProjectID,
-		},
-		PathParams: map[string]string{
-			"verification_id": verificationStatus.Body[0].DocumentID,
-		},
-		Body: &capModels.UpdateVerificationStatusRequestBody{
-			Note:   "",
-			Reason: "",
-			Status: capModels.VerificationStatusApproved,
-		},
-	}
-
-	updateStatusResp := capClient.UpdateVerificationStatus(sCtx, updateStatusReq)
-	sCtx.Require().Equal(http.StatusNoContent, updateStatusResp.StatusCode, "Обновление статуса верификации")
-
-	// Шаг 8: Запрос верификации телефона
-	phoneReq := &clientTypes.Request[publicModels.RequestVerificationRequestBody]{
-		Headers: map[string]string{
-			"Authorization": fmt.Sprintf("Bearer %s", authorizationResponse.Body.Token),
-		},
-		Body: &publicModels.RequestVerificationRequestBody{
-			Contact: utils.Get(utils.PHONE),
-			Type:    publicModels.ContactTypePhone,
-		},
-	}
-
-	phoneVerifyResp := publicClient.RequestContactVerification(sCtx, phoneReq)
-	sCtx.Require().Equal(http.StatusOK, phoneVerifyResp.StatusCode, "Запрос верификации телефона")
-
-	// Шаг 9: Запрос верификации email
-	emailReq := &clientTypes.Request[publicModels.RequestVerificationRequestBody]{
-		Headers: map[string]string{
-			"Authorization": fmt.Sprintf("Bearer %s", authorizationResponse.Body.Token),
-		},
-		Body: &publicModels.RequestVerificationRequestBody{
-			Contact: fmt.Sprintf("test%d@example.com", time.Now().Unix()),
-			Type:    publicModels.ContactTypeEmail,
-		},
-	}
-
-	emailVerifyResp := publicClient.RequestContactVerification(sCtx, emailReq)
-	sCtx.Require().Equal(http.StatusOK, emailVerifyResp.StatusCode, "Запрос верификации email")
-
-	// Шаг 10: Получение сообщения о подтверждении телефона
-	phoneNumberWithoutPlus := strings.TrimPrefix(phoneReq.Body.Contact, "+")
-	phoneConfirmMsg := kafka.FindMessageByFilter(sCtx, kafkaClient, func(msg kafka.PlayerMessage) bool {
-		return msg.Message.EventType == string(kafka.PlayerEventConfirmationPhone) &&
-			msg.Player.AccountID == registrationResponse.Body.Username &&
-			msg.Player.Phone == phoneNumberWithoutPlus
-	})
-
-	// Шаг 11: Получение сообщения о подтверждении email
-	emailConfirmMsg := kafka.FindMessageByFilter(sCtx, kafkaClient, func(msg kafka.PlayerMessage) bool {
-		return msg.Message.EventType == string(kafka.PlayerEventConfirmationEmail) &&
-			msg.Player.AccountID == registrationResponse.Body.Username &&
-			msg.Player.Email == emailReq.Body.Contact
-	})
-
-	// Шаг 12: Подтверждение телефона
-	phoneContext, err := phoneConfirmMsg.GetConfirmationContext()
-	sCtx.Require().NoError(err, "Получение кода подтверждения телефона")
-
-	confirmPhoneReq := &clientTypes.Request[publicModels.ConfirmContactRequestBody]{
-		Headers: map[string]string{
-			"Authorization": fmt.Sprintf("Bearer %s", authorizationResponse.Body.Token),
-		},
-		Body: &publicModels.ConfirmContactRequestBody{
-			Contact: phoneReq.Body.Contact,
-			Type:    publicModels.ContactTypePhone,
-			Code:    phoneContext.ConfirmationCode,
-		},
-	}
-
-	confirmPhoneResp := publicClient.ConfirmContact(sCtx, confirmPhoneReq)
-	sCtx.Require().Equal(http.StatusCreated, confirmPhoneResp.StatusCode, "Подтверждение телефона")
-
-	// Шаг 13: Подтверждение email
-	emailContext, err := emailConfirmMsg.GetConfirmationContext()
-	sCtx.Require().NoError(err, "Получение кода подтверждения email")
-
-	confirmEmailReq := &clientTypes.Request[publicModels.ConfirmContactRequestBody]{
-		Headers: map[string]string{
-			"Authorization": fmt.Sprintf("Bearer %s", authorizationResponse.Body.Token),
-		},
-		Body: &publicModels.ConfirmContactRequestBody{
-			Contact: emailReq.Body.Contact,
-			Type:    publicModels.ContactTypeEmail,
-			Code:    emailContext.ConfirmationCode,
-		},
-	}
-
-	confirmEmailResp := publicClient.ConfirmContact(sCtx, confirmEmailReq)
-	sCtx.Require().Equal(http.StatusCreated, confirmEmailResp.StatusCode, "Подтверждение email")
-
-	// Шаг 14: Установка лимита на одиночную ставку
-	setSingleBetLimitReq := &clientTypes.Request[publicModels.SetSingleBetLimitRequestBody]{
-		Headers: map[string]string{
-			"Authorization": fmt.Sprintf("Bearer %s", authorizationResponse.Body.Token),
-		},
-		Body: &publicModels.SetSingleBetLimitRequestBody{
-			Amount:   "100",
-			Currency: config.Node.DefaultCurrency,
-		},
-	}
-
-	singleBetLimitResp := publicClient.SetSingleBetLimit(sCtx, setSingleBetLimitReq)
-	sCtx.Require().Equal(http.StatusCreated, singleBetLimitResp.StatusCode, "Установка лимита на одиночную ставку")
-
-	// Шаг 15: Установка лимита на оборот средств
-	setTurnoverLimitReq := &clientTypes.Request[publicModels.SetTurnoverLimitRequestBody]{
-		Headers: map[string]string{
-			"Authorization": fmt.Sprintf("Bearer %s", authorizationResponse.Body.Token),
-		},
-		Body: &publicModels.SetTurnoverLimitRequestBody{
-			Amount:    "100",
-			Currency:  config.Node.DefaultCurrency,
-			Type:      publicModels.LimitPeriodDaily,
-			StartedAt: time.Now().Unix(),
-		},
-	}
-
-	turnoverLimitResp := publicClient.SetTurnoverLimit(sCtx, setTurnoverLimitReq)
-	sCtx.Require().Equal(http.StatusCreated, turnoverLimitResp.StatusCode, "Установка лимита на оборот средств")
-
-	// Шаг 16: Проверка данных кошелька в Redis
-	var wallets redis.WalletsMap
-	err = redisPlayerClient.GetWithRetry(sCtx, opData.registrationMessage.Player.ExternalID, &wallets)
-	sCtx.Require().NoError(err, "Значение кошелька получено из Redis")
-
-	// Получаем UUID кошелька
-	for _, w := range wallets {
-		opData.walletUUID = w.WalletUUID
-		break
-	}
-	sCtx.Require().NotEmpty(opData.walletUUID, "UUID кошелька в Redis не пустой")
-
-	// Получаем полные данные кошелька
-	var walletFullData redis.WalletFullData
-	err = redisWalletClient.GetWithRetry(sCtx, opData.walletUUID, &walletFullData)
-	sCtx.Require().NoError(err, "Полные данные кошелька получены из Redis")
-
-	// Создаем результат
-	playerData := PlayerData{
-		Auth:       authorizationResponse,
-		WalletData: walletFullData,
-	}
-
-	// Шаг 17: Создание депозита (если сумма > 0)
-	if depositAmount > 0 {
-		time.Sleep(5 * time.Second)
-
-		req := &clientTypes.Request[publicModels.DepositRequestBody]{
-			Headers: map[string]string{
-				"Authorization": fmt.Sprintf("Bearer %s", authorizationResponse.Body.Token),
-			},
-			Body: &publicModels.DepositRequestBody{
-				Amount:          fmt.Sprintf("%.0f", depositAmount),
-				PaymentMethodID: int(publicModels.Fake),
-				Currency:        config.Node.DefaultCurrency,
-				Country:         config.Node.DefaultCountry,
-				Redirect: publicModels.DepositRedirectURLs{
-					Failed:  publicModels.DepositRedirectURLFailed,
-					Success: publicModels.DepositRedirectURLSuccess,
-					Pending: publicModels.DepositRedirectURLPending,
-				},
+	sCtx.WithNewStep("Создание и верификация игрока", func(sCtx provider.StepCtx) {
+		req := &clientTypes.Request[publicModels.FastRegistrationRequestBody]{
+			Body: &publicModels.FastRegistrationRequestBody{
+				Country:  config.Node.DefaultCountry,
+				Currency: config.Node.DefaultCurrency,
 			},
 		}
 
-		resp := publicClient.CreateDeposit(sCtx, req)
-		sCtx.Require().Equal(http.StatusCreated, resp.StatusCode, "Депозит успешно создан")
+		registrationData.registrationResponse = publicClient.FastRegistration(sCtx, req)
+		sCtx.Require().Equal(http.StatusOK, registrationData.registrationResponse.StatusCode, "Успешная регистрация")
+	})
 
-		// Шаг 18: Получение события депозита из NATS
-		subject := fmt.Sprintf("%s.wallet.*.%s.%s", config.Nats.StreamPrefix,
-			walletFullData.PlayerUUID,
-			walletFullData.WalletUUID)
+	// Шаг 2: Получение Kafka-сообщения о регистрации
+	sCtx.WithNewStep("Получение Kafka-сообщения о регистрации", func(sCtx provider.StepCtx) {
+		registrationData.registrationMessage = kafka.FindMessageByFilter(sCtx, kafkaClient, func(msg kafka.PlayerMessage) bool {
+			return msg.Message.EventType == string(kafka.PlayerEventSignUpFast) &&
+				msg.Player.AccountID == registrationData.registrationResponse.Body.Username
+		})
+		sCtx.Require().NotEmpty(registrationData.registrationMessage.Player.ID, "ID игрока не пустой")
+	})
 
-		sCtx.Logf("Ожидание события депозита в NATS для: %s", subject)
-		opData.depositEvent = nats.FindMessageInStream(
+	// Шаг 3: Авторизация
+	sCtx.WithNewStep("Авторизация", func(sCtx provider.StepCtx) {
+		req := &clientTypes.Request[publicModels.TokenCheckRequestBody]{
+			Body: &publicModels.TokenCheckRequestBody{
+				Username: registrationData.registrationResponse.Body.Username,
+				Password: registrationData.registrationResponse.Body.Password,
+			},
+		}
+
+		registrationData.authorizationResponse = publicClient.TokenCheck(sCtx, req)
+		sCtx.Require().Equal(http.StatusOK, registrationData.authorizationResponse.StatusCode, "Успешная авторизация")
+	})
+
+	// Шаг 4: Обновление данных игрока
+	sCtx.WithNewStep("Обновление данных игрока", func(sCtx provider.StepCtx) {
+		req := &clientTypes.Request[publicModels.UpdatePlayerRequestBody]{
+			Headers: map[string]string{
+				"Authorization": fmt.Sprintf("Bearer %s", registrationData.authorizationResponse.Body.Token),
+			},
+			Body: &publicModels.UpdatePlayerRequestBody{
+				FirstName:        "Test",
+				LastName:         "Test",
+				Gender:           1,
+				City:             "TestCity",
+				Postcode:         "12345",
+				PermanentAddress: "Test Address",
+				PersonalID:       utils.Get(utils.PERSONAL_ID),
+				Profession:       "QA",
+				IBAN:             utils.Get(utils.IBAN),
+				Birthday:         "1980-01-01",
+				Country:          config.Node.DefaultCountry,
+			},
+		}
+
+		resp := publicClient.UpdatePlayer(sCtx, req)
+		sCtx.Require().Equal(http.StatusOK, resp.StatusCode, "Обновление данных игрока")
+	})
+
+	// Шаг 5: Создание запроса на подтверждение личности
+	sCtx.WithNewStep("Создание запроса на подтверждение личности", func(sCtx provider.StepCtx) {
+		req := &clientTypes.Request[publicModels.VerifyIdentityRequestBody]{
+			Headers: map[string]string{
+				"Authorization": fmt.Sprintf("Bearer %s", registrationData.authorizationResponse.Body.Token),
+			},
+			Body: &publicModels.VerifyIdentityRequestBody{
+				Number:     "305003277",
+				Type:       publicModels.VerificationTypeIdentity,
+				IssuedDate: "1421463275.791",
+				ExpiryDate: "1921463275.791",
+			},
+		}
+
+		resp := publicClient.VerifyIdentity(sCtx, req)
+		sCtx.Require().Equal(http.StatusCreated, resp.StatusCode, "Верификация идентичности")
+	})
+
+	// Шаг 6: Получение статуса верификации
+	sCtx.WithNewStep("Получение статуса верификации", func(sCtx provider.StepCtx) {
+		req := &clientTypes.Request[any]{
+			Headers: map[string]string{
+				"Authorization": fmt.Sprintf("Bearer %s", registrationData.authorizationResponse.Body.Token),
+			},
+		}
+
+		registrationData.verifications = publicClient.GetVerificationStatus(sCtx, req)
+		sCtx.Require().Equal(http.StatusOK, registrationData.verifications.StatusCode, "Получение статуса верификации")
+	})
+
+	// Шаг 7: Обновление статуса верификации
+	sCtx.WithNewStep("Обновление статуса верификации", func(sCtx provider.StepCtx) {
+		req := &clientTypes.Request[capModels.UpdateVerificationStatusRequestBody]{
+			Headers: map[string]string{
+				"Authorization":   fmt.Sprintf("Bearer %s", capClient.GetToken(sCtx)),
+				"Platform-NodeID": config.Node.ProjectID,
+			},
+			PathParams: map[string]string{
+				"verification_id": registrationData.verifications.Body[0].DocumentID,
+			},
+			Body: &capModels.UpdateVerificationStatusRequestBody{
+				Note:   "",
+				Reason: "",
+				Status: capModels.VerificationStatusApproved,
+			},
+		}
+
+		resp := capClient.UpdateVerificationStatus(sCtx, req)
+		sCtx.Require().Equal(http.StatusNoContent, resp.StatusCode, "Обновление статуса верификации")
+	})
+
+	// Шаг 8: Запрос верификации телефона
+	sCtx.WithNewStep("Запрос верификации телефона", func(sCtx provider.StepCtx) {
+		registrationData.phoneVerificationRequest = &clientTypes.Request[publicModels.RequestVerificationRequestBody]{
+			Headers: map[string]string{
+				"Authorization": fmt.Sprintf("Bearer %s", registrationData.authorizationResponse.Body.Token),
+			},
+			Body: &publicModels.RequestVerificationRequestBody{
+				Contact: utils.Get(utils.PHONE),
+				Type:    publicModels.ContactTypePhone,
+			},
+		}
+
+		resp := publicClient.RequestContactVerification(sCtx, registrationData.phoneVerificationRequest)
+		sCtx.Require().Equal(http.StatusOK, resp.StatusCode, "Запрос верификации телефона")
+	})
+
+	// Шаг 9: Запрос верификации email
+	sCtx.WithNewStep("Запрос верификации email", func(sCtx provider.StepCtx) {
+		registrationData.emailVerificationRequest = &clientTypes.Request[publicModels.RequestVerificationRequestBody]{
+			Headers: map[string]string{
+				"Authorization": fmt.Sprintf("Bearer %s", registrationData.authorizationResponse.Body.Token),
+			},
+			Body: &publicModels.RequestVerificationRequestBody{
+				Contact: fmt.Sprintf("test%d@example.com", time.Now().Unix()),
+				Type:    publicModels.ContactTypeEmail,
+			},
+		}
+
+		resp := publicClient.RequestContactVerification(sCtx, registrationData.emailVerificationRequest)
+		sCtx.Require().Equal(http.StatusOK, resp.StatusCode, "Запрос верификации email")
+	})
+
+	// Шаг 10: Получение сообщения о подтверждении телефона и email
+	sCtx.WithNewStep("Получение сообщения о подтверждении телефона и email", func(sCtx provider.StepCtx) {
+		phoneNumberWithoutPlus := strings.TrimPrefix(registrationData.phoneVerificationRequest.Body.Contact, "+")
+
+		registrationData.phoneConfirmMsg = kafka.FindMessageByFilter(sCtx, kafkaClient, func(msg kafka.PlayerMessage) bool {
+			return msg.Message.EventType == string(kafka.PlayerEventConfirmationPhone) &&
+				msg.Player.AccountID == registrationData.registrationResponse.Body.Username &&
+				msg.Player.Phone == phoneNumberWithoutPlus
+		})
+
+		registrationData.emailConfirmMsg = kafka.FindMessageByFilter(sCtx, kafkaClient, func(msg kafka.PlayerMessage) bool {
+			return msg.Message.EventType == string(kafka.PlayerEventConfirmationEmail) &&
+				msg.Player.AccountID == registrationData.registrationResponse.Body.Username &&
+				msg.Player.Email == registrationData.emailVerificationRequest.Body.Contact
+		})
+
+	})
+
+	// Шаг 12: Подтверждение телефона
+	sCtx.WithNewStep("Подтверждение телефона", func(sCtx provider.StepCtx) {
+		phoneContext, _ := registrationData.phoneConfirmMsg.GetConfirmationContext()
+		req := &clientTypes.Request[publicModels.ConfirmContactRequestBody]{
+			Headers: map[string]string{
+				"Authorization": fmt.Sprintf("Bearer %s", registrationData.authorizationResponse.Body.Token),
+			},
+			Body: &publicModels.ConfirmContactRequestBody{
+				Contact: registrationData.phoneVerificationRequest.Body.Contact,
+				Type:    publicModels.ContactTypePhone,
+				Code:    phoneContext.ConfirmationCode,
+			},
+		}
+
+		resp := publicClient.ConfirmContact(sCtx, req)
+		sCtx.Require().Equal(http.StatusCreated, resp.StatusCode, "Подтверждение телефона")
+	})
+
+	// Шаг 13: Подтверждение email
+	sCtx.WithNewStep("Подтверждение email", func(sCtx provider.StepCtx) {
+		emailContext, _ := registrationData.emailConfirmMsg.GetConfirmationContext()
+		confirmEmailReq := &clientTypes.Request[publicModels.ConfirmContactRequestBody]{
+			Headers: map[string]string{
+				"Authorization": fmt.Sprintf("Bearer %s", registrationData.authorizationResponse.Body.Token),
+			},
+			Body: &publicModels.ConfirmContactRequestBody{
+				Contact: registrationData.emailVerificationRequest.Body.Contact,
+				Type:    publicModels.ContactTypeEmail,
+				Code:    emailContext.ConfirmationCode,
+			},
+		}
+
+		resp := publicClient.ConfirmContact(sCtx, confirmEmailReq)
+		sCtx.Require().Equal(http.StatusCreated, resp.StatusCode, "Подтверждение email")
+	})
+
+	// Шаг 14: Установка лимита на одиночную ставку
+	sCtx.WithNewStep("Установка лимита на одиночную ставку", func(sCtx provider.StepCtx) {
+		req := &clientTypes.Request[publicModels.SetSingleBetLimitRequestBody]{
+			Headers: map[string]string{
+				"Authorization": fmt.Sprintf("Bearer %s", registrationData.authorizationResponse.Body.Token),
+			},
+			Body: &publicModels.SetSingleBetLimitRequestBody{
+				Amount:   "100",
+				Currency: config.Node.DefaultCurrency,
+			},
+		}
+
+		singleBetLimitResp := publicClient.SetSingleBetLimit(sCtx, req)
+		sCtx.Require().Equal(http.StatusCreated, singleBetLimitResp.StatusCode, "Установка лимита на одиночную ставку")
+	})
+
+	// Шаг 15: Установка лимита на оборот средств
+	sCtx.WithNewStep("Установка лимита на оборот средств", func(sCtx provider.StepCtx) {
+		req := &clientTypes.Request[publicModels.SetTurnoverLimitRequestBody]{
+			Headers: map[string]string{
+				"Authorization": fmt.Sprintf("Bearer %s", registrationData.authorizationResponse.Body.Token),
+			},
+			Body: &publicModels.SetTurnoverLimitRequestBody{
+				Amount:    "100",
+				Currency:  config.Node.DefaultCurrency,
+				Type:      publicModels.LimitPeriodDaily,
+				StartedAt: time.Now().Unix(),
+			},
+		}
+
+		resp := publicClient.SetTurnoverLimit(sCtx, req)
+		sCtx.Require().Equal(http.StatusCreated, resp.StatusCode, "Установка лимита на оборот средств")
+	})
+
+	// Шаг 16: Получение WalletUUID из Redis
+	sCtx.WithNewStep("Получение WalletUUID из Redis", func(sCtx provider.StepCtx) {
+		var wallets redis.WalletsMap
+		err := redisPlayerClient.GetWithRetry(sCtx, registrationData.registrationMessage.Player.ExternalID, &wallets)
+
+		registrationData.wallets = wallets
+		sCtx.Require().NoError(err, "Значение кошелька получено из Redis")
+	})
+
+	// Шаг 17: Создание депозита (если сумма > 0)
+	sCtx.WithNewStep("Создание депозита", func(sCtx provider.StepCtx) {
+		if depositAmount > 0 {
+			time.Sleep(5 * time.Second)
+
+			req := &clientTypes.Request[publicModels.DepositRequestBody]{
+				Headers: map[string]string{
+					"Authorization": fmt.Sprintf("Bearer %s", registrationData.authorizationResponse.Body.Token),
+				},
+				Body: &publicModels.DepositRequestBody{
+					Amount:          fmt.Sprintf("%.0f", depositAmount),
+					PaymentMethodID: int(publicModels.Fake),
+					Currency:        config.Node.DefaultCurrency,
+					Country:         config.Node.DefaultCountry,
+					Redirect: publicModels.DepositRedirectURLs{
+						Failed:  publicModels.DepositRedirectURLFailed,
+						Success: publicModels.DepositRedirectURLSuccess,
+						Pending: publicModels.DepositRedirectURLPending,
+					},
+				},
+			}
+
+			resp := publicClient.CreateDeposit(sCtx, req)
+			sCtx.Require().Equal(http.StatusCreated, resp.StatusCode, "Депозит успешно создан")
+		}
+	})
+
+	// Шаг 18: Получение события депозита из NATS
+	sCtx.WithNewStep("Получение события депозита из NATS", func(sCtx provider.StepCtx) {
+		subject := fmt.Sprintf("%s.wallet.*.%s.*", config.Nats.StreamPrefix,
+			registrationData.registrationMessage.Player.ExternalID)
+
+		registrationData.depositEvent = nats.FindMessageInStream(
 			sCtx, natsClient, subject, func(payload nats.DepositedMoneyPayload, msgType string) bool {
 				return msgType == string(nats.DepositedMoney) &&
 					payload.Amount == fmt.Sprintf("%.0f", depositAmount) &&
 					payload.CurrencyCode == config.Node.DefaultCurrency
 			})
 
-		// Получаем обновленные данные кошелька
+		sCtx.Require().NotEmpty(registrationData.depositEvent, "Событие депозита получено из NATS")
+	})
+
+	// Шаг 19: Получение обновленных данных кошелька из Redis
+	sCtx.WithNewStep("Получение обновленных данных кошелька из Redis", func(sCtx provider.StepCtx) {
+		var walletUUID string
+		for _, wallet := range registrationData.wallets {
+			walletUUID = wallet.WalletUUID
+			break
+		}
+
 		var updatedWalletData redis.WalletFullData
 		err := redisWalletClient.GetWithSeqCheck(
 			sCtx,
-			opData.walletUUID,
+			walletUUID,
 			&updatedWalletData,
-			int(opData.depositEvent.Sequence))
+			int(registrationData.depositEvent.Sequence))
 		sCtx.Require().NoError(err, "Получены обновленные данные кошелька из Redis")
 
-		playerData.WalletData = updatedWalletData
-	}
+		playerData = PlayerData{
+			Auth:       registrationData.authorizationResponse,
+			WalletData: updatedWalletData,
+		}
+	})
 
 	// Возвращаем информацию для авторизации и данные кошелька
 	return playerData

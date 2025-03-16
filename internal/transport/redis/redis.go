@@ -135,6 +135,7 @@ func (r *RedisClient) GetWithSeqCheck(sCtx provider.StepCtx, key string, result 
 				}
 			}
 
+			log.Printf("seqNumber: %d, expectedSeq: %d", seqNumber, expectedSeq)
 			if seqNumber == expectedSeq {
 				sCtx.WithAttachments(allure.NewAttachment("Redis Value", allure.JSON, utils.CreatePrettyJSON(result)))
 				return nil
