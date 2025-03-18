@@ -47,11 +47,11 @@ type WalletFullData struct {
 	Balance                    string          `json:"Balance"`
 	AvailableWithdrawalBalance string          `json:"AvailableWithdrawalBalance"`
 	BalanceBefore              string          `json:"BalanceBefore"`
-	CreatedAt                  int64           `json:"CreatedAt"`
-	UpdatedAt                  int64           `json:"UpdatedAt"`
-	BlockDate                  int64           `json:"BlockDate"`
-	SumSubBlockDate            int64           `json:"SumSubBlockDate"`
-	KYCVerificationUpdateTo    int64           `json:"KYCVerificationUpdateTo"`
+	CreatedAt                  int             `json:"CreatedAt"`
+	UpdatedAt                  int             `json:"UpdatedAt"`
+	BlockDate                  int             `json:"BlockDate"`
+	SumSubBlockDate            int             `json:"SumSubBlockDate"`
+	KYCVerificationUpdateTo    int             `json:"KYCVerificationUpdateTo"`
 	LastSeqNumber              int             `json:"LastSeqNumber"`
 	Default                    bool            `json:"Default"`
 	Main                       bool            `json:"Main"`
@@ -90,8 +90,8 @@ type LimitData struct {
 	Spent        string          `json:"Spent"`
 	Rest         string          `json:"Rest"`
 	CurrencyCode string          `json:"CurrencyCode"`
-	StartedAt    int64           `json:"StartedAt"`
-	ExpiresAt    int64           `json:"ExpiresAt"`
+	StartedAt    int             `json:"StartedAt"`
+	ExpiresAt    int             `json:"ExpiresAt"`
 	Status       bool            `json:"Status"`
 }
 
@@ -104,8 +104,8 @@ type BlockedAmount struct {
 	DeltaAvailableWithdrawalBalance string `json:"DeltaAvailableWithdrawalBalance"`
 	Reason                          string `json:"Reason"`
 	UserName                        string `json:"UserName"`
-	CreatedAt                       int64  `json:"CreatedAt"`
-	ExpiredAt                       int64  `json:"ExpiredAt"`
+	CreatedAt                       int    `json:"CreatedAt"`
+	ExpiredAt                       int    `json:"ExpiredAt"`
 }
 
 type DepositedMoneyPayload struct {

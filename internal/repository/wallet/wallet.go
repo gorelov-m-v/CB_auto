@@ -46,19 +46,19 @@ type Wallet struct {
 	IsKycVerified       bool            `db:"is_kyc_verified"`
 }
 
-type Repository struct {
+type WalletRepository struct {
 	db  *sql.DB
 	cfg *config.MySQLConfig
 }
 
-func NewRepository(db *sql.DB, mysqlConfig *config.MySQLConfig) *Repository {
-	return &Repository{
+func NewWalletRepository(db *sql.DB, mysqlConfig *config.MySQLConfig) *WalletRepository {
+	return &WalletRepository{
 		db:  db,
 		cfg: mysqlConfig,
 	}
 }
 
-var allowedFields = map[string]bool{
+var walletAllowedFields = map[string]bool{
 	"uuid":               true,
 	"player_uuid":        true,
 	"currency":           true,
@@ -71,7 +71,7 @@ var allowedFields = map[string]bool{
 	"is_betting_active":  true,
 }
 
-func (r *Repository) fetchWallet(sCtx provider.StepCtx, filters map[string]interface{}) (*Wallet, error) {
+func (r *WalletRepository) fetchWallet(sCtx provider.StepCtx, filters map[string]interface{}) (*Wallet, error) {
 	if err := r.db.Ping(); err != nil {
 		log.Printf("Ошибка подключения к БД: %v", err)
 	}
@@ -145,7 +145,7 @@ func (r *Repository) fetchWallet(sCtx provider.StepCtx, filters map[string]inter
 	return &wallet, nil
 }
 
-func (r *Repository) GetOneWithRetry(sCtx provider.StepCtx, filters map[string]interface{}) *Wallet {
+func (r *WalletRepository) GetWalletWithRetry(sCtx provider.StepCtx, filters map[string]interface{}) *Wallet {
 	wallet, err := r.fetchWallet(sCtx, filters)
 	if err != nil {
 		log.Printf("Ошибка при получении данных кошелька: %v", err)
@@ -153,7 +153,7 @@ func (r *Repository) GetOneWithRetry(sCtx provider.StepCtx, filters map[string]i
 	return wallet
 }
 
-func (r *Repository) GetOne(sCtx provider.StepCtx, filters map[string]interface{}) (*Wallet, error) {
+func (r *WalletRepository) GetWallet(sCtx provider.StepCtx, filters map[string]interface{}) (*Wallet, error) {
 	wallet, err := r.fetchWallet(sCtx, filters)
 	if err != nil {
 		if err == sql.ErrNoRows {
