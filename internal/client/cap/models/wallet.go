@@ -61,8 +61,8 @@ type PlayerLimit struct {
 	Rest          string          `json:"rest,omitempty"`
 	CreatedAt     int64           `json:"createdAt"`
 	DeactivatedAt int64           `json:"deactivatedAt,omitempty"`
-	StartedAt     int64           `json:"startedAt"`
-	ExpiresAt     int64           `json:"expiresAt,omitempty"`
+	StartedAt     int             `json:"startedAt"`
+	ExpiresAt     int             `json:"expiresAt,omitempty"`
 }
 
 type CreateBalanceAdjustmentRequestBody struct {

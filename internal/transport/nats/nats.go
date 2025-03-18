@@ -31,7 +31,7 @@ type NatsMessage[T any] struct {
 	Payload   T
 	Metadata  *nats.MsgMetadata
 	Subject   string
-	Sequence  uint64
+	Sequence  int
 	Seq       uint64
 	Timestamp time.Time
 	Type      string
@@ -148,7 +148,7 @@ func FindMessageInStream[T any](sCtx provider.StepCtx, n *NatsClient, subject st
 					Payload:   data,
 					Metadata:  meta,
 					Subject:   msg.Subject,
-					Sequence:  meta.Sequence.Stream,
+					Sequence:  int(meta.Sequence.Stream),
 					Seq:       meta.Sequence.Stream,
 					Timestamp: meta.Timestamp,
 					Type:      msg.Header.Get("type"),

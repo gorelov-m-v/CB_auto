@@ -36,7 +36,7 @@ type ParametrizedUpdateBlockersSuite struct {
 	natsClient    *nats.NatsClient
 	kafka         *kafka.Kafka
 	walletDB      *repository.Connector
-	walletRepo    *wallet.Repository
+	walletRepo    *wallet.WalletRepository
 	ParamBlockers []BlockersParam
 }
 
@@ -59,7 +59,7 @@ func (s *ParametrizedUpdateBlockersSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Соединение с базой данных wallet.", func(sCtx provider.StepCtx) {
-		s.walletRepo = wallet.NewRepository(repository.OpenConnector(t, &s.config.MySQL, repository.Wallet).DB(), &s.config.MySQL)
+		s.walletRepo = wallet.NewWalletRepository(repository.OpenConnector(t, &s.config.MySQL, repository.Wallet).DB(), &s.config.MySQL)
 	})
 
 	s.ParamBlockers = []BlockersParam{
@@ -154,7 +154,7 @@ func (s *ParametrizedUpdateBlockersSuite) TableTestBlockers(t provider.T, param 
 	})
 
 	t.WithNewAsyncStep("Проверка блокировок в БД.", func(sCtx provider.StepCtx) {
-		walletFromDatabase := s.walletRepo.GetOneWithRetry(sCtx, map[string]interface{}{
+		walletFromDatabase := s.walletRepo.GetWalletWithRetry(sCtx, map[string]interface{}{
 			"player_uuid":        testData.registrationMessage.Player.ExternalID,
 			"is_gambling_active": param.GamblingEnabled,
 			"is_betting_active":  param.BettingEnabled,

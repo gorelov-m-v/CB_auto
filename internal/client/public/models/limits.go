@@ -18,32 +18,32 @@ type SetCasinoLossLimitRequestBody struct {
 	Amount    string          `json:"amount"`
 	Currency  string          `json:"currency"`
 	Type      LimitPeriodType `json:"type"`
-	StartedAt int64           `json:"startedAt"`
+	StartedAt int             `json:"startedAt"`
 }
 
 type UpcomingChangeData struct {
-	ExpiresAt *int64 `json:"expiresAt"`
-	StartedAt *int64 `json:"startedAt"`
+	ExpiresAt *int   `json:"expiresAt"`
+	StartedAt *int   `json:"startedAt"`
 	Amount    string `json:"amount"`
 }
 
 type UpcomingChange struct {
-	ApplyAt int64              `json:"applyAt"`
+	ApplyAt int                `json:"applyAt"`
 	Data    UpcomingChangeData `json:"data"`
 }
 
 type CasinoLossLimit struct {
 	ID              string           `json:"id"`
-	Type            string           `json:"type"`
+	Type            LimitPeriodType  `json:"type"`
 	Currency        string           `json:"currency"`
 	Amount          string           `json:"amount"`
 	Spent           string           `json:"spent"`
 	Rest            string           `json:"rest"`
-	StartedAt       int64            `json:"startedAt"`
-	ExpiresAt       int64            `json:"expiresAt"`
+	StartedAt       int              `json:"startedAt"`
+	ExpiresAt       int              `json:"expiresAt"`
 	Status          bool             `json:"status"`
 	UpcomingChanges []UpcomingChange `json:"upcomingChanges"`
-	DeactivatedAt   *int64           `json:"deactivatedAt"`
+	DeactivatedAt   *int             `json:"deactivatedAt"`
 }
 
 type GetCasinoLossLimitsResponseBody []CasinoLossLimit
@@ -56,10 +56,10 @@ type TurnoverLimit struct {
 	Amount          string           `json:"amount"`
 	Spent           string           `json:"spent"`
 	Rest            string           `json:"rest"`
-	StartedAt       int64            `json:"startedAt"`
+	StartedAt       int              `json:"startedAt"`
 	UpcomingChanges []UpcomingChange `json:"upcomingChanges"`
-	ExpiresAt       int64            `json:"expiresAt"`
-	DeactivatedAt   *int64           `json:"deactivatedAt"`
+	ExpiresAt       int              `json:"expiresAt"`
+	DeactivatedAt   *int             `json:"deactivatedAt"`
 	Required        bool             `json:"required"`
 }
 
@@ -71,7 +71,7 @@ type SingleBetLimit struct {
 	Status          bool             `json:"status"`
 	Amount          string           `json:"amount"`
 	UpcomingChanges []UpcomingChange `json:"upcomingChanges"`
-	DeactivatedAt   *int64           `json:"deactivatedAt"`
+	DeactivatedAt   *int             `json:"deactivatedAt"`
 	Required        bool             `json:"required"`
 }
 
@@ -83,15 +83,15 @@ type SetRestrictionRequestBody struct {
 
 type SetRestrictionResponseBody struct {
 	ID              string           `json:"id"`
-	StartedAt       int64            `json:"startedAt"`
+	StartedAt       int              `json:"startedAt"`
 	UpcomingChanges []UpcomingChange `json:"upcomingChanges"`
-	ExpiresAt       int64            `json:"expiresAt"`
-	DeactivatedAt   *int64           `json:"deactivatedAt"`
+	ExpiresAt       int              `json:"expiresAt"`
+	DeactivatedAt   *int             `json:"deactivatedAt"`
 }
 
 type SetTurnoverLimitRequestBody struct {
 	Amount    string          `json:"amount"`
 	Currency  string          `json:"currency"`
 	Type      LimitPeriodType `json:"type"`
-	StartedAt int64           `json:"startedAt"`
+	StartedAt int             `json:"startedAt"`
 }

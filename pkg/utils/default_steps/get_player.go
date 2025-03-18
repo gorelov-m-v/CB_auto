@@ -69,7 +69,7 @@ func CreateVerifiedPlayer(
 	// Шаг 2: Получение Kafka-сообщения о регистрации
 	sCtx.WithNewStep("Получение Kafka-сообщения о регистрации", func(sCtx provider.StepCtx) {
 		registrationData.registrationMessage = kafka.FindMessageByFilter(sCtx, kafkaClient, func(msg kafka.PlayerMessage) bool {
-			return msg.Message.EventType == string(kafka.PlayerEventSignUpFast) &&
+			return msg.Message.EventType == kafka.PlayerEventSignUpFast &&
 				msg.Player.AccountID == registrationData.registrationResponse.Body.Username
 		})
 		sCtx.Require().NotEmpty(registrationData.registrationMessage.Player.ID, "ID игрока не пустой")
@@ -201,13 +201,13 @@ func CreateVerifiedPlayer(
 		phoneNumberWithoutPlus := strings.TrimPrefix(registrationData.phoneVerificationRequest.Body.Contact, "+")
 
 		registrationData.phoneConfirmMsg = kafka.FindMessageByFilter(sCtx, kafkaClient, func(msg kafka.PlayerMessage) bool {
-			return msg.Message.EventType == string(kafka.PlayerEventConfirmationPhone) &&
+			return msg.Message.EventType == kafka.PlayerEventConfirmationPhone &&
 				msg.Player.AccountID == registrationData.registrationResponse.Body.Username &&
 				msg.Player.Phone == phoneNumberWithoutPlus
 		})
 
 		registrationData.emailConfirmMsg = kafka.FindMessageByFilter(sCtx, kafkaClient, func(msg kafka.PlayerMessage) bool {
-			return msg.Message.EventType == string(kafka.PlayerEventConfirmationEmail) &&
+			return msg.Message.EventType == kafka.PlayerEventConfirmationEmail &&
 				msg.Player.AccountID == registrationData.registrationResponse.Body.Username &&
 				msg.Player.Email == registrationData.emailVerificationRequest.Body.Contact
 		})
@@ -276,7 +276,7 @@ func CreateVerifiedPlayer(
 				Amount:    "100",
 				Currency:  config.Node.DefaultCurrency,
 				Type:      publicModels.LimitPeriodDaily,
-				StartedAt: time.Now().Unix(),
+				StartedAt: int(time.Now().Unix()),
 			},
 		}
 

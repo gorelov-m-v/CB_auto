@@ -31,7 +31,7 @@ type SingleBetLimitSuite struct {
 	capClient         capAPI.CapAPI
 	kafka             *kafka.Kafka
 	natsClient        *nats.NatsClient
-	walletRepo        *wallet.Repository
+	walletRepo        *wallet.WalletRepository
 	redisPlayerClient *redis.RedisClient
 	redisWalletClient *redis.RedisClient
 }
@@ -54,7 +54,7 @@ func (s *SingleBetLimitSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Соединение с базой данных wallet.", func(sCtx provider.StepCtx) {
-		s.walletRepo = wallet.NewRepository(repository.OpenConnector(t, &s.config.MySQL, repository.Wallet).DB(), &s.config.MySQL)
+		s.walletRepo = wallet.NewWalletRepository(repository.OpenConnector(t, &s.config.MySQL, repository.Wallet).DB(), &s.config.MySQL)
 	})
 
 	t.WithNewStep("Инициализация Redis клиента", func(sCtx provider.StepCtx) {
