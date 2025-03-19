@@ -4,6 +4,7 @@ type LimitPeriodType string
 type LimitType string
 type WalletsMap map[string]WalletData
 type EventType string
+type TransactionStatus int
 
 const (
 	// LimitPeriodType определяет типы периодов для лимитов
@@ -16,14 +17,7 @@ const (
 	LimitTypeCasinoLoss    LimitType = "casino-loss"
 	LimitTypeTurnoverFunds LimitType = "turnover-of-funds"
 
-	// Event Types
-	WalletCreated      EventType = "wallet_created"
-	WalletDisabled     EventType = "wallet_disabled"
-	BlockersSetted     EventType = "setting_prevent_gamble_setted"
-	BalanceAdjusted    EventType = "balance_adjusted"
-	BlockAmountStarted EventType = "block_amount_started"
-	BlockAmountRevoked EventType = "block_amount_revoked"
-	DepositedMoney     EventType = "deposited_money"
+	TransactionStatusSuccess TransactionStatus = 4
 )
 
 type WalletData struct {
@@ -63,8 +57,18 @@ type WalletFullData struct {
 	Limits                     []LimitData     `json:"Limits"`
 	IFrameRecords              []any           `json:"IFrameRecords"`
 	Gambling                   map[string]any  `json:"Gambling"`
-	Deposits                   []any           `json:"Deposits"`
+	Deposits                   []DepositData   `json:"Deposits"`
 	BlockedAmounts             []BlockedAmount `json:"BlockedAmounts"`
+}
+
+type DepositData struct {
+	UUID           string            `json:"UUID"`
+	NodeUUID       string            `json:"NodeUUID"`
+	BonusID        string            `json:"BonusID"`
+	CurrencyCode   string            `json:"CurrencyCode"`
+	Status         TransactionStatus `json:"Status"`
+	Amount         string            `json:"Amount"`
+	WageringAmount string            `json:"WageringAmount"`
 }
 
 type BonusInfo struct {
@@ -106,13 +110,4 @@ type BlockedAmount struct {
 	UserName                        string `json:"UserName"`
 	CreatedAt                       int    `json:"CreatedAt"`
 	ExpiredAt                       int    `json:"ExpiredAt"`
-}
-
-type DepositedMoneyPayload struct {
-	UUID         string `json:"uuid"`
-	CurrencyCode string `json:"currency_code"`
-	Amount       string `json:"amount"`
-	Status       int    `json:"status"`
-	NodeUUID     string `json:"node_uuid"`
-	BonusID      string `json:"bonus_id"`
 }

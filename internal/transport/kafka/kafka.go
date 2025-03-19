@@ -22,6 +22,7 @@ const (
 	PlayerTopicPart     TopicPart = "player.v1.account"
 	LimitTopicPart      TopicPart = "limits.v2"
 	ProjectionTopicPart TopicPart = "wallet.v8.projectionSource"
+	PaymentTopicPart    TopicPart = "payment.v1.transaction"
 )
 
 type Topics struct {
@@ -29,6 +30,7 @@ type Topics struct {
 	Player     TopicType
 	Limit      TopicType
 	Projection TopicType
+	Payment    TopicType
 }
 
 func NewTopics(prefix string) Topics {
@@ -37,6 +39,7 @@ func NewTopics(prefix string) Topics {
 		Player:     TopicType(prefix + string(PlayerTopicPart)),
 		Limit:      TopicType(prefix + string(LimitTopicPart)),
 		Projection: TopicType(prefix + string(ProjectionTopicPart)),
+		Payment:    TopicType(prefix + string(PaymentTopicPart)),
 	}
 }
 
@@ -162,6 +165,7 @@ func newConsumer(cfg *config.Config) *Kafka {
 		TopicsConfig.Player,
 		TopicsConfig.Limit,
 		TopicsConfig.Projection,
+		TopicsConfig.Payment,
 	}
 
 	bufferSize := cfg.Kafka.BufferSize
@@ -375,6 +379,10 @@ func (m LimitMessage) GetTopic() TopicType {
 
 func (m ProjectionSourceMessage) GetTopic() TopicType {
 	return TopicsConfig.Projection
+}
+
+func (m TransactionMessage) GetTopic() TopicType {
+	return TopicsConfig.Payment
 }
 
 func GetTopicForType[T KafkaMessage]() TopicType {
