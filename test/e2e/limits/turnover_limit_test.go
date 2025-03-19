@@ -12,6 +12,7 @@ import (
 	"CB_auto/internal/transport/kafka"
 	"CB_auto/internal/transport/nats"
 	"CB_auto/internal/transport/redis"
+	defaultSteps "CB_auto/pkg/utils/default_steps"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
@@ -33,65 +34,36 @@ func (s *TurnoverLimitSuite) TestTurnoverLimitCreate(t provider.T) {
 	t.Tags("wallet", "limits")
 
 	var testData struct {
-		registrationResponse  *clientTypes.Response[publicModels.FastRegistrationResponseBody]
-		authorizationResponse *clientTypes.Response[publicModels.TokenCheckResponseBody]
-		registrationMessage   kafka.PlayerMessage
+		authToken             string
+		walletAggregate       redis.WalletFullData
+		turnoverLimitRequest  *clientTypes.Request[publicModels.SetTurnoverLimitRequestBody]
 		turnoverLimitResponse *clientTypes.Response[publicModels.GetTurnoverLimitsResponseBody]
-		setTurnoverLimitReq   *clientTypes.Request[publicModels.SetTurnoverLimitRequestBody]
 		limitMessage          kafka.LimitMessage
-		dbWallet              *wallet.Wallet
 		turnoverEvent         *nats.NatsMessage[nats.LimitChangedV2]
 	}
 
-	t.WithNewStep("Регистрация нового игрока", func(sCtx provider.StepCtx) {
-		req := &clientTypes.Request[publicModels.FastRegistrationRequestBody]{
-			Body: &publicModels.FastRegistrationRequestBody{
-				Country:  s.Shared.Config.Node.DefaultCountry,
-				Currency: s.Shared.Config.Node.DefaultCurrency,
-			},
-		}
+	t.WithNewStep("Создание игрока через полную регистрацию", func(sCtx provider.StepCtx) {
+		playerData := defaultSteps.CreatePlayerWithFullRegistration(
+			sCtx,
+			s.Shared.PublicClient,
+			s.Shared.Kafka,
+			s.Shared.Config,
+			s.Shared.PlayerRedisClient,
+			s.Shared.WalletRedisClient,
+		)
 
-		testData.registrationResponse = s.Shared.PublicClient.FastRegistration(sCtx, req)
-		sCtx.Assert().Equal(http.StatusOK, testData.registrationResponse.StatusCode, "Успешная регистрация")
-	})
+		sCtx.Require().NotEmpty(playerData.Auth.Body.Token, "Токен авторизации получен")
+		sCtx.Require().NotEmpty(playerData.WalletData.WalletUUID, "UUID кошелька получен")
+		sCtx.Require().NotEmpty(playerData.WalletData.PlayerUUID, "UUID игрока получен")
 
-	t.WithNewStep("Получение сообщения сообщения о регистрации игрока из топика player.v1.account", func(sCtx provider.StepCtx) {
-		testData.registrationMessage = kafka.FindMessageByFilter(sCtx, s.Shared.Kafka, func(msg kafka.PlayerMessage) bool {
-			return msg.Message.EventType == kafka.PlayerEventSignUpFast &&
-				msg.Player.AccountID == testData.registrationResponse.Body.Username
-		})
-		sCtx.Require().NotEmpty(testData.registrationMessage.Player.ID, "ID игрока не пустой")
-	})
-
-	t.WithNewStep("Получение кошелька игрока из базы данных", func(sCtx provider.StepCtx) {
-		walletFilter := map[string]interface{}{
-			"player_uuid": testData.registrationMessage.Player.ExternalID,
-			"is_default":  true,
-			"is_basic":    true,
-			"wallet_type": wallet.WalletTypeReal,
-			"currency":    testData.registrationMessage.Player.Currency,
-		}
-
-		testData.dbWallet = s.Shared.WalletRepo.GetWalletWithRetry(sCtx, walletFilter)
-		sCtx.Require().NotNil(testData.dbWallet, "Базовый кошелек найден в базе данных")
-	})
-
-	t.WithNewStep("Получение токена авторизации", func(sCtx provider.StepCtx) {
-		req := &clientTypes.Request[publicModels.TokenCheckRequestBody]{
-			Body: &publicModels.TokenCheckRequestBody{
-				Username: testData.registrationResponse.Body.Username,
-				Password: testData.registrationResponse.Body.Password,
-			},
-		}
-
-		testData.authorizationResponse = s.Shared.PublicClient.TokenCheck(sCtx, req)
-		sCtx.Require().Equal(http.StatusOK, testData.authorizationResponse.StatusCode, "Успешная авторизация")
+		testData.authToken = playerData.Auth.Body.Token
+		testData.walletAggregate = playerData.WalletData
 	})
 
 	t.WithNewStep("Установка лимита на оборот средств", func(sCtx provider.StepCtx) {
-		testData.setTurnoverLimitReq = &clientTypes.Request[publicModels.SetTurnoverLimitRequestBody]{
+		testData.turnoverLimitRequest = &clientTypes.Request[publicModels.SetTurnoverLimitRequestBody]{
 			Headers: map[string]string{
-				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
+				"Authorization": fmt.Sprintf("Bearer %s", testData.authToken),
 			},
 			Body: &publicModels.SetTurnoverLimitRequestBody{
 				Amount:    "100",
@@ -101,7 +73,7 @@ func (s *TurnoverLimitSuite) TestTurnoverLimitCreate(t provider.T) {
 			},
 		}
 
-		resp := s.Shared.PublicClient.SetTurnoverLimit(sCtx, testData.setTurnoverLimitReq)
+		resp := s.Shared.PublicClient.SetTurnoverLimit(sCtx, testData.turnoverLimitRequest)
 		sCtx.Require().Equal(http.StatusCreated, resp.StatusCode, "Лимит на оборот средств установлен")
 	})
 
@@ -109,15 +81,15 @@ func (s *TurnoverLimitSuite) TestTurnoverLimitCreate(t provider.T) {
 		testData.limitMessage = kafka.FindMessageByFilter(sCtx, s.Shared.Kafka, func(msg kafka.LimitMessage) bool {
 			return msg.EventType == kafka.LimitEventCreated &&
 				msg.LimitType == kafka.LimitTypeTurnoverFunds &&
-				msg.PlayerID == testData.registrationMessage.Player.ExternalID &&
-				msg.Amount == testData.setTurnoverLimitReq.Body.Amount &&
-				msg.CurrencyCode == testData.setTurnoverLimitReq.Body.Currency
+				msg.PlayerID == testData.walletAggregate.PlayerUUID &&
+				msg.Amount == testData.turnoverLimitRequest.Body.Amount &&
+				msg.CurrencyCode == testData.turnoverLimitRequest.Body.Currency
 		})
 		sCtx.Require().NotEmpty(testData.limitMessage.ID, "Сообщение о создании лимита на проигрыш из топика limits.v2 получено")
 	})
 
 	t.WithNewStep("Проверка ивента NATS о создании лимита на оборот средств", func(sCtx provider.StepCtx) {
-		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.Shared.Config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
+		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.Shared.Config.Nats.StreamPrefix, testData.walletAggregate.PlayerUUID)
 		testData.turnoverEvent = nats.FindMessageInStream(sCtx, s.Shared.NatsClient, subject, func(msg nats.LimitChangedV2, msgType string) bool {
 			return msg.EventType == nats.EventTypeCreated &&
 				len(msg.Limits) > 0 &&
@@ -142,7 +114,7 @@ func (s *TurnoverLimitSuite) TestTurnoverLimitCreate(t provider.T) {
 	t.WithNewAsyncStep("Получение созданного лимита через Public API", func(sCtx provider.StepCtx) {
 		req := &clientTypes.Request[any]{
 			Headers: map[string]string{
-				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
+				"Authorization": fmt.Sprintf("Bearer %s", testData.authToken),
 			},
 		}
 
@@ -170,7 +142,7 @@ func (s *TurnoverLimitSuite) TestTurnoverLimitCreate(t provider.T) {
 				"Platform-Locale": capModels.DefaultLocale,
 			},
 			PathParams: map[string]string{
-				"playerID": testData.registrationMessage.Player.ExternalID,
+				"playerID": testData.walletAggregate.PlayerUUID,
 			},
 		}
 
@@ -191,7 +163,7 @@ func (s *TurnoverLimitSuite) TestTurnoverLimitCreate(t provider.T) {
 
 	t.WithNewAsyncStep("Проверка данных кошелька в Redis", func(sCtx provider.StepCtx) {
 		var redisValue redis.WalletFullData
-		err := s.Shared.RedisClient.GetWithSeqCheck(sCtx, testData.dbWallet.UUID, &redisValue, int(testData.turnoverEvent.Sequence))
+		err := s.Shared.WalletRedisClient.GetWithSeqCheck(sCtx, testData.walletAggregate.WalletUUID, &redisValue, int(testData.turnoverEvent.Sequence))
 		sCtx.Assert().NoError(err, "Redis: Значение кошелька получено")
 
 		limitData := redisValue.Limits[0]
@@ -210,14 +182,14 @@ func (s *TurnoverLimitSuite) TestTurnoverLimitCreate(t provider.T) {
 	t.WithNewAsyncStep("Проверка сообщения о создании лимита в топике wallet.v8.projectionSource", func(sCtx provider.StepCtx) {
 		projectionMessage := kafka.FindMessageByFilter(sCtx, s.Shared.Kafka, func(msg kafka.ProjectionSourceMessage) bool {
 			return msg.Type == kafka.ProjectionEventLimitChanged &&
-				msg.PlayerUUID == testData.registrationMessage.Player.ExternalID &&
-				msg.WalletUUID == testData.dbWallet.UUID
+				msg.PlayerUUID == testData.walletAggregate.PlayerUUID &&
+				msg.WalletUUID == testData.walletAggregate.WalletUUID
 		})
 		sCtx.Assert().NotEmpty(projectionMessage.Type, "Kafka: Сообщение projectionSource найдено")
 		sCtx.Assert().Equal(string(kafka.ProjectionEventLimitChanged), string(projectionMessage.Type), "Kafka: Проверка параметра type")
 		sCtx.Assert().Equal(testData.turnoverEvent.Sequence, projectionMessage.SeqNumber, "Kafka: Проверка параметра seq_number")
-		sCtx.Assert().Equal(testData.dbWallet.UUID, projectionMessage.WalletUUID, "Kafka: Проверка параметра wallet_uuid")
-		sCtx.Assert().Equal(testData.registrationMessage.Player.ExternalID, projectionMessage.PlayerUUID, "Kafka: Проверка параметра player_uuid")
+		sCtx.Assert().Equal(testData.walletAggregate.WalletUUID, projectionMessage.WalletUUID, "Kafka: Проверка параметра wallet_uuid")
+		sCtx.Assert().Equal(testData.walletAggregate.PlayerUUID, projectionMessage.PlayerUUID, "Kafka: Проверка параметра player_uuid")
 		sCtx.Assert().Equal(s.Shared.Config.Node.ProjectID, projectionMessage.NodeUUID, "Kafka: Проверка параметра node_uuid")
 		sCtx.Assert().Equal(s.Shared.Config.Node.DefaultCurrency, projectionMessage.Currency, "Kafka: Проверка параметра currency")
 		sCtx.Assert().NotZero(projectionMessage.Timestamp, "Kafka: Проверка параметра timestamp")
@@ -242,13 +214,13 @@ func (s *TurnoverLimitSuite) TestTurnoverLimitCreate(t provider.T) {
 	t.WithNewAsyncStep("Проверка записи в таблице limit_record_v2", func(sCtx provider.StepCtx) {
 		filters := map[string]interface{}{
 			"external_uuid": testData.limitMessage.ID,
-			"player_uuid":   testData.registrationMessage.Player.ExternalID,
+			"player_uuid":   testData.walletAggregate.PlayerUUID,
 		}
 
 		limitRecord := s.Shared.LimitRecordRepo.GetLimitRecordWithRetry(sCtx, filters)
 		sCtx.Assert().NotNil(limitRecord, "DB: Запись о лимите найдена в таблице limit_record_v2")
 		sCtx.Assert().Equal(testData.limitMessage.ID, limitRecord.ExternalUUID, "DB: Проверка параметра external_uuid")
-		sCtx.Assert().Equal(testData.registrationMessage.Player.ExternalID, limitRecord.PlayerUUID, "DB: Проверка параметра player_uuid")
+		sCtx.Assert().Equal(testData.walletAggregate.PlayerUUID, limitRecord.PlayerUUID, "DB: Проверка параметра player_uuid")
 		sCtx.Assert().Equal(string(wallet.LimitTypeTurnoverFunds), string(limitRecord.LimitType), "DB: Проверка параметра limit_type")
 		sCtx.Assert().Equal(string(wallet.IntervalTypeDaily), string(limitRecord.IntervalType), "DB: Проверка параметра interval_type")
 		sCtx.Assert().Equal(testData.limitMessage.Amount, limitRecord.Amount.String(), "DB: Проверка параметра amount")

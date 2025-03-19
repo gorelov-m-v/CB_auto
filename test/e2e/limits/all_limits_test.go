@@ -20,14 +20,15 @@ import (
 )
 
 type SharedConnections struct {
-	Config          *config.Config
-	PublicClient    public.PublicAPI
-	CapClient       cap.CapAPI
-	WalletRepo      *wallet.WalletRepository
-	LimitRecordRepo *wallet.LimitRecordRepository
-	RedisClient     *redis.RedisClient
-	Kafka           *kafka.Kafka
-	NatsClient      *nats.NatsClient
+	Config            *config.Config
+	PublicClient      public.PublicAPI
+	CapClient         cap.CapAPI
+	WalletRepo        *wallet.WalletRepository
+	LimitRecordRepo   *wallet.LimitRecordRepository
+	WalletRedisClient *redis.RedisClient
+	PlayerRedisClient *redis.RedisClient
+	Kafka             *kafka.Kafka
+	NatsClient        *nats.NatsClient
 }
 
 type AllLimitsSuite struct {
@@ -44,19 +45,21 @@ func (s *AllLimitsSuite) BeforeAll(t provider.T) {
 		walletDB := repository.OpenConnector(t, &cfg.MySQL, repository.Wallet).DB()
 		walletRepo := wallet.NewWalletRepository(walletDB, &cfg.MySQL)
 		limitRecordRepo := wallet.NewLimitRecordRepository(walletDB, &cfg.MySQL)
-		redisClient := redis.NewRedisClient(t, &cfg.Redis, redis.WalletClient)
+		walletRedisClient := redis.NewRedisClient(t, &cfg.Redis, redis.WalletClient)
+		playerRedisClient := redis.NewRedisClient(t, &cfg.Redis, redis.PlayerClient)
 		kafkaClient := kafka.GetInstance(t, cfg)
 		natsClient := nats.NewClient(&cfg.Nats)
 
 		s.shared = &SharedConnections{
-			Config:          cfg,
-			PublicClient:    publicClient,
-			CapClient:       capClient,
-			WalletRepo:      walletRepo,
-			LimitRecordRepo: limitRecordRepo,
-			RedisClient:     redisClient,
-			Kafka:           kafkaClient,
-			NatsClient:      natsClient,
+			Config:            cfg,
+			PublicClient:      publicClient,
+			CapClient:         capClient,
+			WalletRepo:        walletRepo,
+			LimitRecordRepo:   limitRecordRepo,
+			WalletRedisClient: walletRedisClient,
+			PlayerRedisClient: playerRedisClient,
+			Kafka:             kafkaClient,
+			NatsClient:        natsClient,
 		}
 	})
 }

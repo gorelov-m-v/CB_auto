@@ -4,6 +4,8 @@ type VerificationType string
 type VerificationStatus int
 type DocumentType string
 type ContactType string
+type BonusChoiceType string
+type Gender int
 
 const (
 	// VerificationType определяет типы верификаций
@@ -22,10 +24,16 @@ const (
 	// ContactType определяет типы контактов
 	ContactTypePhone ContactType = "PHONE"
 	ContactTypeEmail ContactType = "EMAIL"
+
+	// Gender определяет пол при регистрации
+	GenderMale   Gender = 1
+	GenderFemale Gender = 2
+
+	// BonusChoiceNone определяет выбор бонуса при регистрации
+	BonusChoiceNone BonusChoiceType = "none"
 )
 
 // Модели для методов работы с игроками
-
 type FastRegistrationRequestBody struct {
 	Country  string `json:"country"`
 	Currency string `json:"currency"`
@@ -118,4 +126,34 @@ type ConfirmContactRequestBody struct {
 	Contact string      `json:"contact"`
 	Type    ContactType `json:"type"`
 	Code    string      `json:"code"`
+}
+
+type VerifyContactRequestBody struct {
+	Contact string `json:"contact"`
+	Code    string `json:"code"`
+}
+
+type VerifyContactResponseBody struct {
+	Hash string `json:"hash"`
+}
+
+type FullRegistrationRequestBody struct {
+	Currency          string          `json:"currency"`
+	Country           string          `json:"country"`
+	BonusChoice       BonusChoiceType `json:"bonusChoice"`
+	Phone             string          `json:"phone"`
+	PhoneConfirmation string          `json:"phoneConfirmation"`
+	FirstName         string          `json:"firstName"`
+	LastName          string          `json:"lastName"`
+	Birthday          string          `json:"birthday"`
+	Gender            Gender          `json:"gender"`
+	PersonalId        string          `json:"personalId"`
+	IBAN              string          `json:"iban"`
+	City              string          `json:"city"`
+	PermanentAddress  string          `json:"permanentAddress"`
+	PostalCode        string          `json:"postalCode"`
+	Profession        string          `json:"profession"`
+	Password          string          `json:"password"`
+	RulesAgreement    bool            `json:"rulesAgreement"`
+	Context           map[string]any  `json:"context"`
 }

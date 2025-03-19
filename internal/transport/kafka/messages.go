@@ -40,6 +40,7 @@ const (
 
 	// Player Event Types
 	PlayerEventSignUpFast        PlayerEventType = "player.signUpFast"
+	PlayerEventSignUpFull        PlayerEventType = "player.signUpV2Full"
 	PlayerEventConfirmationPhone PlayerEventType = "player.confirmationPhone"
 	PlayerEventConfirmationEmail PlayerEventType = "player.confirmationEmail"
 
