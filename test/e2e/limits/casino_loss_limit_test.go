@@ -13,7 +13,6 @@ import (
 	"CB_auto/internal/transport/nats"
 	"CB_auto/internal/transport/redis"
 
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
 )
@@ -40,6 +39,7 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimitCreate(t provider.T) {
 		limitMessage            kafka.LimitMessage
 		casinoLossLimitResponse *clientTypes.Response[publicModels.GetCasinoLossLimitsResponseBody]
 		setCasinoLossLimitReq   *clientTypes.Request[publicModels.SetCasinoLossLimitRequestBody]
+		casinoLossEvent         *nats.NatsMessage[nats.LimitChangedV2]
 		dbWallet                *wallet.Wallet
 	}
 
@@ -50,19 +50,20 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimitCreate(t provider.T) {
 				Currency: s.Shared.Config.Node.DefaultCurrency,
 			},
 		}
+
 		testData.registrationResponse = s.Shared.PublicClient.FastRegistration(sCtx, req)
 		sCtx.Assert().Equal(http.StatusOK, testData.registrationResponse.StatusCode, "Успешная регистрация")
 	})
 
-	t.WithNewStep("Проверка Kafka-сообщения о регистрации игрока", func(sCtx provider.StepCtx) {
+	t.WithNewStep("Получение сообщения сообщения о регистрации игрока из топика player.v1.account", func(sCtx provider.StepCtx) {
 		testData.registrationMessage = kafka.FindMessageByFilter(sCtx, s.Shared.Kafka, func(msg kafka.PlayerMessage) bool {
-			return msg.Message.EventType == string(kafka.PlayerEventSignUpFast) &&
+			return msg.Message.EventType == kafka.PlayerEventSignUpFast &&
 				msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
 		sCtx.Require().NotEmpty(testData.registrationMessage.Player.ID, "ID игрока не пустой")
 	})
 
-	t.WithNewStep("Проверка базового кошелька игрока в базе данных", func(sCtx provider.StepCtx) {
+	t.WithNewStep("Получение кошелька игрока из базы данных", func(sCtx provider.StepCtx) {
 		walletFilter := map[string]interface{}{
 			"player_uuid": testData.registrationMessage.Player.ExternalID,
 			"is_default":  true,
@@ -70,7 +71,8 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimitCreate(t provider.T) {
 			"wallet_type": wallet.WalletTypeReal,
 			"currency":    testData.registrationMessage.Player.Currency,
 		}
-		testData.dbWallet = s.Shared.WalletRepo.GetOneWithRetry(sCtx, walletFilter)
+
+		testData.dbWallet = s.Shared.WalletRepo.GetWalletWithRetry(sCtx, walletFilter)
 		sCtx.Require().NotNil(testData.dbWallet, "Базовый кошелек найден в базе данных")
 	})
 
@@ -81,6 +83,7 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimitCreate(t provider.T) {
 				Password: testData.registrationResponse.Body.Password,
 			},
 		}
+
 		testData.authorizationResponse = s.Shared.PublicClient.TokenCheck(sCtx, req)
 		sCtx.Require().Equal(http.StatusOK, testData.authorizationResponse.StatusCode, "Успешная авторизация")
 	})
@@ -94,71 +97,74 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimitCreate(t provider.T) {
 				Amount:    "100",
 				Currency:  s.Shared.Config.Node.DefaultCurrency,
 				Type:      publicModels.LimitPeriodDaily,
-				StartedAt: time.Now().Unix(),
+				StartedAt: int(time.Now().Unix()),
 			},
 		}
+
 		resp := s.Shared.PublicClient.SetCasinoLossLimit(sCtx, testData.setCasinoLossLimitReq)
 		sCtx.Require().Equal(http.StatusCreated, resp.StatusCode, "Лимит на проигрыш установлен")
 	})
 
-	t.WithNewStep("Получение сообщения из Kafka о создании лимита на проигрыш", func(sCtx provider.StepCtx) {
+	t.WithNewStep("Получение сообщения о создании лимита на проигрыш из топика limits.v2", func(sCtx provider.StepCtx) {
 		testData.limitMessage = kafka.FindMessageByFilter(sCtx, s.Shared.Kafka, func(msg kafka.LimitMessage) bool {
-			return msg.EventType == string(kafka.LimitEventCreated) &&
-				msg.LimitType == string(kafka.LimitTypeCasinoLoss) &&
-				msg.IntervalType == string(kafka.IntervalTypeDaily) &&
+			return msg.EventType == kafka.LimitEventCreated &&
+				msg.LimitType == kafka.LimitTypeCasinoLoss &&
+				msg.IntervalType == kafka.IntervalTypeDaily &&
 				msg.PlayerID == testData.registrationMessage.Player.ExternalID &&
 				msg.Amount == testData.setCasinoLossLimitReq.Body.Amount &&
 				msg.CurrencyCode == testData.setCasinoLossLimitReq.Body.Currency
 		})
-		sCtx.Require().NotEmpty(testData.limitMessage.ID, "ID лимита на проигрыш не пустой")
+		sCtx.Require().NotEmpty(testData.limitMessage.ID, "Сообщение о создании лимита на проигрыш из топика limits.v2 получено")
 	})
 
-	t.WithNewAsyncStep("Получение лимита через Public API", func(sCtx provider.StepCtx) {
+	t.WithNewStep("Проверка ивента NATS о создании лимита на проигрыш", func(sCtx provider.StepCtx) {
+		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.Shared.Config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
+		testData.casinoLossEvent = nats.FindMessageInStream(sCtx, s.Shared.NatsClient, subject, func(data nats.LimitChangedV2, msgType string) bool {
+			return data.EventType == nats.EventTypeCreated &&
+				len(data.Limits) > 0 &&
+				data.Limits[0].LimitType == nats.LimitTypeCasinoLoss
+		})
+		sCtx.Require().NotNil(testData.casinoLossEvent, "Должно получиться получить сообщение из NATS")
+
+		limit := testData.casinoLossEvent.Payload.Limits[0]
+		eventType := testData.casinoLossEvent.Payload.EventType
+		sCtx.Assert().Equal(testData.limitMessage.ID, limit.ExternalID, "NATS: Проверка параметра external_id")
+		sCtx.Assert().Equal(testData.limitMessage.Amount, limit.Amount, "NATS: Проверка параметра amount")
+		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, limit.CurrencyCode, "NATS: Проверка параметра currency_code")
+		sCtx.Assert().Equal(string(testData.limitMessage.LimitType), limit.LimitType, "NATS: Проверка параметра limit_type")
+		sCtx.Assert().True(limit.Status, "NATS: Проверка параметра status")
+		sCtx.Assert().Equal(testData.limitMessage.StartedAt, limit.StartedAt, "NATS: Проверка параметра started_at")
+		sCtx.Assert().Equal(testData.limitMessage.ExpiresAt, limit.ExpiresAt, "NATS: Проверка параметра expires_at")
+		sCtx.Assert().Equal(string(testData.limitMessage.IntervalType), limit.IntervalType, "NATS: Проверка параметра interval_type")
+		sCtx.Assert().Equal(nats.LimitTypeCasinoLoss, limit.LimitType, "NATS: Проверка параметра limit_type")
+		sCtx.Assert().Equal(eventType, testData.casinoLossEvent.Payload.EventType, "NATS: Проверка параметра event_type")
+	})
+
+	t.WithNewAsyncStep("Получение созданного лимита через Public API", func(sCtx provider.StepCtx) {
 		req := &clientTypes.Request[any]{
 			Headers: map[string]string{
 				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
 			},
 		}
+
 		testData.casinoLossLimitResponse = s.Shared.PublicClient.GetCasinoLossLimits(sCtx, req)
-		sCtx.Assert().Equal(http.StatusOK, testData.casinoLossLimitResponse.StatusCode, "Лимиты получены")
-		sCtx.Assert().NotEmpty(testData.casinoLossLimitResponse.Body, "Список лимитов не пустой")
+		sCtx.Assert().Equal(http.StatusOK, testData.casinoLossLimitResponse.StatusCode, "Public API: Статус-код 200")
+
 		limit := testData.casinoLossLimitResponse.Body[0]
-		sCtx.Assert().Equal(testData.limitMessage.ID, limit.ID, "ID лимита совпадает")
-		sCtx.Assert().Equal(testData.limitMessage.Amount, limit.Amount, "Сумма лимита совпадает")
-		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, limit.Currency, "Валюта лимита совпадает")
-		sCtx.Assert().Equal(testData.limitMessage.IntervalType, limit.Type, "Тип лимита совпадает")
-		sCtx.Assert().True(limit.Status, "Статус лимита активен")
-		sCtx.Assert().Empty(limit.UpcomingChanges, "Нет предстоящих изменений")
-		sCtx.Assert().Nil(limit.DeactivatedAt, "Лимит не деактивируется")
-		sCtx.Assert().Equal(testData.limitMessage.StartedAt, limit.StartedAt, "Время начала установлено")
-		sCtx.Assert().Equal(testData.limitMessage.ExpiresAt, limit.ExpiresAt, "Время окончания установлено")
-		sCtx.Assert().Equal("0", limit.Spent, "Потраченная сумма равна 0")
-		sCtx.Assert().Equal(limit.Amount, limit.Rest, "Остаток равен сумме лимита")
+		sCtx.Assert().Equal(testData.limitMessage.ID, limit.ID, "Public API: Проверка параметра id")
+		sCtx.Assert().Equal(testData.limitMessage.Amount, limit.Amount, "Public API: Проверка параметра amount")
+		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, limit.Currency, "Public API: Проверка параметра currency")
+		sCtx.Assert().Equal(string(testData.limitMessage.IntervalType), string(limit.Type), "Public API: Проверка параметра type")
+		sCtx.Assert().True(limit.Status, "Public API: Проверка параметра status")
+		sCtx.Assert().Empty(limit.UpcomingChanges, "Public API: Проверка параметра upcomingChanges")
+		sCtx.Assert().Nil(limit.DeactivatedAt, "Public API: Проверка параметра deactivatedAt")
+		sCtx.Assert().Equal(testData.limitMessage.StartedAt, limit.StartedAt, "Public API: Проверка параметра startedAt")
+		sCtx.Assert().Equal(testData.limitMessage.ExpiresAt, limit.ExpiresAt, "Public API: Проверка параметра expiresAt")
+		sCtx.Assert().Equal("0", limit.Spent, "Public API: Проверка параметра spent")
+		sCtx.Assert().Equal(limit.Amount, limit.Rest, "Public API: Проверка параметра rest")
 	})
 
-	t.WithNewAsyncStep("Проверка NATS-сообщения о создании лимита на проигрыш", func(sCtx provider.StepCtx) {
-		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.Shared.Config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
-		casinoLossEvent := nats.FindMessageInStream(sCtx, s.Shared.NatsClient, subject, func(data nats.LimitChangedV2, msgType string) bool {
-			return data.EventType == nats.EventTypeCreated &&
-				len(data.Limits) > 0 &&
-				data.Limits[0].LimitType == nats.LimitTypeCasinoLoss
-		})
-		sCtx.Require().NotNil(casinoLossEvent, "Должно получиться получить сообщение из NATS")
-		limit := casinoLossEvent.Payload.Limits[0]
-		eventType := casinoLossEvent.Payload.EventType
-		sCtx.Assert().Equal(testData.limitMessage.ID, limit.ExternalID, "ID лимита совпадает")
-		sCtx.Assert().Equal(testData.limitMessage.Amount, limit.Amount, "Сумма лимита совпадает")
-		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, limit.CurrencyCode, "Валюта лимита совпадает")
-		sCtx.Assert().Equal(testData.limitMessage.LimitType, limit.LimitType, "Тип лимита на проигрыш совпадает")
-		sCtx.Assert().True(limit.Status, "Статус лимита на проигрыш установлен")
-		sCtx.Assert().Equal(testData.limitMessage.StartedAt, limit.StartedAt, "Время начала установлено")
-		sCtx.Assert().Equal(testData.limitMessage.ExpiresAt, limit.ExpiresAt, "Время окончания установлено")
-		sCtx.Assert().Equal(testData.limitMessage.IntervalType, limit.IntervalType, "Тип интервала совпадает")
-		sCtx.Assert().Equal(nats.LimitTypeCasinoLoss, limit.LimitType, "Тип лимита совпадает")
-		sCtx.Assert().Equal(eventType, casinoLossEvent.Payload.EventType, "Тип события совпадает")
-	})
-
-	t.WithNewAsyncStep("Проверка CAP API для лимита на проигрыш", func(sCtx provider.StepCtx) {
+	t.WithNewAsyncStep("Получение созданного лимита через CAP API", func(sCtx provider.StepCtx) {
 		req := &clientTypes.Request[any]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.Shared.CapClient.GetToken(sCtx)),
@@ -169,55 +175,90 @@ func (s *CasinoLossLimitSuite) TestCasinoLossLimitCreate(t provider.T) {
 				"playerID": testData.registrationMessage.Player.ExternalID,
 			},
 		}
+
 		resp := s.Shared.CapClient.GetPlayerLimits(sCtx, req)
-		sCtx.Assert().Equal(http.StatusOK, resp.StatusCode, "Список лимитов получен")
-		sCtx.Assert().Equal(1, resp.Body.Total, "Количество лимитов корректно")
+		sCtx.Assert().Equal(http.StatusOK, resp.StatusCode, "CAP API: Статус-код 200")
+
 		casinoLossLimit := resp.Body.Data[0]
-		sCtx.Assert().Equal(capModels.LimitTypeCasinoLoss, casinoLossLimit.Type)
-		sCtx.Assert().True(casinoLossLimit.Status)
-		sCtx.Assert().Equal(capModels.LimitPeriodDaily, casinoLossLimit.Period)
-		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, casinoLossLimit.Currency)
-		sCtx.Assert().Equal(testData.limitMessage.Amount, casinoLossLimit.Rest)
-		sCtx.Assert().Equal(testData.limitMessage.Amount, casinoLossLimit.Amount)
-		sCtx.Assert().InDelta(testData.limitMessage.StartedAt, casinoLossLimit.StartedAt, 10)
-		sCtx.Assert().InDelta(testData.limitMessage.ExpiresAt, casinoLossLimit.ExpiresAt, 10)
-		sCtx.Assert().Zero(casinoLossLimit.DeactivatedAt)
+		sCtx.Assert().Equal(capModels.LimitTypeCasinoLoss, casinoLossLimit.Type, "CAP API: Проверка параметра type")
+		sCtx.Assert().True(casinoLossLimit.Status, "CAP API: Проверка параметра status")
+		sCtx.Assert().Equal(capModels.LimitPeriodDaily, casinoLossLimit.Period, "CAP API: Проверка параметра period")
+		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, casinoLossLimit.Currency, "CAP API: Проверка параметра currency")
+		sCtx.Assert().Equal(testData.limitMessage.Amount, casinoLossLimit.Rest, "CAP API: Проверка параметра rest")
+		sCtx.Assert().Equal(testData.limitMessage.Amount, casinoLossLimit.Amount, "CAP API: Проверка параметра amount")
+		sCtx.Assert().InDelta(testData.limitMessage.StartedAt, casinoLossLimit.StartedAt, 10, "CAP API: Проверка параметра startedAt")
+		sCtx.Assert().InDelta(testData.limitMessage.ExpiresAt, casinoLossLimit.ExpiresAt, 10, "CAP API: Проверка параметра expiresAt")
+		sCtx.Assert().Zero(casinoLossLimit.DeactivatedAt, "CAP API: Проверка параметра deactivatedAt")
 	})
 
-	t.WithNewStep("Проверка данных кошелька в Redis", func(sCtx provider.StepCtx) {
+	t.WithNewAsyncStep("Проверка данных кошелька в Redis", func(sCtx provider.StepCtx) {
 		var redisValue redis.WalletFullData
-		err := s.Shared.RedisClient.GetWithRetry(sCtx, testData.dbWallet.UUID, &redisValue)
-		sCtx.Require().NoError(err, "Значение кошелька получено из Redis")
-		sCtx.Require().NotEmpty(redisValue.Limits, "Должен быть хотя бы один лимит")
+		err := s.Shared.RedisClient.GetWithSeqCheck(sCtx, testData.dbWallet.UUID, &redisValue, int(testData.casinoLossEvent.Sequence))
+		sCtx.Assert().NoError(err, "Redis: Значение кошелька получено")
+
 		limitData := redisValue.Limits[0]
-		sCtx.Assert().Equal(testData.limitMessage.ID, limitData.ExternalID, "ID лимита совпадает")
-		sCtx.Assert().Equal(redis.LimitTypeCasinoLoss, limitData.LimitType, "Тип лимита совпадает")
-		sCtx.Assert().Equal(testData.limitMessage.Amount, limitData.Amount, "Сумма лимита совпадает")
-		sCtx.Assert().Equal("0", limitData.Spent, "Потраченная сумма равна 0")
-		sCtx.Assert().Equal(testData.limitMessage.Amount, limitData.Rest, "Остаток равен сумме лимита")
-		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, limitData.CurrencyCode, "Валюта лимита совпадает")
-		sCtx.Assert().InDelta(testData.limitMessage.StartedAt, limitData.StartedAt, 10, "Время начала лимита")
-		sCtx.Assert().InDelta(testData.limitMessage.ExpiresAt, limitData.ExpiresAt, 10, "Время окончания лимита")
-		sCtx.Assert().True(limitData.Status, "Лимит активен")
+		sCtx.Assert().Equal(testData.limitMessage.ID, limitData.ExternalID, "Redis: Проверка параметра externalID")
+		sCtx.Assert().Equal(redis.LimitTypeCasinoLoss, limitData.LimitType, "Redis: Проверка параметра limitType")
+		sCtx.Assert().Equal(redis.LimitPeriodDaily, limitData.IntervalType, "Redis: Проверка параметра intervalType")
+		sCtx.Assert().Equal(testData.limitMessage.Amount, limitData.Amount, "Redis: Проверка параметра amount")
+		sCtx.Assert().Equal("0", limitData.Spent, "Redis: Проверка параметра spent")
+		sCtx.Assert().Equal(testData.limitMessage.Amount, limitData.Rest, "Redis: Проверка параметра rest")
+		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, limitData.CurrencyCode, "Redis: Проверка параметра currencyCode")
+		sCtx.Assert().InDelta(testData.limitMessage.StartedAt, limitData.StartedAt, 10, "Redis: Проверка параметра startedAt")
+		sCtx.Assert().InDelta(testData.limitMessage.ExpiresAt, limitData.ExpiresAt, 10, "Redis: Проверка параметра expiresAt")
+		sCtx.Assert().True(limitData.Status, "Redis: Проверка параметра status")
 	})
 
-	t.WithNewStep("Проверка отправки события лимита в Kafka projection source", func(sCtx provider.StepCtx) {
+	t.WithNewAsyncStep("Проверка сообщения о создании лимита в топике wallet.v8.projectionSource", func(sCtx provider.StepCtx) {
 		projectionMessage := kafka.FindMessageByFilter(sCtx, s.Shared.Kafka, func(msg kafka.ProjectionSourceMessage) bool {
-			return msg.Type == string(kafka.ProjectionEventLimitChanged) &&
+			return msg.Type == kafka.ProjectionEventLimitChanged &&
 				msg.PlayerUUID == testData.registrationMessage.Player.ExternalID &&
 				msg.WalletUUID == testData.dbWallet.UUID
 		})
-		sCtx.Require().NotEmpty(projectionMessage.Type, "Сообщение limit_changed_v2 найдено в топике projection source")
+		sCtx.Assert().NotEmpty(projectionMessage.Type, "Kafka: Сообщение projectionSource найдено")
+		sCtx.Assert().Equal(string(kafka.ProjectionEventLimitChanged), string(projectionMessage.Type), "Kafka: Проверка параметра type")
+		sCtx.Assert().Equal(testData.casinoLossEvent.Sequence, projectionMessage.SeqNumber, "Kafka: Проверка параметра seq_number")
+		sCtx.Assert().Equal(testData.dbWallet.UUID, projectionMessage.WalletUUID, "Kafka: Проверка параметра wallet_uuid")
+		sCtx.Assert().Equal(testData.registrationMessage.Player.ExternalID, projectionMessage.PlayerUUID, "Kafka: Проверка параметра player_uuid")
+		sCtx.Assert().Equal(s.Shared.Config.Node.ProjectID, projectionMessage.NodeUUID, "Kafka: Проверка параметра node_uuid")
+		sCtx.Assert().Equal(s.Shared.Config.Node.DefaultCurrency, projectionMessage.Currency, "Kafka: Проверка параметра currency")
+		sCtx.Assert().Equal(projectionMessage.Timestamp, int(testData.casinoLossEvent.Timestamp.Unix()), "Kafka: Проверка параметра timestamp")
+		sCtx.Assert().NotEmpty(projectionMessage.SeqNumberNodeUUID, "Kafka: Проверка параметра seq_number_node_uuid")
+
 		var limitsPayload kafka.ProjectionPayloadLimits
 		err := projectionMessage.UnmarshalPayloadTo(&limitsPayload)
-		sCtx.Require().NoError(err, "Payload успешно распакован")
-		sCtx.Require().GreaterOrEqual(len(limitsPayload.Limits), 1, "В payload есть хотя бы один лимит")
+		sCtx.Assert().NoError(err, "Kafka: Payload успешно распакован")
+
 		limit := limitsPayload.Limits[0]
-		sCtx.Assert().Equal(string(kafka.LimitEventCreated), limitsPayload.EventType, "Тип события в payload корректен")
-		sCtx.Assert().Equal(testData.limitMessage.ID, limit.ExternalID, "ID лимита совпадает")
-		sCtx.Assert().Equal(testData.limitMessage.Amount, limit.Amount, "Сумма лимита совпадает")
-		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, limit.CurrencyCode, "Валюта лимита совпадает")
-		sCtx.Assert().Equal(testData.limitMessage.LimitType, limit.LimitType, "Тип лимита совпадает")
-		sCtx.Assert().True(limit.Status, "Лимит активен")
+		sCtx.Assert().Equal(string(kafka.LimitEventCreated), string(limitsPayload.EventType), "Kafka: Проверка параметра event_type")
+		sCtx.Assert().Equal(testData.limitMessage.ID, limit.ExternalID, "Kafka: Проверка параметра external_id")
+		sCtx.Assert().Equal(testData.limitMessage.Amount, limit.Amount, "Kafka: Проверка параметра amount")
+		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, limit.CurrencyCode, "Kafka: Проверка параметра currency_code")
+		sCtx.Assert().Equal(string(testData.limitMessage.LimitType), string(limit.LimitType), "Kafka: Проверка параметра limit_type")
+		sCtx.Assert().Equal(string(testData.limitMessage.IntervalType), string(limit.IntervalType), "Kafka: Проверка параметра interval_type")
+		sCtx.Assert().Equal(testData.limitMessage.StartedAt, limit.StartedAt, "Kafka: Проверка параметра started_at")
+		sCtx.Assert().Equal(testData.limitMessage.ExpiresAt, limit.ExpiresAt, "Kafka: Проверка параметра expires_at")
+		sCtx.Assert().True(limit.Status, "Kafka: Проверка параметра status")
+	})
+
+	t.WithNewAsyncStep("Проверка записи в таблице limit_record_v2", func(sCtx provider.StepCtx) {
+		filters := map[string]interface{}{
+			"external_uuid": testData.limitMessage.ID,
+			"player_uuid":   testData.registrationMessage.Player.ExternalID,
+		}
+
+		limitRecord := s.Shared.LimitRecordRepo.GetLimitRecordWithRetry(sCtx, filters)
+		sCtx.Assert().NotNil(limitRecord, "DB: Запись о лимите найдена в таблице limit_record_v2")
+		sCtx.Assert().Equal(testData.limitMessage.ID, limitRecord.ExternalUUID, "DB: Проверка параметра external_uuid")
+		sCtx.Assert().Equal(testData.registrationMessage.Player.ExternalID, limitRecord.PlayerUUID, "DB: Проверка параметра player_uuid")
+		sCtx.Assert().Equal(string(wallet.LimitTypeCasinoLoss), string(limitRecord.LimitType), "DB: Проверка параметра limit_type")
+		sCtx.Assert().Equal(string(wallet.IntervalTypeDaily), string(limitRecord.IntervalType), "DB: Проверка параметра interval_type")
+		sCtx.Assert().Equal(testData.limitMessage.Amount, limitRecord.Amount.String(), "DB: Проверка параметра amount")
+		sCtx.Assert().Equal("0", limitRecord.Spent.String(), "DB: Проверка параметра spent")
+		sCtx.Assert().Equal(testData.limitMessage.Amount, limitRecord.Rest.String(), "DB: Проверка параметра rest")
+		sCtx.Assert().Equal(testData.limitMessage.CurrencyCode, limitRecord.CurrencyCode, "DB: Проверка параметра currency_code")
+		sCtx.Assert().Equal(testData.limitMessage.StartedAt, limitRecord.StartedAt, "DB: Проверка параметра started_at")
+		sCtx.Assert().Equal(testData.limitMessage.ExpiresAt, limitRecord.ExpiresAt, "DB: Проверка параметра expires_at")
+		sCtx.Assert().True(limitRecord.LimitStatus, "DB: Проверка параметра limit_status")
 	})
 }

@@ -29,7 +29,7 @@ type SwitchWalletSuite struct {
 	redisClient   *redis.RedisClient
 	kafka         *kafka.Kafka
 	walletDB      *repository.Connector
-	walletRepo    *wallet.Repository
+	walletRepo    *wallet.WalletRepository
 }
 
 func (s *SwitchWalletSuite) BeforeAll(t provider.T) {
@@ -54,7 +54,7 @@ func (s *SwitchWalletSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Соединение с базой данных wallet.", func(sCtx provider.StepCtx) {
-		s.walletRepo = wallet.NewRepository(repository.OpenConnector(t, &s.config.MySQL, repository.Wallet).DB(), &s.config.MySQL)
+		s.walletRepo = wallet.NewWalletRepository(repository.OpenConnector(t, &s.config.MySQL, repository.Wallet).DB(), &s.config.MySQL)
 	})
 }
 
@@ -199,10 +199,10 @@ func (s *SwitchWalletSuite) TestSwitchWallet(t provider.T) {
 	})
 
 	t.WithNewAsyncStep("Смены дефолтного кошелька в БД.", func(sCtx provider.StepCtx) {
-		walletRepo := wallet.NewRepository(s.walletDB.DB(), &s.config.MySQL)
+		walletRepo := wallet.NewWalletRepository(s.walletDB.DB(), &s.config.MySQL)
 
-		oldDefaultWallet := walletRepo.GetOneWithRetry(sCtx, map[string]interface{}{"uuid": testData.mainWalletCreatedEvent.Payload.WalletUUID})
-		newDefaultWallet := walletRepo.GetOneWithRetry(sCtx, map[string]interface{}{"uuid": testData.additionalWalletCreatedEvent.Payload.WalletUUID})
+		oldDefaultWallet := walletRepo.GetWalletWithRetry(sCtx, map[string]interface{}{"uuid": testData.mainWalletCreatedEvent.Payload.WalletUUID})
+		newDefaultWallet := walletRepo.GetWalletWithRetry(sCtx, map[string]interface{}{"uuid": testData.additionalWalletCreatedEvent.Payload.WalletUUID})
 
 		sCtx.Assert().True(newDefaultWallet.IsDefault, "Новый кошелёк помечен как дефолтный в БД")
 		sCtx.Assert().False(oldDefaultWallet.IsDefault, "Старый кошелёк больше не помечен как дефолтный в БД")

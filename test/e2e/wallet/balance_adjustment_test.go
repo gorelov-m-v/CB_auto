@@ -33,7 +33,7 @@ type BalanceAdjustmentSuite struct {
 	kafka        *kafka.Kafka
 	natsClient   *nats.NatsClient
 	database     *repository.Connector
-	walletRepo   *wallet.Repository
+	walletRepo   *wallet.WalletRepository
 	redisClient  *redis.RedisClient
 }
 
@@ -60,7 +60,7 @@ func (s *BalanceAdjustmentSuite) BeforeAll(t provider.T) {
 	})
 
 	t.WithNewStep("Соединение с базой данных", func(sCtx provider.StepCtx) {
-		s.walletRepo = wallet.NewRepository(repository.OpenConnector(t, &s.config.MySQL, repository.Wallet).DB(), &s.config.MySQL)
+		s.walletRepo = wallet.NewWalletRepository(repository.OpenConnector(t, &s.config.MySQL, repository.Wallet).DB(), &s.config.MySQL)
 	})
 }
 
@@ -98,7 +98,7 @@ func (s *BalanceAdjustmentSuite) TestBalanceAdjustment(t provider.T) {
 
 	t.WithNewStep("Получение сообщения о регистрации из топика player.v1.account.", func(sCtx provider.StepCtx) {
 		testData.registrationMessage = kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.PlayerMessage) bool {
-			return msg.Message.EventType == string(kafka.PlayerEventSignUpFast) &&
+			return msg.Message.EventType == kafka.PlayerEventSignUpFast &&
 				msg.Player.AccountID == testData.registrationResponse.Body.Username
 		})
 
@@ -147,9 +147,11 @@ func (s *BalanceAdjustmentSuite) TestBalanceAdjustment(t provider.T) {
 			testData.registrationMessage.Player.ExternalID,
 			testData.walletCreatedEvent.Payload.WalletUUID)
 
-		testData.balanceAdjustedEvent = nats.FindMessageInStream(sCtx, s.natsClient, subject, func(payload nats.BalanceAdjustedPayload, msgType string) bool {
-			return msgType == string(nats.BalanceAdjusted)
-		})
+		testData.balanceAdjustedEvent = nats.FindMessageInStream(
+			sCtx, s.natsClient, subject,
+			func(payload nats.BalanceAdjustedPayload, msgType string) bool {
+				return msgType == string(nats.BalanceAdjusted)
+			})
 
 		sCtx.Assert().NotNil(testData.balanceAdjustedEvent, "Событие balance_adjusted получено")
 
@@ -193,8 +195,8 @@ func (s *BalanceAdjustmentSuite) TestBalanceAdjustment(t provider.T) {
 	})
 
 	t.WithNewAsyncStep("Проверка отправки события корректировки баланса в Kafka projection source", func(sCtx provider.StepCtx) {
-		testData.projectionAdjustEvent = kafka.FindMessageByFilter[kafka.ProjectionSourceMessage](sCtx, s.kafka, func(msg kafka.ProjectionSourceMessage) bool {
-			return msg.Type == string(kafka.ProjectionEventBalanceAdjusted) &&
+		testData.projectionAdjustEvent = kafka.FindMessageByFilter(sCtx, s.kafka, func(msg kafka.ProjectionSourceMessage) bool {
+			return msg.Type == kafka.ProjectionEventBalanceAdjusted &&
 				msg.PlayerUUID == testData.registrationMessage.Player.ExternalID &&
 				msg.WalletUUID == testData.walletCreatedEvent.Payload.WalletUUID
 		})
@@ -237,12 +239,10 @@ func (s *BalanceAdjustmentSuite) TestBalanceAdjustment(t provider.T) {
 	t.WithNewStep("Проверка данных кошелька в Redis", func(sCtx provider.StepCtx) {
 		var redisValue redis.WalletFullData
 		err := s.redisClient.GetWithRetry(sCtx, testData.walletCreatedEvent.Payload.WalletUUID, &redisValue)
-
 		sCtx.Require().NoError(err, "Значение кошелька получено из Redis")
 
 		expectedBalance := fmt.Sprintf("%.0f", testData.adjustmentRequest.Body.Amount)
 		sCtx.Assert().Equal(expectedBalance, redisValue.Balance, "Баланс кошелька соответствует сумме корректировки")
-
 		sCtx.Assert().Equal(int(testData.balanceAdjustedEvent.Sequence), redisValue.LastSeqNumber, "Номер последовательности совпадает")
 	})
 }

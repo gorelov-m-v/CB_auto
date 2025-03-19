@@ -5,6 +5,7 @@ import (
 )
 
 type EventType string
+type TransactionStatus int
 
 const (
 	// Event Types
@@ -14,6 +15,9 @@ const (
 	BalanceAdjusted    EventType = "balance_adjusted"
 	BlockAmountStarted EventType = "block_amount_started"
 	BlockAmountRevoked EventType = "block_amount_revoked"
+	DepositedMoney     EventType = "deposited_money"
+
+	TransactionStatusSuccess TransactionStatus = 4
 )
 
 const (
@@ -51,35 +55,35 @@ type WalletCreatedPayload struct {
 	WalletType      WalletType   `json:"wallet_type"`
 	WalletStatus    WalletStatus `json:"wallet_status"`
 	Balance         string       `json:"balance"`
-	CreatedAt       int64        `json:"created_at"`
-	UpdatedAt       int64        `json:"updated_at"`
+	CreatedAt       int          `json:"created_at"`
+	UpdatedAt       int          `json:"updated_at"`
 	IsDefault       bool         `json:"is_default"`
 	IsBasic         bool         `json:"is_basic"`
 }
 
 type SetDefaultStartedPayload struct {
 	UUID      string `json:"uuid"`
-	CreatedAt int64  `json:"created_at"`
+	CreatedAt int    `json:"created_at"`
 }
 
 type DefaultUnsettedPayload struct {
 	UUID      string `json:"uuid"`
-	CreatedAt int64  `json:"created_at"`
+	CreatedAt int    `json:"created_at"`
 }
 
 type DefaultSettedPayload struct {
 	UUID      string `json:"uuid"`
-	CreatedAt int64  `json:"created_at"`
+	CreatedAt int    `json:"created_at"`
 }
 
 type WalletDisabledPayload struct {
-	CreatedAt int64 `json:"created_at"`
+	CreatedAt int `json:"created_at"`
 }
 
 type BlockersSettedPayload struct {
-	IsGamblingActive bool  `json:"is_gambling_active"`
-	IsBettingActive  bool  `json:"is_betting_active"`
-	CreatedAt        int64 `json:"created_at"`
+	IsGamblingActive bool `json:"is_gambling_active"`
+	IsBettingActive  bool `json:"is_betting_active"`
+	CreatedAt        int  `json:"created_at"`
 }
 
 type LimitChangedV2 struct {
@@ -90,8 +94,8 @@ type LimitChangedV2 struct {
 		IntervalType string `json:"interval_type"`
 		Amount       string `json:"amount"`
 		CurrencyCode string `json:"currency_code"`
-		StartedAt    int64  `json:"started_at"`
-		ExpiresAt    int64  `json:"expires_at"`
+		StartedAt    int    `json:"started_at"`
+		ExpiresAt    int    `json:"expires_at"`
 		Status       bool   `json:"status"`
 	} `json:"limits"`
 }
@@ -142,4 +146,13 @@ type BlockAmountRevokedPayload struct {
 	UserUUID string `json:"user_uuid"`
 	UserName string `json:"user_name"`
 	NodeUUID string `json:"node_uuid"`
+}
+
+type DepositedMoneyPayload struct {
+	UUID         string            `json:"uuid"`
+	CurrencyCode string            `json:"currency_code"`
+	Amount       string            `json:"amount"`
+	Status       TransactionStatus `json:"status"`
+	NodeUUID     string            `json:"node_uuid"`
+	BonusID      string            `json:"bonus_id"`
 }

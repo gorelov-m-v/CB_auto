@@ -107,6 +107,55 @@ func (r *RedisClient) GetWithRetry(sCtx provider.StepCtx, key string, result int
 	return lastErr
 }
 
+func (r *RedisClient) GetWithSeqCheck(sCtx provider.StepCtx, key string, result interface{}, expectedSeq int) error {
+	var lastErr error
+	delay := r.retryDelay
+	maxAttempts := r.retryAttempts
+
+	for i := 0; i < maxAttempts; i++ {
+		value, err := r.Get(key)
+		if err == nil && value != "" {
+			if err := json.Unmarshal([]byte(value), result); err != nil {
+				log.Printf("Не удалось десериализовать значение из Redis: %v", err)
+				lastErr = err
+				continue
+			}
+
+			var seqNumber int
+			switch v := result.(type) {
+			case *WalletFullData:
+				seqNumber = v.LastSeqNumber
+			default:
+				if resultMap, ok := result.(map[string]interface{}); ok {
+					if seqVal, exists := resultMap["LastSeqNumber"]; exists {
+						if seqInt, ok := seqVal.(int); ok {
+							seqNumber = seqInt
+						}
+					}
+				}
+			}
+
+			log.Printf("seqNumber: %d, expectedSeq: %d", seqNumber, expectedSeq)
+			if seqNumber == expectedSeq {
+				sCtx.WithAttachments(allure.NewAttachment("Redis Value", allure.JSON, utils.CreatePrettyJSON(result)))
+				return nil
+			}
+
+			log.Printf("Attempt %d: Redis key %s found, but LastSeqNumber %d != %d (expected), retrying in %v...",
+				i+1, key, seqNumber, expectedSeq, delay)
+		} else {
+			lastErr = err
+			log.Printf("Attempt %d: Redis key %s not found or empty, retrying in %v...", i+1, key, delay)
+		}
+
+		time.Sleep(delay)
+		delay *= 2
+	}
+
+	log.Printf("Не удалось получить значение из Redis с ожидаемым LastSeqNumber после %d попыток: %v", maxAttempts, lastErr)
+	return fmt.Errorf("redis get with sequence check failed after %d attempts: %w", maxAttempts, lastErr)
+}
+
 func (r *RedisClient) Close() error {
 	return r.client.Close()
 }
