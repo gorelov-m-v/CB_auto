@@ -16,6 +16,12 @@ func (c *publicClient) FastRegistration(sCtx provider.StepCtx, req *types.Reques
 	return httpClient.DoRequest[models.FastRegistrationRequestBody, models.FastRegistrationResponseBody](sCtx, c.client, req)
 }
 
+func (c *publicClient) FullRegistration(sCtx provider.StepCtx, req *types.Request[models.FullRegistrationRequestBody]) *types.Response[struct{}] {
+	req.Method = http.MethodPost
+	req.Path = "/_front_api/api/v2/registration/full"
+	return httpClient.DoRequest[models.FullRegistrationRequestBody, struct{}](sCtx, c.client, req)
+}
+
 func (c *publicClient) TokenCheck(sCtx provider.StepCtx, req *types.Request[models.TokenCheckRequestBody]) *types.Response[models.TokenCheckResponseBody] {
 	req.Method = http.MethodPost
 	req.Path = "/_front_api/api/token/check"
@@ -59,4 +65,10 @@ func (c *publicClient) ConfirmContact(sCtx provider.StepCtx, req *types.Request[
 	req.Method = http.MethodPost
 	req.Path = "/_front_api/api/v1/contacts"
 	return httpClient.DoRequest[models.ConfirmContactRequestBody, struct{}](sCtx, c.client, req)
+}
+
+func (c *publicClient) VerifyContact(sCtx provider.StepCtx, req *types.Request[models.VerifyContactRequestBody]) *types.Response[models.VerifyContactResponseBody] {
+	req.Method = http.MethodPost
+	req.Path = "/_front_api/api/v1/contacts/verification"
+	return httpClient.DoRequest[models.VerifyContactRequestBody, models.VerifyContactResponseBody](sCtx, c.client, req)
 }

@@ -11,12 +11,14 @@ import (
 type PublicAPI interface {
 	// Player методы
 	FastRegistration(sCtx provider.StepCtx, req *types.Request[models.FastRegistrationRequestBody]) *types.Response[models.FastRegistrationResponseBody]
+	FullRegistration(sCtx provider.StepCtx, req *types.Request[models.FullRegistrationRequestBody]) *types.Response[struct{}]
 	TokenCheck(sCtx provider.StepCtx, req *types.Request[models.TokenCheckRequestBody]) *types.Response[models.TokenCheckResponseBody]
 	UpdatePlayer(sCtx provider.StepCtx, req *types.Request[models.UpdatePlayerRequestBody]) *types.Response[models.UpdatePlayerResponseBody]
 	VerifyIdentity(sCtx provider.StepCtx, req *types.Request[models.VerifyIdentityRequestBody]) *types.Response[struct{}]
 	GetVerificationStatus(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[[]models.VerificationStatusResponseItem]
 	RequestContactVerification(sCtx provider.StepCtx, req *types.Request[models.RequestVerificationRequestBody]) *types.Response[struct{}]
 	ConfirmContact(sCtx provider.StepCtx, req *types.Request[models.ConfirmContactRequestBody]) *types.Response[struct{}]
+	VerifyContact(sCtx provider.StepCtx, req *types.Request[models.VerifyContactRequestBody]) *types.Response[models.VerifyContactResponseBody]
 
 	// Wallet методы
 	GetWallets(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetWalletsResponseBody]

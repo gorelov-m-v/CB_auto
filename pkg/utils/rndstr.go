@@ -223,11 +223,7 @@ func daysIn(month time.Month, year int) int {
 }
 
 func generateIban() string {
-	part1 := strings.ToUpper(randomLettersString(2))
-	part2 := randomNumericString(2)
-	part3 := strings.ToUpper(randomLettersString(4))
-	part4 := randomNumericString(12)
-	return part1 + part2 + part3 + part4
+	return "LV" + randomNumericString(19)
 }
 
 func generatePersonalId() string {
