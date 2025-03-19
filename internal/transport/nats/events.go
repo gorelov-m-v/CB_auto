@@ -5,6 +5,7 @@ import (
 )
 
 type EventType string
+type TransactionStatus int
 
 const (
 	// Event Types
@@ -15,6 +16,8 @@ const (
 	BlockAmountStarted EventType = "block_amount_started"
 	BlockAmountRevoked EventType = "block_amount_revoked"
 	DepositedMoney     EventType = "deposited_money"
+
+	TransactionStatusSuccess TransactionStatus = 4
 )
 
 const (
@@ -146,10 +149,10 @@ type BlockAmountRevokedPayload struct {
 }
 
 type DepositedMoneyPayload struct {
-	UUID         string `json:"uuid"`
-	CurrencyCode string `json:"currency_code"`
-	Amount       string `json:"amount"`
-	Status       int    `json:"status"`
-	NodeUUID     string `json:"node_uuid"`
-	BonusID      string `json:"bonus_id"`
+	UUID         string            `json:"uuid"`
+	CurrencyCode string            `json:"currency_code"`
+	Amount       string            `json:"amount"`
+	Status       TransactionStatus `json:"status"`
+	NodeUUID     string            `json:"node_uuid"`
+	BonusID      string            `json:"bonus_id"`
 }

@@ -10,6 +10,10 @@ type LimitType string
 type LimitIntervalType string
 type ProjectionEventType string
 type PlayerEventType string
+type TransactionStatus int
+type TransactionDirection string
+type PaymentMethodAlias string
+type PaymentMethod string
 
 const (
 	// Event Types
@@ -22,7 +26,7 @@ const (
 	LimitTypeCasinoLoss    LimitType = "casino-loss"
 	LimitTypeTurnoverFunds LimitType = "turnover-of-funds"
 
-	// Interval Types
+	// Limit Interval Types
 	IntervalTypeDaily   LimitIntervalType = "daily"
 	IntervalTypeWeekly  LimitIntervalType = "weekly"
 	IntervalTypeMonthly LimitIntervalType = "monthly"
@@ -32,11 +36,24 @@ const (
 	ProjectionEventLimitChanged       ProjectionEventType = "limit_changed_v2"
 	ProjectionEventBlockAmountStarted ProjectionEventType = "block_amount_started"
 	ProjectionEventBlockAmountRevoked ProjectionEventType = "block_amount_revoked"
+	ProjectionEventDepositedMoney     ProjectionEventType = "deposited_money"
 
 	// Player Event Types
 	PlayerEventSignUpFast        PlayerEventType = "player.signUpFast"
 	PlayerEventConfirmationPhone PlayerEventType = "player.confirmationPhone"
 	PlayerEventConfirmationEmail PlayerEventType = "player.confirmationEmail"
+
+	// Transaction Direction Types
+	TransactionDirectionDeposit TransactionDirection = "deposit"
+
+	// Transaction Status Types
+	TransactionStatusSuccess TransactionStatus = 4
+
+	// Payment Method Alias Types
+	PaymentMethodAliasFake PaymentMethodAlias = "Fake"
+
+	// Payment Method Types
+	PaymentMethodFake PaymentMethod = "Fake1001"
 )
 
 type Brand struct {
@@ -147,6 +164,15 @@ type ProjectionPayloadBlockAmountRevoked struct {
 	Amount   string `json:"amount"`
 }
 
+type ProjectionPayloadDepositedMoney struct {
+	UUID         string `json:"uuid"`
+	CurrencyCode string `json:"currency_code"`
+	Amount       string `json:"amount"`
+	Status       int    `json:"status"`
+	NodeUUID     string `json:"node_uuid"`
+	BonusID      string `json:"bonus_id"`
+}
+
 func (m *ProjectionSourceMessage) UnmarshalPayloadTo(payload interface{}) error {
 	return json.Unmarshal([]byte(m.Payload), payload)
 }
@@ -167,4 +193,43 @@ func (m *PlayerMessage) GetConfirmationContext() (*ConfirmationContext, error) {
 	}
 
 	return &ctx, nil
+}
+
+type TransactionMessage struct {
+	PlayerID    string `json:"playerId"`
+	NodeID      string `json:"nodeId"`
+	Transaction struct {
+		TransactionID          string               `json:"transactionId"`
+		CurrencyCode           string               `json:"currencyCode"`
+		Direction              TransactionDirection `json:"direction"`
+		PaymentMethod          PaymentMethod        `json:"paymentMethod"`
+		Amount                 string               `json:"amount"`
+		Status                 TransactionStatus    `json:"status"`
+		CreatedAt              int                  `json:"createdAt"`
+		UpdatedAt              int                  `json:"updatedAt"`
+		PlayerAccountID        string               `json:"playerAccountId"`
+		StatusNumber           int                  `json:"statusNumber"`
+		DefaultCurrencyCode    string               `json:"defaultCurrencyCode"`
+		DefaultAmount          string               `json:"defaultAmount"`
+		ProcessingCurrencyCode string               `json:"processingCurrencyCode"`
+		ProcessingAmount       string               `json:"processingAmount"`
+		PaymentMethodAlias     PaymentMethodAlias   `json:"paymentMethodAlias"`
+		MethodID               int                  `json:"methodId"`
+	} `json:"transaction"`
+	Meta struct {
+		FirstDep        bool   `json:"firstDep"`
+		FirstDepAmount  string `json:"firstDepAmount"`
+		Gateway         string `json:"gateway"`
+		InternalID      int    `json:"internalId"`
+		CustomAdminName string `json:"customAdminName"`
+		Fee             struct {
+			Currency            string `json:"currency"`
+			BalanceSide         string `json:"balanceSide"`
+			AmountInFeeCurrency string `json:"amountInFeeCurrency"`
+			TransactionFees     []struct {
+				Amount string `json:"amount"`
+				Type   string `json:"type"`
+			} `json:"transactionFees"`
+		} `json:"fee"`
+	} `json:"meta"`
 }
