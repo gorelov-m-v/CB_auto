@@ -39,78 +39,128 @@ func CreateVerifiedPlayer(
 	// Внутренняя структура для хранения оперативных данных при создании игрока
 	var registrationData struct {
 		registrationMessage      kafka.PlayerMessage
-		depositEvent             *nats.NatsMessage[nats.DepositedMoneyPayload]
-		registrationResponse     *clientTypes.Response[publicModels.FastRegistrationResponseBody]
 		authorizationResponse    *clientTypes.Response[publicModels.TokenCheckResponseBody]
+		fullRegRequest           *clientTypes.Request[publicModels.FullRegistrationRequestBody]
+		fullRegResponse          *clientTypes.Response[struct{}]
+		verifyContactResponse    *clientTypes.Response[publicModels.VerifyContactResponseBody]
+		depositEvent             *nats.NatsMessage[nats.DepositedMoneyPayload]
 		verifications            *clientTypes.Response[[]publicModels.VerificationStatusResponseItem]
 		phoneVerificationRequest *clientTypes.Request[publicModels.RequestVerificationRequestBody]
 		emailVerificationRequest *clientTypes.Request[publicModels.RequestVerificationRequestBody]
-		phoneConfirmMsg          kafka.PlayerMessage
-		emailConfirmMsg          kafka.PlayerMessage
+		phoneConfirmationMessage kafka.PlayerMessage
+		emailConfirmationMessage kafka.PlayerMessage
 		wallets                  redis.WalletsMap
 		depositeEvent            *nats.NatsMessage[nats.DepositedMoneyPayload]
 	}
 
 	playerData := PlayerData{}
 
-	// Шаг 1: Регистрация игрока
-	sCtx.WithNewStep("Создание и верификация игрока", func(sCtx provider.StepCtx) {
-		req := &clientTypes.Request[publicModels.FastRegistrationRequestBody]{
-			Body: &publicModels.FastRegistrationRequestBody{
-				Country:  config.Node.DefaultCountry,
-				Currency: config.Node.DefaultCurrency,
+	// Шаг 1: Запрос подтверждения телефона
+	sCtx.WithNewStep("Запрос подтверждения телефона", func(sCtx provider.StepCtx) {
+		registrationData.phoneVerificationRequest = &clientTypes.Request[publicModels.RequestVerificationRequestBody]{
+			Body: &publicModels.RequestVerificationRequestBody{
+				Contact: utils.Get(utils.PHONE),
+				Type:    publicModels.ContactTypePhone,
 			},
 		}
 
-		registrationData.registrationResponse = publicClient.FastRegistration(sCtx, req)
-		sCtx.Require().Equal(http.StatusOK, registrationData.registrationResponse.StatusCode, "Успешная регистрация")
+		resp := publicClient.RequestContactVerification(sCtx, registrationData.phoneVerificationRequest)
+		sCtx.Require().Equal(http.StatusOK, resp.StatusCode, "Public API: Запрос на подтверждение телефона успешно отправлен")
+		sCtx.Logf("Отправлен запрос на подтверждение телефона: %s", registrationData.phoneVerificationRequest.Body.Contact)
 	})
 
-	// Шаг 2: Получение Kafka-сообщения о регистрации
-	sCtx.WithNewStep("Получение Kafka-сообщения о регистрации", func(sCtx provider.StepCtx) {
-		registrationData.registrationMessage = kafka.FindMessageByFilter(sCtx, kafkaClient, func(msg kafka.PlayerMessage) bool {
-			return msg.Message.EventType == kafka.PlayerEventSignUpFast &&
-				msg.Player.AccountID == registrationData.registrationResponse.Body.Username
+	// Шаг 2: Получение кода подтверждения из Kafka
+	sCtx.WithNewStep("Получение кода подтверждения из Kafka", func(sCtx provider.StepCtx) {
+		phoneNumberWithoutPlus := strings.TrimPrefix(registrationData.phoneVerificationRequest.Body.Contact, "+")
+
+		registrationData.phoneConfirmationMessage = kafka.FindMessageByFilter(sCtx, kafkaClient, func(msg kafka.PlayerMessage) bool {
+			return msg.Message.EventType == kafka.PlayerEventConfirmationPhone &&
+				msg.Player.Phone == phoneNumberWithoutPlus
 		})
-		sCtx.Require().NotEmpty(registrationData.registrationMessage.Player.ID, "ID игрока не пустой")
+
+		sCtx.Require().Equal(string(kafka.PlayerEventConfirmationPhone), string(registrationData.phoneConfirmationMessage.Message.EventType),
+			"Kafka: Сообщение player.confirmationPhone найдено")
+		sCtx.Assert().Equal(phoneNumberWithoutPlus, registrationData.phoneConfirmationMessage.Player.Phone,
+			"Kafka: Телефон в сообщении соответствует запрошенному")
+
+		confirmationContext, err := registrationData.phoneConfirmationMessage.GetConfirmationContext()
+		sCtx.Require().NoError(err, "Kafka: Контекст с кодом подтверждения успешно получен")
+		sCtx.Require().NotEmpty(confirmationContext.ConfirmationCode, "Kafka: Код подтверждения не пустой")
+		sCtx.Logf("Получен код подтверждения: %s", confirmationContext.ConfirmationCode)
 	})
 
-	// Шаг 3: Авторизация
+	// Шаг 3: Вызов эндпоинта верификации контакта
+	sCtx.WithNewStep("Вызов эндпоинта верификации контакта", func(sCtx provider.StepCtx) {
+		confirmationContext, _ := registrationData.phoneConfirmationMessage.GetConfirmationContext()
+
+		req := &clientTypes.Request[publicModels.VerifyContactRequestBody]{
+			Body: &publicModels.VerifyContactRequestBody{
+				Contact: strings.TrimPrefix(registrationData.phoneVerificationRequest.Body.Contact, "+"),
+				Code:    confirmationContext.ConfirmationCode,
+			},
+		}
+
+		registrationData.verifyContactResponse = publicClient.VerifyContact(sCtx, req)
+		sCtx.Require().Equal(http.StatusOK, registrationData.verifyContactResponse.StatusCode, "Public API: Контакт успешно верифицирован")
+		sCtx.Require().NotEmpty(registrationData.verifyContactResponse.Body.Hash, "Public API: Получен непустой хэш верификации")
+		sCtx.Logf("Получен хэш верификации: %s", registrationData.verifyContactResponse.Body.Hash)
+	})
+
+	// Шаг 4: Выполнение полной регистрации пользователя
+	sCtx.WithNewStep("Выполнение полной регистрации пользователя", func(sCtx provider.StepCtx) {
+		phoneNumber := strings.TrimPrefix(registrationData.phoneVerificationRequest.Body.Contact, "+")
+		birthDate := "1990-01-01"
+		password := "SecurePassword123!"
+
+		registrationData.fullRegRequest = &clientTypes.Request[publicModels.FullRegistrationRequestBody]{
+			Body: &publicModels.FullRegistrationRequestBody{
+				Currency:          config.Node.DefaultCurrency,
+				Country:           config.Node.DefaultCountry,
+				BonusChoice:       publicModels.BonusChoiceNone,
+				Phone:             phoneNumber,
+				PhoneConfirmation: registrationData.verifyContactResponse.Body.Hash,
+				FirstName:         "Иван",
+				LastName:          "Петров",
+				Birthday:          birthDate,
+				Gender:            publicModels.GenderMale,
+				PersonalId:        utils.Get(utils.PERSONAL_ID),
+				IBAN:              utils.Get(utils.IBAN),
+				City:              "Москва",
+				PermanentAddress:  "ул. Примерная, д. 123",
+				PostalCode:        "123456",
+				Profession:        "Инженер",
+				Password:          password,
+				RulesAgreement:    true,
+				Context:           map[string]any{},
+			},
+		}
+
+		registrationData.fullRegResponse = publicClient.FullRegistration(sCtx, registrationData.fullRegRequest)
+		sCtx.Require().Equal(http.StatusCreated, registrationData.fullRegResponse.StatusCode, "Public API: Полная регистрация выполнена успешно")
+	})
+
+	// Шаг 5: Получение Kafka-сообщения о регистрации
+	sCtx.WithNewStep("Получение Kafka-сообщения о регистрации", func(sCtx provider.StepCtx) {
+		phoneNumber := strings.TrimPrefix(registrationData.phoneVerificationRequest.Body.Contact, "+")
+		registrationData.registrationMessage = kafka.FindMessageByFilter(sCtx, kafkaClient, func(msg kafka.PlayerMessage) bool {
+			return msg.Message.EventType == kafka.PlayerEventSignUpFull &&
+				msg.Player.Phone == phoneNumber
+		})
+
+		sCtx.Require().NotEmpty(registrationData.registrationMessage.Player.ExternalID, "ExternalID игрока не пустой")
+	})
+
+	// Шаг 6: Авторизация
 	sCtx.WithNewStep("Авторизация", func(sCtx provider.StepCtx) {
 		req := &clientTypes.Request[publicModels.TokenCheckRequestBody]{
 			Body: &publicModels.TokenCheckRequestBody{
-				Username: registrationData.registrationResponse.Body.Username,
-				Password: registrationData.registrationResponse.Body.Password,
+				Username: registrationData.fullRegRequest.Body.Phone,
+				Password: registrationData.fullRegRequest.Body.Password,
 			},
 		}
 
 		registrationData.authorizationResponse = publicClient.TokenCheck(sCtx, req)
 		sCtx.Require().Equal(http.StatusOK, registrationData.authorizationResponse.StatusCode, "Успешная авторизация")
-	})
-
-	// Шаг 4: Обновление данных игрока
-	sCtx.WithNewStep("Обновление данных игрока", func(sCtx provider.StepCtx) {
-		req := &clientTypes.Request[publicModels.UpdatePlayerRequestBody]{
-			Headers: map[string]string{
-				"Authorization": fmt.Sprintf("Bearer %s", registrationData.authorizationResponse.Body.Token),
-			},
-			Body: &publicModels.UpdatePlayerRequestBody{
-				FirstName:        "Test",
-				LastName:         "Test",
-				Gender:           1,
-				City:             "TestCity",
-				Postcode:         "12345",
-				PermanentAddress: "Test Address",
-				PersonalID:       utils.Get(utils.PERSONAL_ID),
-				Profession:       "QA",
-				IBAN:             utils.Get(utils.IBAN),
-				Birthday:         "1980-01-01",
-				Country:          config.Node.DefaultCountry,
-			},
-		}
-
-		resp := publicClient.UpdatePlayer(sCtx, req)
-		sCtx.Require().Equal(http.StatusOK, resp.StatusCode, "Обновление данных игрока")
 	})
 
 	// Шаг 5: Создание запроса на подтверждение личности
@@ -164,22 +214,6 @@ func CreateVerifiedPlayer(
 		sCtx.Require().Equal(http.StatusNoContent, resp.StatusCode, "Обновление статуса верификации")
 	})
 
-	// Шаг 8: Запрос верификации телефона
-	sCtx.WithNewStep("Запрос верификации телефона", func(sCtx provider.StepCtx) {
-		registrationData.phoneVerificationRequest = &clientTypes.Request[publicModels.RequestVerificationRequestBody]{
-			Headers: map[string]string{
-				"Authorization": fmt.Sprintf("Bearer %s", registrationData.authorizationResponse.Body.Token),
-			},
-			Body: &publicModels.RequestVerificationRequestBody{
-				Contact: utils.Get(utils.PHONE),
-				Type:    publicModels.ContactTypePhone,
-			},
-		}
-
-		resp := publicClient.RequestContactVerification(sCtx, registrationData.phoneVerificationRequest)
-		sCtx.Require().Equal(http.StatusOK, resp.StatusCode, "Запрос верификации телефона")
-	})
-
 	// Шаг 9: Запрос верификации email
 	sCtx.WithNewStep("Запрос верификации email", func(sCtx provider.StepCtx) {
 		registrationData.emailVerificationRequest = &clientTypes.Request[publicModels.RequestVerificationRequestBody]{
@@ -196,45 +230,18 @@ func CreateVerifiedPlayer(
 		sCtx.Require().Equal(http.StatusOK, resp.StatusCode, "Запрос верификации email")
 	})
 
-	// Шаг 10: Получение сообщения о подтверждении телефона и email
+	// Шаг 10: Получение сообщения о подтверждении  email
 	sCtx.WithNewStep("Получение сообщения о подтверждении телефона и email", func(sCtx provider.StepCtx) {
-		phoneNumberWithoutPlus := strings.TrimPrefix(registrationData.phoneVerificationRequest.Body.Contact, "+")
-
-		registrationData.phoneConfirmMsg = kafka.FindMessageByFilter(sCtx, kafkaClient, func(msg kafka.PlayerMessage) bool {
-			return msg.Message.EventType == kafka.PlayerEventConfirmationPhone &&
-				msg.Player.AccountID == registrationData.registrationResponse.Body.Username &&
-				msg.Player.Phone == phoneNumberWithoutPlus
-		})
-
-		registrationData.emailConfirmMsg = kafka.FindMessageByFilter(sCtx, kafkaClient, func(msg kafka.PlayerMessage) bool {
+		registrationData.emailConfirmationMessage = kafka.FindMessageByFilter(sCtx, kafkaClient, func(msg kafka.PlayerMessage) bool {
 			return msg.Message.EventType == kafka.PlayerEventConfirmationEmail &&
-				msg.Player.AccountID == registrationData.registrationResponse.Body.Username &&
 				msg.Player.Email == registrationData.emailVerificationRequest.Body.Contact
 		})
 
 	})
 
-	// Шаг 12: Подтверждение телефона
-	sCtx.WithNewStep("Подтверждение телефона", func(sCtx provider.StepCtx) {
-		phoneContext, _ := registrationData.phoneConfirmMsg.GetConfirmationContext()
-		req := &clientTypes.Request[publicModels.ConfirmContactRequestBody]{
-			Headers: map[string]string{
-				"Authorization": fmt.Sprintf("Bearer %s", registrationData.authorizationResponse.Body.Token),
-			},
-			Body: &publicModels.ConfirmContactRequestBody{
-				Contact: registrationData.phoneVerificationRequest.Body.Contact,
-				Type:    publicModels.ContactTypePhone,
-				Code:    phoneContext.ConfirmationCode,
-			},
-		}
-
-		resp := publicClient.ConfirmContact(sCtx, req)
-		sCtx.Require().Equal(http.StatusCreated, resp.StatusCode, "Подтверждение телефона")
-	})
-
 	// Шаг 13: Подтверждение email
 	sCtx.WithNewStep("Подтверждение email", func(sCtx provider.StepCtx) {
-		emailContext, _ := registrationData.emailConfirmMsg.GetConfirmationContext()
+		emailContext, _ := registrationData.emailConfirmationMessage.GetConfirmationContext()
 		confirmEmailReq := &clientTypes.Request[publicModels.ConfirmContactRequestBody]{
 			Headers: map[string]string{
 				"Authorization": fmt.Sprintf("Bearer %s", registrationData.authorizationResponse.Body.Token),
