@@ -83,7 +83,7 @@ func (s *UpdateCollectionSuite) TestUpdateCollection(t provider.T) {
 				Sort:      1,
 				Alias:     collectionAlias,
 				Names:     originalNames,
-				Type:      models.TypeHorizontal,
+				Type:      models.TypeVertical,
 				GroupID:   s.config.Node.GroupID,
 				ProjectID: s.config.Node.ProjectID,
 			},
@@ -108,7 +108,7 @@ func (s *UpdateCollectionSuite) TestUpdateCollection(t provider.T) {
 				Sort:  2,
 				Alias: fmt.Sprintf("updated-%s", utils.Get(utils.ALIAS, 10)),
 				Names: updatedNames,
-				Type:  models.TypeHorizontal,
+				Type:  models.TypeVertical,
 			},
 		}
 
@@ -124,7 +124,7 @@ func (s *UpdateCollectionSuite) TestUpdateCollection(t provider.T) {
 		sCtx.Assert().NotNil(collectionFromDB, "Коллекция найдена в БД")
 		sCtx.Assert().NotEmpty(collectionFromDB.LocalizedNames["en"], "Английское название в БД не пустое")
 		sCtx.Assert().NotEmpty(collectionFromDB.LocalizedNames["ru"], "Русское название в БД не пустое")
-		sCtx.Assert().Equal(string(models.TypeHorizontal), collectionFromDB.Type, "Тип коллекции обновлен")
+		sCtx.Assert().Equal(string(models.TypeVertical), collectionFromDB.Type, "Тип коллекции обновлен")
 		sCtx.Assert().Equal(uint32(2), uint32(collectionFromDB.Sort), "Sort обновлен")
 		sCtx.Assert().Equal(updateReq.Body.Alias, collectionFromDB.Alias, "Alias обновлен")
 	})
