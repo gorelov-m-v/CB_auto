@@ -5,6 +5,7 @@ type CategoryType string
 type CategoryStatus int
 
 const (
+
 	// Статусы
 	StatusEnabled  StatusType = 1
 	StatusDisabled StatusType = 2

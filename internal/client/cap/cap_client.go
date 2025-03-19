@@ -42,6 +42,11 @@ type CapAPI interface {
 	UpdateCapCategory(sCtx provider.StepCtx, req *types.Request[models.UpdateCapCategoryRequestBody]) *types.Response[models.UpdateCapCategoryResponseBody]
 	UpdateCapCategoryError(sCtx provider.StepCtx, req *types.Request[models.UpdateCapCategoryRequestBody]) *types.Response[models.ErrorResponse]
 
+	// Games
+	GetGames(sCtx provider.StepCtx, req *types.Request[struct{}]) *types.Response[models.GetCapGamesResponseBody]
+	UpdateGamesStatus(sCtx provider.StepCtx, req *types.Request[models.UpdateGamesStatusRequestBody]) *types.Response[models.UpdateCapGamesResponseBody]
+	UpdateGames(sCtx provider.StepCtx, req *types.Request[models.UpdateCapGamesRequestBody]) *types.Response[models.UpdateCapGamesResponseBody]
+
 	// Bonus
 	CreateLabel(sCtx provider.StepCtx, req *types.Request[models.CreateLabelRequestBody]) *types.Response[models.CreateLabelResponseBody]
 	GetLabel(sCtx provider.StepCtx, req *types.Request[struct{}]) *types.Response[models.GetLabelResponseBody]

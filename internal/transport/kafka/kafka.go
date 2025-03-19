@@ -22,6 +22,7 @@ const (
 	PlayerTopicPart     TopicPart = "player.v1.account"
 	LimitTopicPart      TopicPart = "limits.v2"
 	ProjectionTopicPart TopicPart = "wallet.v8.projectionSource"
+	GameTopicPart       TopicPart = "core.gambling.v2.Game"
 	PaymentTopicPart    TopicPart = "payment.v1.transaction"
 )
 
@@ -30,6 +31,7 @@ type Topics struct {
 	Player     TopicType
 	Limit      TopicType
 	Projection TopicType
+	Game       TopicType
 	Payment    TopicType
 }
 
@@ -39,6 +41,7 @@ func NewTopics(prefix string) Topics {
 		Player:     TopicType(prefix + string(PlayerTopicPart)),
 		Limit:      TopicType(prefix + string(LimitTopicPart)),
 		Projection: TopicType(prefix + string(ProjectionTopicPart)),
+		Game:       TopicType(prefix + string(GameTopicPart)),
 		Payment:    TopicType(prefix + string(PaymentTopicPart)),
 	}
 }
@@ -165,6 +168,7 @@ func newConsumer(cfg *config.Config) *Kafka {
 		TopicsConfig.Player,
 		TopicsConfig.Limit,
 		TopicsConfig.Projection,
+		TopicsConfig.Game,
 		TopicsConfig.Payment,
 	}
 
@@ -379,6 +383,10 @@ func (m LimitMessage) GetTopic() TopicType {
 
 func (m ProjectionSourceMessage) GetTopic() TopicType {
 	return TopicsConfig.Projection
+}
+
+func (m GameMessage) GetTopic() TopicType {
+	return TopicsConfig.Game
 }
 
 func (m TransactionMessage) GetTopic() TopicType {

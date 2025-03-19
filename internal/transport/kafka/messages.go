@@ -195,6 +195,22 @@ func (m *PlayerMessage) GetConfirmationContext() (*ConfirmationContext, error) {
 	return &ctx, nil
 }
 
+type GameMessage struct {
+	ID                   string            `json:"id"`
+	ExternalUUID         string            `json:"external_uuid"`
+	Name                 string            `json:"name"`
+	OriginalName         string            `json:"original_name"`
+	Alias                string            `json:"alias"`
+	Image                string            `json:"image"`
+	ProviderName         string            `json:"provider_name"`
+	ProviderID           string            `json:"provider_id"`
+	ProviderExternalUUID string            `json:"provider_external_uuid"`
+	GameTypeLocalized    map[string]string `json:"game_type_localized"`
+	Status               string            `json:"status"`
+	GameTypeUUID         string            `json:"game_type_uuid"`
+	BrandUUID            string            `json:"brand_uuid"`
+}
+
 type TransactionMessage struct {
 	PlayerID    string `json:"playerId"`
 	NodeID      string `json:"nodeId"`
