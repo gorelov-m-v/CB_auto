@@ -152,7 +152,11 @@ func (s *ParametrizedUpdateCollectionSuite) TestAll(t provider.T) {
 					body.Names = testData.createCollectionRequest.Body.Names
 				}
 				body.Type = testData.createCollectionRequest.Body.Type
-				body.Sort = testData.createCollectionRequest.Body.Sort
+				if param.Sort > 0 {
+					body.Sort = param.Sort
+				} else {
+					body.Sort = testData.createCollectionRequest.Body.Sort
+				}
 
 				updateReq := &clientTypes.Request[models.UpdateCapCategoryRequestBody]{
 					Headers: map[string]string{
