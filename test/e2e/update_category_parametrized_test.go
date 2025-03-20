@@ -61,7 +61,7 @@ func (s *ParametrizedUpdateCategorySuite) BeforeAll(t provider.T) {
 				"en": utils.Get(utils.CATEGORY_TITLE, 25),
 				"ru": utils.Get(utils.CATEGORY_TITLE, 25),
 			},
-			Type:        models.TypeVertical,
+			Type:        models.TypeHorizontal,
 			Description: "Обновление коллекции (максимальные значения: Alias=100, Name=25)",
 		},
 		{
@@ -71,7 +71,7 @@ func (s *ParametrizedUpdateCategorySuite) BeforeAll(t provider.T) {
 				"en": utils.Get(utils.CATEGORY_TITLE, 24),
 				"ru": utils.Get(utils.CATEGORY_TITLE, 24),
 			},
-			Type:        models.TypeVertical,
+			Type:        models.TypeHorizontal,
 			Description: "Обновление коллекции (граничные значения: Alias=99, Name=24)",
 		},
 		{
@@ -135,7 +135,7 @@ func (s *ParametrizedUpdateCategorySuite) TestAll(t provider.T) {
 							"en": utils.Get(utils.CATEGORY_TITLE, 20),
 							"ru": utils.Get(utils.CATEGORY_TITLE, 20),
 						},
-						Type:      models.TypeVertical,
+						Type:      models.TypeHorizontal,
 						GroupID:   s.config.Node.GroupID,
 						ProjectID: s.config.Node.ProjectID,
 					},

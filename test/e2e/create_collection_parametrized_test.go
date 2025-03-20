@@ -51,7 +51,6 @@ func (s *ParametrizedCreateCollectionSuite) BeforeAll(t provider.T) {
 		s.collectionRepo = category.NewRepository(s.database.DB(), &s.config.MySQL)
 	})
 
-	// Параметры для параметризованных тестов (коллекции)
 	s.ParamUpdateCollection = []UpdateCollectionParam{
 		{
 			Sort:  5,
