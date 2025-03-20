@@ -2,7 +2,6 @@ package test
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"testing"
 
@@ -81,72 +80,72 @@ func (s *ParametrizedBalanceAdjustmentSuite) BeforeAll(t provider.T) {
 			ReasonType:    capModels.ReasonMalfunction,
 			Description:   "Корректировка из-за технического сбоя",
 		},
-		// {
-		// 	Direction:     capModels.DirectionIncrease,
-		// 	OperationType: capModels.OperationTypeDeposit,
-		// 	ReasonType:    capModels.ReasonOperationalMistake,
-		// 	Description:   "Депозит из-за операционной ошибки",
-		// },
-		// {
-		// 	Direction:     capModels.DirectionIncrease,
-		// 	OperationType: capModels.OperationTypeGift,
-		// 	ReasonType:    capModels.ReasonBalanceCorrection,
-		// 	Description:   "Подарок для корректировки баланса",
-		// },
-		// {
-		// 	Direction:     capModels.DirectionIncrease,
-		// 	OperationType: capModels.OperationTypeCashback,
-		// 	ReasonType:    capModels.ReasonOperationalMistake,
-		// 	Description:   "Кэшбэк из-за операционной ошибки",
-		// },
-		// {
-		// 	Direction:     capModels.DirectionIncrease,
-		// 	OperationType: capModels.OperationTypeTournamentPrize,
-		// 	ReasonType:    capModels.ReasonMalfunction,
-		// 	Description:   "Приз турнира из-за технического сбоя",
-		// },
-		// {
-		// 	Direction:     capModels.DirectionIncrease,
-		// 	OperationType: capModels.OperationTypeJackpot,
-		// 	ReasonType:    capModels.ReasonBalanceCorrection,
-		// 	Description:   "Джекпот для корректировки баланса",
-		// },
-		// {
-		// 	Direction:     capModels.DirectionDecrease,
-		// 	OperationType: capModels.OperationTypeCorrection,
-		// 	ReasonType:    capModels.ReasonBalanceCorrection,
-		// 	Description:   "Уменьшение для корректировки баланса",
-		// },
-		// {
-		// 	Direction:     capModels.DirectionDecrease,
-		// 	OperationType: capModels.OperationTypeWithdrawal,
-		// 	ReasonType:    capModels.ReasonOperationalMistake,
-		// 	Description:   "Вывод из-за операционной ошибки",
-		// },
-		// {
-		// 	Direction:     capModels.DirectionDecrease,
-		// 	OperationType: capModels.OperationTypeGift,
-		// 	ReasonType:    capModels.ReasonMalfunction,
-		// 	Description:   "Отмена подарка из-за технического сбоя",
-		// },
-		// {
-		// 	Direction:     capModels.DirectionDecrease,
-		// 	OperationType: capModels.OperationTypeReferralCommission,
-		// 	ReasonType:    capModels.ReasonOperationalMistake,
-		// 	Description:   "Отмена реферальной комиссии из-за ошибки",
-		// },
-		// {
-		// 	Direction:     capModels.DirectionDecrease,
-		// 	OperationType: capModels.OperationTypeTournamentPrize,
-		// 	ReasonType:    capModels.ReasonBalanceCorrection,
-		// 	Description:   "Корректировка выигрыша в турнире",
-		// },
-		// {
-		// 	Direction:     capModels.DirectionDecrease,
-		// 	OperationType: capModels.OperationTypeJackpot,
-		// 	ReasonType:    capModels.ReasonMalfunction,
-		// 	Description:   "Отмена джекпота из-за технического сбоя",
-		// },
+		{
+			Direction:     capModels.DirectionIncrease,
+			OperationType: capModels.OperationTypeDeposit,
+			ReasonType:    capModels.ReasonOperationalMistake,
+			Description:   "Депозит из-за операционной ошибки",
+		},
+		{
+			Direction:     capModels.DirectionIncrease,
+			OperationType: capModels.OperationTypeGift,
+			ReasonType:    capModels.ReasonBalanceCorrection,
+			Description:   "Подарок для корректировки баланса",
+		},
+		{
+			Direction:     capModels.DirectionIncrease,
+			OperationType: capModels.OperationTypeCashback,
+			ReasonType:    capModels.ReasonOperationalMistake,
+			Description:   "Кэшбэк из-за операционной ошибки",
+		},
+		{
+			Direction:     capModels.DirectionIncrease,
+			OperationType: capModels.OperationTypeTournamentPrize,
+			ReasonType:    capModels.ReasonMalfunction,
+			Description:   "Приз турнира из-за технического сбоя",
+		},
+		{
+			Direction:     capModels.DirectionIncrease,
+			OperationType: capModels.OperationTypeJackpot,
+			ReasonType:    capModels.ReasonBalanceCorrection,
+			Description:   "Джекпот для корректировки баланса",
+		},
+		{
+			Direction:     capModels.DirectionDecrease,
+			OperationType: capModels.OperationTypeCorrection,
+			ReasonType:    capModels.ReasonBalanceCorrection,
+			Description:   "Уменьшение для корректировки баланса",
+		},
+		{
+			Direction:     capModels.DirectionDecrease,
+			OperationType: capModels.OperationTypeWithdrawal,
+			ReasonType:    capModels.ReasonOperationalMistake,
+			Description:   "Вывод из-за операционной ошибки",
+		},
+		{
+			Direction:     capModels.DirectionDecrease,
+			OperationType: capModels.OperationTypeGift,
+			ReasonType:    capModels.ReasonMalfunction,
+			Description:   "Отмена подарка из-за технического сбоя",
+		},
+		{
+			Direction:     capModels.DirectionDecrease,
+			OperationType: capModels.OperationTypeReferralCommission,
+			ReasonType:    capModels.ReasonOperationalMistake,
+			Description:   "Отмена реферальной комиссии из-за ошибки",
+		},
+		{
+			Direction:     capModels.DirectionDecrease,
+			OperationType: capModels.OperationTypeTournamentPrize,
+			ReasonType:    capModels.ReasonBalanceCorrection,
+			Description:   "Корректировка выигрыша в турнире",
+		},
+		{
+			Direction:     capModels.DirectionDecrease,
+			OperationType: capModels.OperationTypeJackpot,
+			ReasonType:    capModels.ReasonMalfunction,
+			Description:   "Отмена джекпота из-за технического сбоя",
+		},
 	}
 }
 
@@ -185,10 +184,6 @@ func (s *ParametrizedBalanceAdjustmentSuite) TableTestBalanceAdjustment(t provid
 	})
 
 	t.WithNewStep("CAP API: Выполнение корректировки баланса", func(sCtx provider.StepCtx) {
-
-		log.Println("----------------------------------------------------------------------------")
-		log.Println(testData.authToken)
-		log.Println("----------------------------------------------------------------------------")
 		testData.adjustmentRequest = &clientTypes.Request[capModels.CreateBalanceAdjustmentRequestBody]{
 			Headers: map[string]string{
 				"Authorization":   fmt.Sprintf("Bearer %s", s.capClient.GetToken(sCtx)),
@@ -224,7 +219,7 @@ func (s *ParametrizedBalanceAdjustmentSuite) TableTestBalanceAdjustment(t provid
 
 		testData.balanceAdjustedEvent = nats.FindMessageInStream(
 			sCtx, s.natsClient, subject, func(payload nats.BalanceAdjustedPayload, msgType string) bool {
-				return msgType == string(nats.BalanceAdjusted)
+				return msgType == string(nats.BalanceAdjustedType)
 			})
 
 		sCtx.Require().NotNil(testData.balanceAdjustedEvent, "NATS: Событие balance_adjusted получено")

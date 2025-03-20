@@ -109,7 +109,7 @@ func (s *BalanceAdjustmentSuite) TestBalanceAdjustment(t provider.T) {
 		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
 
 		testData.walletCreatedEvent = nats.FindMessageInStream(sCtx, s.natsClient, subject, func(payload nats.WalletCreatedPayload, msgType string) bool {
-			return msgType == string(nats.WalletCreated) &&
+			return msgType == string(nats.WalletCreatedType) &&
 				payload.WalletType == nats.TypeReal &&
 				payload.WalletStatus == nats.StatusEnabled &&
 				payload.IsBasic
@@ -150,7 +150,7 @@ func (s *BalanceAdjustmentSuite) TestBalanceAdjustment(t provider.T) {
 		testData.balanceAdjustedEvent = nats.FindMessageInStream(
 			sCtx, s.natsClient, subject,
 			func(payload nats.BalanceAdjustedPayload, msgType string) bool {
-				return msgType == string(nats.BalanceAdjusted)
+				return msgType == string(nats.BalanceAdjustedType)
 			})
 
 		sCtx.Assert().NotNil(testData.balanceAdjustedEvent, "Событие balance_adjusted получено")

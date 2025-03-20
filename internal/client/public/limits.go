@@ -1,6 +1,7 @@
 package public
 
 import (
+	"fmt"
 	"net/http"
 
 	httpClient "CB_auto/internal/client"
@@ -56,4 +57,16 @@ func (c *publicClient) SetTurnoverLimit(sCtx provider.StepCtx, req *types.Reques
 	req.Method = http.MethodPost
 	req.Path = "/_front_api/api/v1/player/recalculated-limits/turnover-of-funds"
 	return httpClient.DoRequest[models.SetTurnoverLimitRequestBody, struct{}](sCtx, c.client, req)
+}
+
+func (c *publicClient) UpdateSingleBetLimit(sCtx provider.StepCtx, req *types.Request[models.UpdateSingleBetLimitRequestBody]) *types.Response[struct{}] {
+	req.Method = http.MethodPatch
+	req.Path = fmt.Sprintf("/_front_api/api/v1/player/single-limits/%s", req.PathParams["limitID"])
+	return httpClient.DoRequest[models.UpdateSingleBetLimitRequestBody, struct{}](sCtx, c.client, req)
+}
+
+func (c *publicClient) UpdateRecalculatedLimit(sCtx provider.StepCtx, req *types.Request[models.UpdateRecalculatedLimitRequestBody]) *types.Response[struct{}] {
+	req.Method = http.MethodPatch
+	req.Path = fmt.Sprintf("/_front_api/api/v1/player/recalculated-limits/%s", req.PathParams["limitID"])
+	return httpClient.DoRequest[models.UpdateRecalculatedLimitRequestBody, struct{}](sCtx, c.client, req)
 }

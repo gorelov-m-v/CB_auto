@@ -326,16 +326,16 @@ func CreateVerifiedPlayer(
 			sCtx.Require().Equal(http.StatusCreated, resp.StatusCode, "Депозит успешно создан")
 		}
 	})
-
+	// Шаг 18: Получение агрегата кошелька из Redis
 	if depositAmount > 0 {
-		// Шаг 18: Получение события депозита из NATS
+		// Получение события депозита из NATS
 		sCtx.WithNewStep("Получение события депозита из NATS", func(sCtx provider.StepCtx) {
 			subject := fmt.Sprintf("%s.wallet.*.%s.*", config.Nats.StreamPrefix,
 				registrationData.registrationMessage.Player.ExternalID)
 
 			registrationData.depositEvent = nats.FindMessageInStream(
 				sCtx, natsClient, subject, func(payload nats.DepositedMoneyPayload, msgType string) bool {
-					return msgType == string(nats.DepositedMoney) &&
+					return msgType == string(nats.DepositedMoneyType) &&
 						payload.Amount == fmt.Sprintf("%.0f", depositAmount) &&
 						payload.CurrencyCode == config.Node.DefaultCurrency
 				})
@@ -343,7 +343,7 @@ func CreateVerifiedPlayer(
 			sCtx.Require().NotEmpty(registrationData.depositEvent, "Событие депозита получено из NATS")
 		})
 
-		// Шаг 19: Получение обновленных данных кошелька из Redis
+		// Получение обновленных данных кошелька из Redis
 		sCtx.WithNewStep("Получение обновленных данных кошелька из Redis", func(sCtx provider.StepCtx) {
 			var walletUUID string
 			for _, wallet := range registrationData.wallets {
@@ -364,10 +364,8 @@ func CreateVerifiedPlayer(
 				WalletData: updatedWalletData,
 			}
 		})
-		// Возвращаем информацию для авторизации и данные кошелька
 		return playerData
 	} else {
-		// Если сумма депозита равна 0, то получаем обновленные данные кошелька из Redis
 		sCtx.WithNewStep("Получение обновленных данных кошелька из Redis", func(sCtx provider.StepCtx) {
 			var walletUUID string
 			for _, wallet := range registrationData.wallets {
@@ -388,7 +386,6 @@ func CreateVerifiedPlayer(
 				WalletData: updatedWalletData,
 			}
 		})
-		// Возвращаем информацию для авторизации и данные кошелька
 		return playerData
 	}
 }
