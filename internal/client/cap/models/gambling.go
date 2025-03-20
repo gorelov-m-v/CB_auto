@@ -142,3 +142,11 @@ type UpdateCapCollectionStatusRequestBody struct {
 type UpdateCapCollectionStatusResponseBody struct {
 	Status StatusType `json:"status"`
 }
+
+type UpdateCapCategoryStatusRequestBody struct {
+	Status StatusType `json:"status"`
+}
+
+type UpdateCapCategoryStatusResponseBody struct {
+	Status StatusType `json:"status"`
+}
