@@ -78,7 +78,7 @@ func (s *CreateCategorySuite) TestCreateCategory(t provider.T) {
 				Sort:      1,
 				Alias:     categoryAlias,
 				Names:     names,
-				Type:      models.TypeVertical,
+				Type:      models.TypeHorizontal,
 				GroupID:   s.config.Node.GroupID,
 				ProjectID: s.config.Node.ProjectID,
 			},
@@ -108,7 +108,7 @@ func (s *CreateCategorySuite) TestCreateCategory(t provider.T) {
 		sCtx.Assert().Equal(http.StatusOK, resp.StatusCode, "Категория успешно получена")
 		sCtx.Assert().NotEmpty(resp.Body.Names["en"], "Английское название категории не пустое")
 		sCtx.Assert().NotEmpty(resp.Body.Names["ru"], "Русское название категории не пустое")
-		sCtx.Assert().Equal(models.TypeVertical, resp.Body.Type, "Тип категории корректен")
+		sCtx.Assert().Equal(models.TypeHorizontal, resp.Body.Type, "Тип категории корректен")
 		sCtx.Assert().Equal(s.config.Node.ProjectID, resp.Body.ProjectId, "ProjectID категории корректен")
 		sCtx.Assert().Equal(1, resp.Body.Sort, "Sort категории корректен")
 		sCtx.Assert().Equal(models.StatusDisabled, resp.Body.Status, "Status категории корректен")
@@ -122,7 +122,7 @@ func (s *CreateCategorySuite) TestCreateCategory(t provider.T) {
 
 		sCtx.Require().NotNil(category, "Категория найдена в БД")
 		{
-			sCtx.Assert().Equal(string(models.TypeVertical), category.Type, "Тип категории в БД совпадает")
+			sCtx.Assert().Equal(string(models.TypeHorizontal), category.Type, "Тип категории в БД совпадает")
 			sCtx.Assert().Equal(uint32(1), uint32(category.Sort), "Sort в БД совпадает")
 			sCtx.Assert().Equal(int16(2), int16(category.StatusID), "Status в БД совпадает")
 			sCtx.Assert().False(category.IsDefault, "IsDefault в БД совпадает")
