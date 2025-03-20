@@ -134,3 +134,11 @@ type UpdateCapCategoryResponseBody struct {
 	ID    string `json:"id"`
 	Alias string `json:"alias"`
 }
+
+type UpdateCapCollectionStatusRequestBody struct {
+	Status StatusType `json:"status"`
+}
+
+type UpdateCapCollectionStatusResponseBody struct {
+	Status StatusType `json:"status"`
+}

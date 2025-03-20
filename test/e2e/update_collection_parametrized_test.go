@@ -24,6 +24,7 @@ type UpdateCollectionParam struct {
 	Alias       string
 	Names       map[string]string
 	Type        models.CategoryType
+	Status      models.StatusType
 	Description string
 }
 
@@ -97,6 +98,14 @@ func (s *ParametrizedUpdateCollectionSuite) BeforeAll(t provider.T) {
 			Names:       map[string]string{"en": utils.Get(utils.COLLECTION_TITLE, 2), "ru": utils.Get(utils.COLLECTION_TITLE, 2)},
 			Description: "Минимальное значение Name (2), Alias не используется",
 		},
+		{
+			Status:      models.StatusEnabled,
+			Description: "Включение коллекции (status=1)",
+		},
+		{
+			Status:      models.StatusDisabled,
+			Description: "Выключение коллекции (status=2)",
+		},
 	}
 }
 
@@ -159,55 +168,85 @@ func (s *ParametrizedUpdateCollectionSuite) TestAll(t provider.T) {
 				sCtx.Require().True(isCreated, "Коллекция доступна для обновления")
 			})
 
-			t.WithNewStep(fmt.Sprintf("Обновление коллекции: %s", param.Description), func(sCtx provider.StepCtx) {
-				body := &models.UpdateCapCategoryRequestBody{}
-				if param.Alias != "" {
-					body.Alias = param.Alias
-				} else {
-					body.Alias = testData.createCollectionRequest.Body.Alias
-				}
-				if param.Names != nil {
-					body.Names = param.Names
-				} else {
-					body.Names = testData.createCollectionRequest.Body.Names
-				}
-				body.Type = testData.createCollectionRequest.Body.Type
-				if param.Sort > 0 {
-					body.Sort = param.Sort
-				} else {
-					body.Sort = testData.createCollectionRequest.Body.Sort
-				}
-
-				updateReq := &clientTypes.Request[models.UpdateCapCategoryRequestBody]{
-					Headers: map[string]string{
-						"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
-						"Platform-NodeId": s.config.Node.ProjectID,
-					},
-					PathParams: map[string]string{
-						"id": testData.createCollectionResponse.Body.ID,
-					},
-					Body: body,
-				}
-
-				var updateResp *clientTypes.Response[models.UpdateCapCategoryResponseBody]
-				var lastErr error
-				for i := 0; i < 3; i++ {
-					updateResp = s.capService.UpdateCapCategory(sCtx, updateReq)
-					if updateResp.StatusCode == http.StatusOK {
-						break
+			if param.Status > 0 {
+				t.WithNewStep(fmt.Sprintf("Изменение статуса коллекции: %s", param.Description), func(sCtx provider.StepCtx) {
+					statusReq := &clientTypes.Request[models.UpdateCapCollectionStatusRequestBody]{
+						Headers: map[string]string{
+							"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
+							"Platform-NodeId": s.config.Node.ProjectID,
+						},
+						PathParams: map[string]string{
+							"id": testData.createCollectionResponse.Body.ID,
+						},
+						Body: &models.UpdateCapCollectionStatusRequestBody{
+							Status: param.Status,
+						},
 					}
-					lastErr = fmt.Errorf("попытка %d: статус %d", i+1, updateResp.StatusCode)
-					sCtx.Logf("Ошибка обновления коллекции: %v", lastErr)
-					time.Sleep(time.Second)
-				}
 
-				if updateResp.StatusCode != http.StatusOK {
-					sCtx.Logf("Ошибка обновления коллекции: %+v", updateResp)
-					sCtx.Logf("Параметры запроса: %+v", param)
-					sCtx.Require().NoError(lastErr, "Коллекция должна быть успешно обновлена")
-				}
-				sCtx.Assert().Equal(http.StatusOK, updateResp.StatusCode, "Коллекция успешно обновлена")
-			})
+					statusResp := s.capService.UpdateCapCollectionStatus(sCtx, statusReq)
+					sCtx.Logf("Ответ от API при обновлении статуса: %+v", statusResp)
+					sCtx.Assert().Equal(http.StatusNoContent, statusResp.StatusCode, "Статус коллекции успешно обновлен")
+
+					// Проверка статуса в БД
+					collectionFromDB, err := s.collectionRepo.GetCategory(sCtx, map[string]interface{}{
+						"uuid": testData.createCollectionResponse.Body.ID,
+					})
+					sCtx.Logf("Данные коллекции из БД: %+v", collectionFromDB)
+					sCtx.Require().NoError(err, "Ошибка при получении коллекции из БД")
+					sCtx.Require().NotNil(collectionFromDB, "Коллекция найдена в БД")
+					sCtx.Assert().Equal(int16(param.Status), collectionFromDB.StatusID, "Статус коллекции в БД соответствует ожидаемому")
+				})
+			} else {
+				t.WithNewStep(fmt.Sprintf("Обновление коллекции: %s", param.Description), func(sCtx provider.StepCtx) {
+					body := &models.UpdateCapCategoryRequestBody{}
+					if param.Alias != "" {
+						body.Alias = param.Alias
+					} else {
+						body.Alias = testData.createCollectionRequest.Body.Alias
+					}
+					if param.Names != nil {
+						body.Names = param.Names
+					} else {
+						body.Names = testData.createCollectionRequest.Body.Names
+					}
+					body.Type = testData.createCollectionRequest.Body.Type
+					if param.Sort > 0 {
+						body.Sort = param.Sort
+					} else {
+						body.Sort = testData.createCollectionRequest.Body.Sort
+					}
+
+					updateReq := &clientTypes.Request[models.UpdateCapCategoryRequestBody]{
+						Headers: map[string]string{
+							"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
+							"Platform-NodeId": s.config.Node.ProjectID,
+						},
+						PathParams: map[string]string{
+							"id": testData.createCollectionResponse.Body.ID,
+						},
+						Body: body,
+					}
+
+					var updateResp *clientTypes.Response[models.UpdateCapCategoryResponseBody]
+					var lastErr error
+					for i := 0; i < 3; i++ {
+						updateResp = s.capService.UpdateCapCategory(sCtx, updateReq)
+						if updateResp.StatusCode == http.StatusOK {
+							break
+						}
+						lastErr = fmt.Errorf("попытка %d: статус %d", i+1, updateResp.StatusCode)
+						sCtx.Logf("Ошибка обновления коллекции: %v", lastErr)
+						time.Sleep(time.Second)
+					}
+
+					if updateResp.StatusCode != http.StatusOK {
+						sCtx.Logf("Ошибка обновления коллекции: %+v", updateResp)
+						sCtx.Logf("Параметры запроса: %+v", param)
+						sCtx.Require().NoError(lastErr, "Коллекция должна быть успешно обновлена")
+					}
+					sCtx.Assert().Equal(http.StatusOK, updateResp.StatusCode, "Коллекция успешно обновлена")
+				})
+			}
 
 			t.WithNewStep(fmt.Sprintf("Проверка обновления коллекции в БД: %s", param.Description), func(sCtx provider.StepCtx) {
 				collectionFromDB, err := s.collectionRepo.GetCategory(sCtx, map[string]interface{}{
@@ -228,6 +267,9 @@ func (s *ParametrizedUpdateCollectionSuite) TestAll(t provider.T) {
 				}
 				if param.Type != "" {
 					sCtx.Assert().Equal(string(param.Type), collectionFromDB.Type, "Тип коллекции обновлен")
+				}
+				if param.Status > 0 {
+					sCtx.Assert().Equal(int16(param.Status), collectionFromDB.StatusID, "Статус коллекции обновлен")
 				}
 			})
 
