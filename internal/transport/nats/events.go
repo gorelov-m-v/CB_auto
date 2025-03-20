@@ -6,18 +6,21 @@ import (
 
 type EventType string
 type TransactionStatus int
+type LimitEventType string
 
 const (
 	// Event Types
-	WalletCreated      EventType = "wallet_created"
-	WalletDisabled     EventType = "wallet_disabled"
-	BlockersSetted     EventType = "setting_prevent_gamble_setted"
-	BalanceAdjusted    EventType = "balance_adjusted"
-	BlockAmountStarted EventType = "block_amount_started"
-	BlockAmountRevoked EventType = "block_amount_revoked"
-	DepositedMoney     EventType = "deposited_money"
+	WalletCreatedType      EventType = "wallet_created"
+	WalletDisabledType     EventType = "wallet_disabled"
+	BlockersSettedType     EventType = "setting_prevent_gamble_setted"
+	BalanceAdjustedType    EventType = "balance_adjusted"
+	BlockAmountStartedType EventType = "block_amount_started"
+	BlockAmountRevokedType EventType = "block_amount_revoked"
+	DepositedMoneyType     EventType = "deposited_money"
+	LimitChangedV2Type     EventType = "limit_changed_v2"
 
 	TransactionStatusSuccess TransactionStatus = 4
+	LimitEventAmountUpdated  LimitEventType    = "amount_updated"
 )
 
 const (
@@ -103,7 +106,7 @@ type LimitChangedV2 struct {
 const (
 	// Event Types
 	EventTypeCreated = "created"
-	EventTypeUpdated = "updated"
+	EventTypeUpdated = "amount_updated"
 	EventTypeDeleted = "deleted"
 
 	// Limit Types

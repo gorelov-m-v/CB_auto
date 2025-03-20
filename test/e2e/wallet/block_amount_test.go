@@ -108,7 +108,7 @@ func (s *BlockAmountSuite) TestBlockAmount(t provider.T) {
 		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
 
 		testData.walletCreatedEvent = nats.FindMessageInStream(sCtx, s.natsClient, subject, func(payload nats.WalletCreatedPayload, msgType string) bool {
-			return msgType == string(nats.WalletCreated) &&
+			return msgType == string(nats.WalletCreatedType) &&
 				payload.WalletType == nats.TypeReal &&
 				payload.WalletStatus == nats.StatusEnabled &&
 				payload.IsBasic
@@ -173,7 +173,7 @@ func (s *BlockAmountSuite) TestBlockAmount(t provider.T) {
 			testData.walletCreatedEvent.Payload.WalletUUID)
 
 		blockEvent := nats.FindMessageInStream[nats.BlockAmountStartedPayload](sCtx, s.natsClient, subject, func(payload nats.BlockAmountStartedPayload, msgType string) bool {
-			return msgType == string(nats.BlockAmountStarted) &&
+			return msgType == string(nats.BlockAmountStartedType) &&
 				payload.Reason == testData.blockRequest.Body.Reason
 		})
 

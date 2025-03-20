@@ -35,6 +35,8 @@ type PublicAPI interface {
 	GetRestriction(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.SetRestrictionResponseBody]
 	GetCasinoLossLimits(sCtx provider.StepCtx, req *types.Request[any]) *types.Response[models.GetCasinoLossLimitsResponseBody]
 	SetTurnoverLimit(sCtx provider.StepCtx, req *types.Request[models.SetTurnoverLimitRequestBody]) *types.Response[struct{}]
+	UpdateSingleBetLimit(sCtx provider.StepCtx, req *types.Request[models.UpdateSingleBetLimitRequestBody]) *types.Response[struct{}]
+	UpdateRecalculatedLimit(sCtx provider.StepCtx, req *types.Request[models.UpdateRecalculatedLimitRequestBody]) *types.Response[struct{}]
 
 	// Payment методы
 	CreateDeposit(sCtx provider.StepCtx, req *types.Request[models.DepositRequestBody]) *types.Response[struct{}]

@@ -95,3 +95,11 @@ type SetTurnoverLimitRequestBody struct {
 	Type      LimitPeriodType `json:"type"`
 	StartedAt int             `json:"startedAt"`
 }
+
+type UpdateSingleBetLimitRequestBody struct {
+	Amount string `json:"amount"`
+}
+
+type UpdateRecalculatedLimitRequestBody struct {
+	Amount string `json:"amount"`
+}

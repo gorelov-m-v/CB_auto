@@ -109,7 +109,7 @@ func (s *DeleteBlockAmountSuite) TestBlockAmount(t provider.T) {
 		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.registrationMessage.Player.ExternalID)
 
 		testData.walletCreatedEvent = nats.FindMessageInStream(sCtx, s.natsClient, subject, func(payload nats.WalletCreatedPayload, msgType string) bool {
-			return msgType == string(nats.WalletCreated) &&
+			return msgType == string(nats.WalletCreatedType) &&
 				payload.WalletType == nats.TypeReal &&
 				payload.WalletStatus == nats.StatusEnabled &&
 				payload.IsBasic
@@ -196,7 +196,7 @@ func (s *DeleteBlockAmountSuite) TestBlockAmount(t provider.T) {
 			testData.walletCreatedEvent.Payload.WalletUUID)
 
 		revokeEvent := nats.FindMessageInStream[nats.BlockAmountRevokedPayload](sCtx, s.natsClient, subject, func(payload nats.BlockAmountRevokedPayload, msgType string) bool {
-			return msgType == string(nats.BlockAmountRevoked) &&
+			return msgType == string(nats.BlockAmountRevokedType) &&
 				payload.UUID == testData.blockResponse.Body.TransactionID
 		})
 

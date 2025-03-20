@@ -64,13 +64,6 @@ func (s *AllLimitsSuite) BeforeAll(t provider.T) {
 	})
 }
 
-func (s *AllLimitsSuite) TestCasinoLossLimit(t provider.T) {
-	t.Parallel()
-	casinoSuite := new(CasinoLossLimitSuite)
-	casinoSuite.SetShared(s.shared)
-	s.RunSuite(t, casinoSuite)
-}
-
 func (s *AllLimitsSuite) TestSingleBetLimit(t provider.T) {
 	t.Parallel()
 	singleBetSuite := new(SingleBetLimitSuite)

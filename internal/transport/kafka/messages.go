@@ -17,9 +17,10 @@ type PaymentMethod string
 
 const (
 	// Event Types
-	LimitEventCreated LimitEventType = "created"
-	LimitEventUpdated LimitEventType = "updated"
-	LimitEventDeleted LimitEventType = "deleted"
+	LimitEventCreated       LimitEventType = "created"
+	LimitEventAmountUpdated LimitEventType = "amount_updated"
+	LimitEventDeleted       LimitEventType = "deleted"
+	LimitEventUpdated       LimitEventType = "updated"
 
 	// Limit Types
 	LimitTypeSingleBet     LimitType = "single-bet"

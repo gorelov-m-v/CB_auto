@@ -147,7 +147,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 	t.WithNewStep("Проверка ивента NATS о зачислении депозита", func(sCtx provider.StepCtx) {
 		subject := fmt.Sprintf("%s.wallet.*.%s.*", s.config.Nats.StreamPrefix, testData.walletAggregate.PlayerUUID)
 		testData.depositEvent = nats.FindMessageInStream(sCtx, s.natsClient, subject, func(msg nats.DepositedMoneyPayload, msgType string) bool {
-			return string(nats.DepositedMoney) == msgType &&
+			return string(nats.DepositedMoneyType) == msgType &&
 				msg.Amount == testData.depositRequest.Body.Amount &&
 				msg.CurrencyCode == testData.depositRequest.Body.Currency
 		})
