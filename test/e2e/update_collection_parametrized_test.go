@@ -74,8 +74,28 @@ func (s *ParametrizedUpdateCollectionSuite) BeforeAll(t provider.T) {
 			Description: "Обновление коллекции (граничные значения: Alias=99, Name=24)",
 		},
 		{
-			Alias:       utils.Get(utils.ALIAS, 3),
-			Description: "Обновление только Alias коллекции (минимальное значение: 3 символа)",
+			Alias:       utils.Get(utils.ALIAS, 100),
+			Description: "Максимальное значение Alias (100), Names не используются",
+		},
+		{
+			Alias:       utils.Get(utils.ALIAS, 99),
+			Description: "Граничное значение Alias (99), Names не используются",
+		},
+		{
+			Alias:       utils.Get(utils.ALIAS, 2),
+			Description: "Минимальное значение Alias (2), Names не используются",
+		},
+		{
+			Names:       map[string]string{"en": utils.Get(utils.COLLECTION_TITLE, 25), "ru": utils.Get(utils.COLLECTION_TITLE, 25)},
+			Description: "Максимальное значение Name (25), Alias не используется",
+		},
+		{
+			Names:       map[string]string{"en": utils.Get(utils.COLLECTION_TITLE, 24), "ru": utils.Get(utils.COLLECTION_TITLE, 24)},
+			Description: "Граничное значение Name (24), Alias не используется",
+		},
+		{
+			Names:       map[string]string{"en": utils.Get(utils.COLLECTION_TITLE, 2), "ru": utils.Get(utils.COLLECTION_TITLE, 2)},
+			Description: "Минимальное значение Name (2), Alias не используется",
 		},
 	}
 }
