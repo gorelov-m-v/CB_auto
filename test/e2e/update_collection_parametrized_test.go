@@ -1,10 +1,6 @@
 package test
 
 import (
-	"fmt"
-	"net/http"
-	"testing"
-
 	capAPI "CB_auto/internal/client/cap"
 	"CB_auto/internal/client/cap/models"
 	"CB_auto/internal/client/factory"
@@ -13,6 +9,9 @@ import (
 	"CB_auto/internal/repository"
 	"CB_auto/internal/repository/category"
 	"CB_auto/pkg/utils"
+	"fmt"
+	"net/http"
+	"testing"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
@@ -176,7 +175,6 @@ func (s *ParametrizedUpdateCollectionSuite) TestAll(t provider.T) {
 					sCtx.Logf("Ответ от API при обновлении статуса: %+v", statusResp)
 					sCtx.Assert().Equal(http.StatusNoContent, statusResp.StatusCode, "Статус коллекции успешно обновлен")
 
-					// Проверка статуса в БД
 					collectionFromDB, err := s.collectionRepo.GetCategory(sCtx, map[string]interface{}{
 						"uuid": testData.createCollectionResponse.Body.ID,
 					})

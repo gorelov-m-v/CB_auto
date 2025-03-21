@@ -1,11 +1,6 @@
 package test
 
 import (
-	"fmt"
-	"net/http"
-	"testing"
-	"time"
-
 	capAPI "CB_auto/internal/client/cap"
 	"CB_auto/internal/client/cap/models"
 	"CB_auto/internal/client/factory"
@@ -14,6 +9,9 @@ import (
 	"CB_auto/internal/repository"
 	"CB_auto/internal/repository/category"
 	"CB_auto/pkg/utils"
+	"fmt"
+	"net/http"
+	"testing"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
@@ -146,26 +144,18 @@ func (s *ParametrizedCreateCollectionSuite) TestCreateCollection(t provider.T) {
 			})
 
 			t.WithNewStep("Ожидание доступности коллекции", func(sCtx provider.StepCtx) {
-				isCreated := false
-				for i := 0; i < 5; i++ {
-					statusReq := &clientTypes.Request[struct{}]{
-						Headers: map[string]string{
-							"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
-							"Platform-NodeId": s.config.Node.ProjectID,
-						},
-						PathParams: map[string]string{
-							"id": testData.createCollectionResponse.Body.ID,
-						},
-					}
-					statusResp := s.capService.GetCapCategory(sCtx, statusReq)
-					if statusResp.StatusCode == http.StatusOK {
-						isCreated = true
-						break
-					}
-					sCtx.Logf("Попытка %d: коллекция еще не доступна, статус: %d", i+1, statusResp.StatusCode)
-					time.Sleep(time.Second)
+				statusReq := &clientTypes.Request[struct{}]{
+					Headers: map[string]string{
+						"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
+						"Platform-NodeId": s.config.Node.ProjectID,
+					},
+					PathParams: map[string]string{
+						"id": testData.createCollectionResponse.Body.ID,
+					},
 				}
-				sCtx.Require().True(isCreated, "Коллекция доступна для использования")
+				statusResp := s.capService.GetCapCategory(sCtx, statusReq)
+				sCtx.Logf("Попытка %d: коллекция еще не доступна, статус: %d", statusResp.StatusCode)
+				sCtx.Require().True(statusResp.StatusCode == http.StatusOK, "Коллекция доступна для использования")
 			})
 
 			t.WithNewStep("Проверка коллекции в БД", func(sCtx provider.StepCtx) {
