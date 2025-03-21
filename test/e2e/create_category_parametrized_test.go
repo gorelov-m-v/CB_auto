@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
-	"time"
+
+	// "time"
 
 	capAPI "CB_auto/internal/client/cap"
 	"CB_auto/internal/client/cap/models"
@@ -146,26 +147,17 @@ func (s *ParametrizedCreateCategorySuite) TestCreateCategory(t provider.T) {
 			})
 
 			t.WithNewStep("Ожидание доступности коллекции", func(sCtx provider.StepCtx) {
-				isCreated := false
-				for i := 0; i < 5; i++ {
-					statusReq := &clientTypes.Request[struct{}]{
-						Headers: map[string]string{
-							"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
-							"Platform-NodeId": s.config.Node.ProjectID,
-						},
-						PathParams: map[string]string{
-							"id": testData.createCategoryResponse.Body.ID,
-						},
-					}
-					statusResp := s.capService.GetCapCategory(sCtx, statusReq)
-					if statusResp.StatusCode == http.StatusOK {
-						isCreated = true
-						break
-					}
-					sCtx.Logf("Попытка %d: коллекция еще не доступна, статус: %d", i+1, statusResp.StatusCode)
-					time.Sleep(time.Second)
+				statusReq := &clientTypes.Request[struct{}]{
+					Headers: map[string]string{
+						"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
+						"Platform-NodeId": s.config.Node.ProjectID,
+					},
+					PathParams: map[string]string{
+						"id": testData.createCategoryResponse.Body.ID,
+					},
 				}
-				sCtx.Require().True(isCreated, "Коллекция доступна для использования")
+				statusResp := s.capService.GetCapCategory(sCtx, statusReq)
+				sCtx.Require().True(statusResp.StatusCode == http.StatusOK, "Коллекция доступна для использования")
 			})
 
 			t.WithNewStep("Проверка коллекции в БД", func(sCtx provider.StepCtx) {

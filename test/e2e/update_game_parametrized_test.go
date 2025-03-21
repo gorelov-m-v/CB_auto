@@ -16,7 +16,7 @@ import (
 
 	"CB_auto/internal/transport/kafka"
 
-	_ "github.com/go-sql-driver/mysql" // Импорт драйвера MySQL
+	_ "github.com/go-sql-driver/mysql"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
@@ -57,7 +57,6 @@ func (s *ParametrizedUpdateGameSuite) BeforeAll(t provider.T) {
 		s.kafka = kafka.GetInstance(t, s.config)
 	})
 
-	// Все параметры, включая новые кейсы
 	s.ParamUpdateGame = []UpdateGameParam{
 		{
 			Alias:       utils.Get(utils.ALIAS, 2),

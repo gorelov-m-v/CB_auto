@@ -1,11 +1,6 @@
 package test
 
 import (
-	"fmt"
-	"net/http"
-	"testing"
-	"time"
-
 	capAPI "CB_auto/internal/client/cap"
 	"CB_auto/internal/client/cap/models"
 	"CB_auto/internal/client/factory"
@@ -14,6 +9,9 @@ import (
 	"CB_auto/internal/repository"
 	"CB_auto/internal/repository/category"
 	"CB_auto/pkg/utils"
+	"fmt"
+	"net/http"
+	"testing"
 
 	"github.com/ozontech/allure-go/pkg/framework/provider"
 	"github.com/ozontech/allure-go/pkg/framework/suite"
@@ -52,7 +50,6 @@ func (s *ParametrizedUpdateCollectionSuite) BeforeAll(t provider.T) {
 		s.collectionRepo = category.NewRepository(s.database.DB(), &s.config.MySQL)
 	})
 
-	// Параметры для тестов
 	s.ParamUpdateCollection = []UpdateCollectionParam{
 		{
 			Sort:  5,
@@ -146,26 +143,17 @@ func (s *ParametrizedUpdateCollectionSuite) TestAll(t provider.T) {
 			})
 
 			t.WithNewStep("Ожидание доступности коллекции", func(sCtx provider.StepCtx) {
-				isCreated := false
-				for i := 0; i < 5; i++ {
-					statusReq := &clientTypes.Request[struct{}]{
-						Headers: map[string]string{
-							"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
-							"Platform-NodeId": s.config.Node.ProjectID,
-						},
-						PathParams: map[string]string{
-							"id": testData.createCollectionResponse.Body.ID,
-						},
-					}
-					statusResp := s.capService.GetCapCategory(sCtx, statusReq)
-					if statusResp.StatusCode == http.StatusOK {
-						isCreated = true
-						break
-					}
-					sCtx.Logf("Попытка %d: коллекция еще не доступна, статус: %d", i+1, statusResp.StatusCode)
-					time.Sleep(time.Second)
+				statusReq := &clientTypes.Request[struct{}]{
+					Headers: map[string]string{
+						"Authorization":   fmt.Sprintf("Bearer %s", s.capService.GetToken(sCtx)),
+						"Platform-NodeId": s.config.Node.ProjectID,
+					},
+					PathParams: map[string]string{
+						"id": testData.createCollectionResponse.Body.ID,
+					},
 				}
-				sCtx.Require().True(isCreated, "Коллекция доступна для обновления")
+				statusResp := s.capService.GetCapCategory(sCtx, statusReq)
+				sCtx.Require().True(statusResp.StatusCode == http.StatusOK, "Коллекция доступна для обновления")
 			})
 
 			if param.Status > 0 {
@@ -187,7 +175,6 @@ func (s *ParametrizedUpdateCollectionSuite) TestAll(t provider.T) {
 					sCtx.Logf("Ответ от API при обновлении статуса: %+v", statusResp)
 					sCtx.Assert().Equal(http.StatusNoContent, statusResp.StatusCode, "Статус коллекции успешно обновлен")
 
-					// Проверка статуса в БД
 					collectionFromDB, err := s.collectionRepo.GetCategory(sCtx, map[string]interface{}{
 						"uuid": testData.createCollectionResponse.Body.ID,
 					})
@@ -236,7 +223,7 @@ func (s *ParametrizedUpdateCollectionSuite) TestAll(t provider.T) {
 						}
 						lastErr = fmt.Errorf("попытка %d: статус %d", i+1, updateResp.StatusCode)
 						sCtx.Logf("Ошибка обновления коллекции: %v", lastErr)
-						time.Sleep(time.Second)
+
 					}
 
 					if updateResp.StatusCode != http.StatusOK {
@@ -293,7 +280,6 @@ func (s *ParametrizedUpdateCollectionSuite) TestAll(t provider.T) {
 					}
 					lastErr = fmt.Errorf("попытка %d: статус %d", i+1, deleteResp.StatusCode)
 					sCtx.Logf("Ошибка удаления коллекции: %v", lastErr)
-					time.Sleep(time.Second)
 				}
 
 				if deleteResp.StatusCode != http.StatusNoContent {
@@ -308,7 +294,6 @@ func (s *ParametrizedUpdateCollectionSuite) TestAll(t provider.T) {
 					collection, err := s.collectionRepo.GetCategory(sCtx, map[string]interface{}{"uuid": testData.createCollectionResponse.Body.ID})
 					if err != nil {
 						sCtx.Logf("Ошибка при проверке удаления коллекции: %v", err)
-						time.Sleep(time.Second)
 						continue
 					}
 					if collection == nil {
@@ -316,7 +301,6 @@ func (s *ParametrizedUpdateCollectionSuite) TestAll(t provider.T) {
 						break
 					}
 					sCtx.Logf("Попытка %d: коллекция все еще существует", i+1)
-					time.Sleep(time.Second)
 				}
 				sCtx.Require().True(isDeleted, "Коллекция удалена из БД")
 			})
