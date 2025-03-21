@@ -75,3 +75,15 @@ func (c *capClient) UpdateCapCategoryError(sCtx provider.StepCtx, req *types.Req
 	req.Path = "/_cap/api/v1/categories/{id}"
 	return httpClient.DoRequest[models.UpdateCapCategoryRequestBody, models.ErrorResponse](sCtx, c.client, req)
 }
+
+func (c *capClient) UpdateCapCollectionStatus(sCtx provider.StepCtx, req *types.Request[models.UpdateCapCollectionStatusRequestBody]) *types.Response[models.UpdateCapCollectionStatusResponseBody] {
+	req.Method = http.MethodPatch
+	req.Path = "/_cap/api/v1/categories/{id}/status"
+	return httpClient.DoRequest[models.UpdateCapCollectionStatusRequestBody, models.UpdateCapCollectionStatusResponseBody](sCtx, c.client, req)
+}
+
+func (c *capClient) UpdateCapCategoryStatus(sCtx provider.StepCtx, req *types.Request[models.UpdateCapCategoryStatusRequestBody]) *types.Response[models.UpdateCapCategoryStatusResponseBody] {
+	req.Method = http.MethodPatch
+	req.Path = "/_cap/api/v1/categories/{id}/status"
+	return httpClient.DoRequest[models.UpdateCapCategoryStatusRequestBody, models.UpdateCapCategoryStatusResponseBody](sCtx, c.client, req)
+}

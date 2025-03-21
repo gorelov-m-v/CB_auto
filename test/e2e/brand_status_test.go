@@ -53,7 +53,7 @@ func (s *BrandStatusSuite) TestBrandStatusManagement(t provider.T) {
 				Names: map[string]string{
 					"en": brandName,
 				},
-				Description: "Test brand for status management",
+				Description: "Test brand for status management 1",
 			},
 		}
 

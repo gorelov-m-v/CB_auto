@@ -69,7 +69,7 @@ func (s *CategoryPositiveSuite) TestCategoryFields(t provider.T) {
 						Sort:      1,
 						Alias:     tc.alias,
 						Names:     map[string]string{"en": tc.title, "ru": tc.title},
-						Type:      models.TypeVertical,
+						Type:      models.TypeHorizontal,
 						GroupID:   s.config.Node.GroupID,
 						ProjectID: s.config.Node.ProjectID,
 					},

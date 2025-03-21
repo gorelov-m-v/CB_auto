@@ -77,7 +77,7 @@ func (s *DeleteCategorySuite) TestDeleteCategory(t provider.T) {
 				Sort:      1,
 				Alias:     categoryAlias,
 				Names:     names,
-				Type:      models.TypeVertical,
+				Type:      models.TypeHorizontal,
 				GroupID:   s.config.Node.GroupID,
 				ProjectID: s.config.Node.ProjectID,
 			},
