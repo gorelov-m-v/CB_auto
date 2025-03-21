@@ -21,6 +21,7 @@ const (
 
 	TransactionStatusSuccess TransactionStatus = 4
 	LimitEventAmountUpdated  LimitEventType    = "amount_updated"
+	LimitEventSpentResetted  LimitEventType    = "spent_resetted"
 )
 
 const (
@@ -105,9 +106,10 @@ type LimitChangedV2 struct {
 
 const (
 	// Event Types
-	EventTypeCreated = "created"
-	EventTypeUpdated = "amount_updated"
-	EventTypeDeleted = "deleted"
+	EventTypeCreated       = "created"
+	EventTypeUpdated       = "amount_updated"
+	EventTypeDeleted       = "deleted"
+	EventTypeSpentResetted = "spent_resetted"
 
 	// Limit Types
 	LimitTypeSingleBet     = "single-bet"

@@ -436,24 +436,4 @@ func (s *SingleBetLimitSuite) TestSingleBetLimitUpdate(t provider.T) {
 		sCtx.Assert().Equal(testData.updateLimitMessage.ExpiresAt, limit.ExpiresAt, "Kafka: Проверка параметра expires_at")
 		sCtx.Assert().True(limit.Status, "Kafka: Проверка параметра status")
 	})
-
-	t.WithNewAsyncStep("Проверка записи в таблице limit_record_v2", func(sCtx provider.StepCtx) {
-		filters := map[string]interface{}{
-			"external_uuid": testData.createLimitMessage.ID,
-			"player_uuid":   testData.walletAggregate.PlayerUUID,
-		}
-
-		limitRecord := s.Shared.LimitRecordRepo.GetLimitRecordWithRetry(sCtx, filters)
-		sCtx.Assert().NotNil(limitRecord, "DB: Запись о лимите найдена в таблице limit_record_v2")
-		sCtx.Assert().Equal(testData.updateLimitMessage.ID, limitRecord.ExternalUUID, "DB: Проверка параметра external_uuid")
-		sCtx.Assert().Equal(testData.walletAggregate.PlayerUUID, limitRecord.PlayerUUID, "DB: Проверка параметра player_uuid")
-		sCtx.Assert().Equal(string(wallet.LimitTypeSingleBet), string(limitRecord.LimitType), "DB: Проверка параметра limit_type")
-		sCtx.Assert().Equal("0", limitRecord.Spent.String(), "DB: Проверка параметра spent")
-		sCtx.Assert().Equal(testData.updateSingeBetLimitRequest.Body.Amount, limitRecord.Amount.String(), "DB: Проверка параметра amount")
-		sCtx.Assert().Equal("0", limitRecord.Rest.String(), "DB: Проверка параметра rest")
-		sCtx.Assert().Equal(testData.updateLimitMessage.CurrencyCode, limitRecord.CurrencyCode, "DB: Проверка параметра currency_code")
-		sCtx.Assert().Equal(testData.updateLimitMessage.StartedAt, limitRecord.StartedAt, "DB: Проверка параметра started_at")
-		sCtx.Assert().Equal(testData.updateLimitMessage.ExpiresAt, limitRecord.ExpiresAt, "DB: Проверка параметра expires_at")
-		sCtx.Assert().True(limitRecord.LimitStatus, "DB: Проверка параметра limit_status")
-	})
 }

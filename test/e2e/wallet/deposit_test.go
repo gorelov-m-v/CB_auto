@@ -26,14 +26,15 @@ import (
 
 type SingleBetLimitSuite struct {
 	suite.Suite
-	config            *config.Config
-	publicClient      publicAPI.PublicAPI
-	capClient         capAPI.CapAPI
-	kafka             *kafka.Kafka
-	natsClient        *nats.NatsClient
-	walletRepo        *wallet.WalletRepository
-	redisPlayerClient *redis.RedisClient
-	redisWalletClient *redis.RedisClient
+	config               *config.Config
+	publicClient         publicAPI.PublicAPI
+	capClient            capAPI.CapAPI
+	kafka                *kafka.Kafka
+	natsClient           *nats.NatsClient
+	walletRepo           *wallet.WalletRepository
+	thresholdDepositRepo *wallet.PlayerThresholdDepositRepository
+	redisPlayerClient    *redis.RedisClient
+	redisWalletClient    *redis.RedisClient
 }
 
 func (s *SingleBetLimitSuite) BeforeAll(t provider.T) {
@@ -55,6 +56,7 @@ func (s *SingleBetLimitSuite) BeforeAll(t provider.T) {
 
 	t.WithNewStep("Соединение с базой данных wallet.", func(sCtx provider.StepCtx) {
 		s.walletRepo = wallet.NewWalletRepository(repository.OpenConnector(t, &s.config.MySQL, repository.Wallet).DB(), &s.config.MySQL)
+		s.thresholdDepositRepo = wallet.NewPlayerThresholdDepositRepository(repository.OpenConnector(t, &s.config.MySQL, repository.Wallet).DB(), &s.config.MySQL)
 	})
 
 	t.WithNewStep("Инициализация Redis клиента", func(sCtx provider.StepCtx) {
@@ -105,7 +107,7 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 				"Authorization": fmt.Sprintf("Bearer %s", testData.authorizationResponse.Body.Token),
 			},
 			Body: &publicModels.DepositRequestBody{
-				Amount:          "10",
+				Amount:          "100",
 				PaymentMethodID: int(publicModels.Fake),
 				Currency:        s.config.Node.DefaultCurrency,
 				Country:         s.config.Node.DefaultCountry,
@@ -204,6 +206,17 @@ func (s *SingleBetLimitSuite) TestSingleBetLimit(t provider.T) {
 		sCtx.Assert().Equal(testData.depositRequest.Body.Amount, depositData.Amount, "Redis: Проверка параметра Amount")
 		sCtx.Assert().Equal(testData.depositEvent.Payload.BonusID, depositData.BonusID, "Redis: Проверка параметра BonusID")
 		sCtx.Assert().Equal("0", depositData.WageringAmount, "Redis: Проверка параметра WageringAmount")
+	})
+
+	t.WithNewAsyncStep("Проверка обновления порога депозита в таблице player_threshold_deposit", func(sCtx provider.StepCtx) {
+		filters := map[string]interface{}{
+			"player_uuid": testData.walletAggregate.PlayerUUID,
+		}
+
+		thresholdRecord := s.thresholdDepositRepo.GetPlayerThresholdDepositWithRetry(sCtx, filters)
+		sCtx.Assert().NotNil(thresholdRecord, "DB: Запись о пороге депозита игрока найдена")
+		sCtx.Assert().Equal(testData.walletAggregate.PlayerUUID, thresholdRecord.PlayerUUID, "DB: Проверка параметра player_uuid")
+		sCtx.Assert().Equal(thresholdRecord.Amount, testData.depositRequest.Body.Amount, "DB: Проверка параметра amount")
 	})
 }
 

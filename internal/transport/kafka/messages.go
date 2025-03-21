@@ -21,6 +21,7 @@ const (
 	LimitEventAmountUpdated LimitEventType = "amount_updated"
 	LimitEventDeleted       LimitEventType = "deleted"
 	LimitEventUpdated       LimitEventType = "updated"
+	LimitEventSpentResetted LimitEventType = "spent_resetted"
 
 	// Limit Types
 	LimitTypeSingleBet     LimitType = "single-bet"
