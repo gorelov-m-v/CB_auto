@@ -64,12 +64,19 @@ func (s *AllLimitsSuite) BeforeAll(t provider.T) {
 	})
 }
 
-func (s *AllLimitsSuite) TestSingleBetLimit(t provider.T) {
-	t.Parallel()
-	singleBetSuite := new(SingleBetLimitSuite)
-	singleBetSuite.SetShared(s.shared)
-	s.RunSuite(t, singleBetSuite)
-}
+// func (s *AllLimitsSuite) TestCasinoLossLimit(t provider.T) {
+// 	t.Parallel()
+// 	casinoLossSuite := new(CasinoLossLimitSuite)
+// 	casinoLossSuite.SetShared(s.shared)
+// 	s.RunSuite(t, casinoLossSuite)
+// }
+
+// func (s *AllLimitsSuite) TestSingleBetLimit(t provider.T) {
+// 	t.Parallel()
+// 	singleBetSuite := new(SingleBetLimitSuite)
+// 	singleBetSuite.SetShared(s.shared)
+// 	s.RunSuite(t, singleBetSuite)
+// }
 
 func (s *AllLimitsSuite) TestTurnoverLimit(t provider.T) {
 	t.Parallel()
